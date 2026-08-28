@@ -28,4 +28,53 @@ export const api = {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return res.json();
   },
+
+  getConfig: async () => {
+    const res = await fetch('/api/config');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  },
+
+  putConfig: async (config: unknown) => {
+    const res = await fetch('/api/config', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config),
+    });
+    const json = await res.json();
+    if (!res.ok || json.ok === false) throw new Error(json.error ?? `HTTP ${res.status}`);
+  },
+
+  courses: async () => {
+    const res = await fetch('/api/courses');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  },
+
+  uploadCourse: async (name: string, kmlText: string) => {
+    const res = await fetch(`/api/courses/${encodeURIComponent(name)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/vnd.google-earth.kml+xml' },
+      body: kmlText,
+    });
+    const json = await res.json();
+    if (!res.ok || json.ok === false) throw new Error(json.error ?? `HTTP ${res.status}`);
+    return json.result as { file: string; lengthMi: number; points: number };
+  },
+
+  devices: async () => {
+    const res = await fetch('/api/devices');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  },
 };
+
+const MI_PER_KM = 0.621371;
+
+/** Convert a distance from course units into the display unit. */
+export function toDisplay(value: number, from: 'miles' | 'kilometers', to: 'miles' | 'kilometers'): number {
+  if (from === to) return value;
+  return from === 'miles' ? value / MI_PER_KM : value * MI_PER_KM;
+}
+
+export const unitAbbr = (u: 'miles' | 'kilometers') => (u === 'miles' ? 'mi' : 'km');

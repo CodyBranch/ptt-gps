@@ -2,28 +2,121 @@
   "id": "boston-2026-demo",
   "name": "Boston Marathon 2026 (demo)",
   "meetId": 9999,
+  "outputUnits": "miles",
   "listeners": [
-    { "name": "queclink", "port": 1000 },
-    { "name": "franklin-mirror", "port": 1001 }
+    {
+      "name": "queclink",
+      "port": 1000
+    },
+    {
+      "name": "franklin-mirror",
+      "port": 1001
+    }
   ],
+  "firebase": [],
   "trackers": [
-    { "imei": "015181000128000", "label": "Lead W-A" },
-    { "imei": "860201060937540", "label": "Lead W-B" },
-    { "imei": "015181000121005", "label": "Lead M-A" },
-    { "imei": "860201060917112", "label": "Lead M-B" },
-    { "imei": "860201060919175", "label": "WC Women" },
-    { "imei": "860201066749444", "label": "WC Men" },
-    { "imei": "865134050946566", "label": "Media Car (GV500)", "hasBattery": false }
+    {
+      "imei": "015181000128000",
+      "label": "Lead W-A",
+      "hasBattery": true
+    },
+    {
+      "imei": "860201060937540",
+      "label": "Lead W-B",
+      "hasBattery": true
+    },
+    {
+      "imei": "015181000121005",
+      "label": "Lead M-A",
+      "hasBattery": true
+    },
+    {
+      "imei": "860201060917112",
+      "label": "Lead M-B",
+      "hasBattery": true
+    },
+    {
+      "imei": "860201060919175",
+      "label": "WC Women",
+      "hasBattery": true
+    },
+    {
+      "imei": "860201066749444",
+      "label": "WC Men",
+      "hasBattery": true
+    },
+    {
+      "imei": "865134050946566",
+      "label": "Media Car (GV500)",
+      "hasBattery": false
+    }
   ],
   "roles": [
-    { "key": "womens_lead", "label": "Women's Lead", "trackers": ["015181000128000", "860201060937540"], "cmd": 0, "clockSlot": 1, "mapEvent": "elite_women" },
-    { "key": "mens_lead", "label": "Men's Lead", "trackers": ["015181000121005", "860201060917112"], "cmd": 2, "clockSlot": 3, "mapEvent": "elite_men" },
-    { "key": "womens_wc", "label": "Women's Wheelchair", "trackers": ["860201060919175"], "cmd": 4, "clockSlot": 2, "mapEvent": "womens_wheelchair" },
-    { "key": "mens_wc", "label": "Men's Wheelchair", "trackers": ["860201066749444"], "cmd": 5, "clockSlot": 4, "mapEvent": "mens_wheelchair" },
-    { "key": "media", "label": "Media Car", "trackers": ["865134050946566"], "cmd": 16, "mapEvent": "abc" }
+    {
+      "key": "womens_lead",
+      "label": "Women's Lead",
+      "trackers": [
+        "015181000128000",
+        "860201060937540"
+      ],
+      "cmd": 0,
+      "mapEvent": "elite_women",
+      "clockSlot": 1
+    },
+    {
+      "key": "mens_lead",
+      "label": "Men's Lead",
+      "trackers": [
+        "015181000121005",
+        "860201060917112"
+      ],
+      "cmd": 2,
+      "mapEvent": "elite_men",
+      "clockSlot": 3
+    },
+    {
+      "key": "womens_wc",
+      "label": "Women's Wheelchair",
+      "trackers": [
+        "860201060919175"
+      ],
+      "cmd": 4,
+      "mapEvent": "womens_wheelchair",
+      "clockSlot": 2
+    },
+    {
+      "key": "mens_wc",
+      "label": "Men's Wheelchair",
+      "trackers": [
+        "860201066749444"
+      ],
+      "cmd": 5,
+      "mapEvent": "mens_wheelchair",
+      "clockSlot": 4
+    },
+    {
+      "key": "media",
+      "label": "Media Car",
+      "trackers": [
+        "865134050946566"
+      ],
+      "cmd": 16,
+      "mapEvent": "abc"
+    }
   ],
-  "snapDefaults": { "minInc": 0.2, "maxInc": 1.0, "initialMax": 0.5 },
+  "snapDefaults": {
+    "minInc": 0.2,
+    "maxInc": 1,
+    "initialMax": 0.5,
+    "maxOffCourse": 0.25,
+    "fwdTolerance": 0.02
+  },
   "races": [
-    { "id": "marathon", "name": "Marathon", "course": "courses/boston-marathon.kml", "units": "miles" }
+    {
+      "id": "marathon",
+      "name": "Marathon",
+      "course": "courses/boston-marathon.kml",
+      "units": "miles"
+    }
   ]
 }

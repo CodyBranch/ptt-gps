@@ -19,9 +19,14 @@ export interface Course {
  */
 export function loadCourse(filePath: string, units: 'miles' | 'kilometers'): Course {
   const text = fs.readFileSync(filePath, 'utf8');
+  return parseCourse(text, filePath.toLowerCase().endsWith('.kml'), units);
+}
+
+/** Parse course content directly (KML uploads from the setup UI). */
+export function parseCourse(text: string, isKml: boolean, units: 'miles' | 'kilometers'): Course {
   let line: Feature<LineString> | undefined;
 
-  if (filePath.toLowerCase().endsWith('.kml')) {
+  if (isKml) {
     const doc = new DOMParser().parseFromString(text, 'text/xml');
     const fc = kml(doc as unknown as Parameters<typeof kml>[0]);
     line = extractLine(fc.features as Feature[]);
@@ -34,7 +39,7 @@ export function loadCourse(filePath: string, units: 'miles' | 'kilometers'): Cou
     line = extractLine(features);
   }
 
-  if (!line) throw new Error(`No LineString found in course file: ${filePath}`);
+  if (!line) throw new Error('No LineString found in course file');
   // Strip altitude — 2D coordinates keep every turf operation consistent.
   line.geometry.coordinates = line.geometry.coordinates.map((c) => [c[0], c[1]]);
   return { line, length: turf.length(line, { units }), units };

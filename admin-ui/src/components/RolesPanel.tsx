@@ -1,4 +1,6 @@
-import type { RaceSnap, TrackerPub } from '../types';
+import { toDisplay, unitAbbr } from '../api';
+import type { RaceSnap, TrackerPub, Units } from '../types';
+import { BatteryBar, GpsChip } from './Health';
 
 /** Fix age in seconds, from server receive time. */
 export function fixAgeS(t: TrackerPub | undefined): number | undefined {
@@ -22,12 +24,15 @@ export function fmtAge(age: number | undefined): string {
 
 export function RolesPanel({
   race,
+  displayUnits,
   onActivate,
 }: {
   race: RaceSnap;
+  displayUnits: Units;
   onActivate: (roleKey: string, imei: string) => void;
 }) {
   const byImei = new Map(race.trackers.map((t) => [t.imei, t]));
+  const d = (v: number) => toDisplay(v, race.units, displayUnits);
   return (
     <div className="roles-panel">
       {race.roles.map((role) => {
@@ -39,7 +44,7 @@ export function RolesPanel({
             <div className="role-head">
               <span className="role-label">{role.label}</span>
               <span className="role-dist">
-                {active?.distance !== undefined ? `${active.distance.toFixed(2)} ${race.units === 'miles' ? 'mi' : 'km'}` : '—'}
+                {active?.distance !== undefined ? `${d(active.distance).toFixed(2)} ${unitAbbr(displayUnits)}` : '—'}
               </span>
             </div>
             {activeStale && role.trackers.length > 1 && (
@@ -64,7 +69,9 @@ export function RolesPanel({
                     />
                     <span className="t-label">{t?.label ?? imei}</span>
                   </label>
-                  <span className="t-dist">{t?.distance !== undefined ? t.distance.toFixed(2) : '—'}</span>
+                  {t && <GpsChip tracker={t} />}
+                  {t && <BatteryBar tracker={t} />}
+                  <span className="t-dist">{t?.distance !== undefined ? d(t.distance).toFixed(2) : '—'}</span>
                   <span className={`t-age ${ageClass(age)}`}>{fmtAge(age)}</span>
                   {t?.suspect && <span className="t-suspect" title="Snapped far from course">⚠</span>}
                 </div>

@@ -8,10 +8,13 @@ import type { Fix } from '../ingest/types.js';
  */
 export interface Publisher {
   readonly name: string;
-  /** Active tracker of a role advanced — the headline distance write. */
-  roleDistance(meetId: number, role: RoleState, state: TrackerState, fix: Fix): void;
+  /**
+   * Active tracker of a role advanced — the headline distance write.
+   * `distanceOut` is already converted to the event's output units.
+   */
+  roleDistance(meetId: number, role: RoleState, distanceOut: number, state: TrackerState, fix: Fix): void;
   /** Full per-tracker data (legacy <meet>/GPS/<imei>). */
-  trackerData(meetId: number, state: TrackerState, fix: Fix, isLead: boolean): void;
+  trackerData(meetId: number, state: TrackerState, distanceOut: number | undefined, fix: Fix, isLead: boolean): void;
   /** The legacy "write/stop" showDistance toggle. */
   showDistance(meetId: number, show: boolean): void;
 }
@@ -23,19 +26,18 @@ export class DebugPublisher implements Publisher {
   readonly name = 'debug';
   constructor(private record: PublishRecorder, private verbose = false) {}
 
-  roleDistance(meetId: number, role: RoleState, state: TrackerState): void {
-    const dist = state.distance?.toFixed(2);
-    if (this.verbose) console.log(`[publish] ${meetId} role=${role.key} dist=${dist} (${state.label})`);
+  roleDistance(meetId: number, role: RoleState, distanceOut: number, state: TrackerState): void {
+    if (this.verbose) console.log(`[publish] ${meetId} role=${role.key} dist=${distanceOut.toFixed(2)} (${state.label})`);
     if (role.clockSlot !== undefined) {
-      this.record('debug', `${meetId}/Meta/Clock`, { [`distanceComplete${slotSuffix(role.clockSlot)}`]: state.distance?.toFixed(1) });
+      this.record('debug', `${meetId}/Meta/Clock`, { [`distanceComplete${slotSuffix(role.clockSlot)}`]: distanceOut.toFixed(1) });
     }
     if (role.cmd !== undefined) {
-      this.record('debug', `${meetId}/GPSMap/${role.cmd}`, { distance: dist, event: role.mapEvent, timestamp: Date.now() });
+      this.record('debug', `${meetId}/GPSMap/${role.cmd}`, { distance: distanceOut.toFixed(2), event: role.mapEvent, timestamp: Date.now() });
     }
   }
 
-  trackerData(meetId: number, state: TrackerState, fix: Fix, isLead: boolean): void {
-    this.record('debug', `${meetId}/GPS/${state.imei}`, { distance: state.distance, is_lead: isLead ? 'Y' : 'N' });
+  trackerData(meetId: number, state: TrackerState, distanceOut: number | undefined, fix: Fix, isLead: boolean): void {
+    this.record('debug', `${meetId}/GPS/${state.imei}`, { distance: distanceOut, is_lead: isLead ? 'Y' : 'N' });
   }
 
   showDistance(meetId: number, show: boolean): void {

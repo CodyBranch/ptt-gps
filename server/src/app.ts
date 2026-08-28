@@ -1,5 +1,5 @@
 import type { EventConfig } from './config/schema.js';
-import { resolveRace } from './config/schema.js';
+import { convertUnits, resolveRace } from './config/schema.js';
 import { RaceEngine, type RaceStatus, type TrackerState } from './engine/race-engine.js';
 import { FixGate } from './ingest/hygiene.js';
 import type { Fix, Telemetry } from './ingest/types.js';
@@ -49,7 +49,9 @@ export class App {
       const engine = new RaceEngine(cfg, race, {
         onTrackerUpdate: (raceId, state) => this.handleTrackerUpdate(raceId, state),
         onRoleDistance: (raceId, role, state, fix) => {
-          for (const p of this.publishers) p.roleDistance(cfg.meetId, role, state, fix);
+          if (state.distance === undefined) return;
+          const distOut = convertUnits(state.distance, race.units, cfg.outputUnits);
+          for (const p of this.publishers) p.roleDistance(cfg.meetId, role, distOut, state, fix);
         },
         onSessionEvent: (raceId, type, payload) => {
           const sessionId = this.sessions.get(raceId);
@@ -100,10 +102,15 @@ export class App {
     });
     if (engine.status === 'live' && state.lastFix) {
       const isLead = engine.roles.some((r) => r.activeImei === state.imei);
+      const distOut =
+        state.distance !== undefined
+          ? convertUnits(state.distance, engine.race.units, this.cfg.outputUnits)
+          : undefined;
       for (const p of this.publishers) {
         p.trackerData(
           this.cfg.meetId,
           state,
+          distOut,
           {
             imei: state.imei,
             lat: state.lastFix.lat,
@@ -201,5 +208,26 @@ function publicTrackerState(s: TrackerState) {
     pathLon: s.pathLon,
     lastFix: s.lastFix,
     speedCalMph: s.speedCalMph,
+    gpsQuality: gpsQuality(s.lastFix),
   };
+}
+
+/**
+ * Normalized GNSS lock certainty for the UI.
+ * GL family reports the GTFRI accuracy field (legacy semantics: 1 = good,
+ * >=2 = degraded, 0 = no current fix). GV500CNA reports HDOP + satellite count.
+ */
+function gpsQuality(lastFix: TrackerState['lastFix']): 'good' | 'ok' | 'poor' | undefined {
+  if (!lastFix) return undefined;
+  if (lastFix.hdop !== undefined) {
+    if (lastFix.hdop <= 1.2) return 'good';
+    if (lastFix.hdop <= 2.5) return 'ok';
+    return 'poor';
+  }
+  if (lastFix.accuracy !== undefined) {
+    if (lastFix.accuracy === 1) return 'good';
+    if (lastFix.accuracy >= 2) return 'ok';
+    return 'poor'; // 0 = repeating last known position
+  }
+  return undefined;
 }

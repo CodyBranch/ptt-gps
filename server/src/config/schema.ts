@@ -68,6 +68,11 @@ export const EventSchema = z.object({
   id: z.string(),
   name: z.string(),
   meetId: z.number().int(),
+  /**
+   * Units for published distances (Firebase etc.). Courses keep their own
+   * per-race units; the publisher converts. Scoreboards expect one unit per meet.
+   */
+  outputUnits: Units.default('miles'),
   listeners: z
     .array(z.object({ name: z.string(), port: z.number().int() }))
     .default([{ name: 'queclink', port: 1000 }]),
@@ -84,6 +89,14 @@ export type RoleConfig = z.infer<typeof RoleSchema>;
 export type TrackerConfig = z.infer<typeof TrackerSchema>;
 export type SnapConfig = z.infer<typeof SnapSchema>;
 export type FirebaseTarget = z.infer<typeof FirebaseTargetSchema>;
+
+export const MI_PER_KM = 0.621371;
+
+/** Convert a distance between course units and another unit system. */
+export function convertUnits(value: number, from: z.infer<typeof Units>, to: z.infer<typeof Units>): number {
+  if (from === to) return value;
+  return from === 'miles' ? value / MI_PER_KM : value * MI_PER_KM;
+}
 
 /** Effective roster/roles/snap for a race after applying meet-level inheritance. */
 export function resolveRace(event: EventConfig, race: RaceConfig) {

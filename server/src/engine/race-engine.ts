@@ -17,7 +17,7 @@ export interface TrackerState {
   suspect?: boolean;
   pathLat?: number;
   pathLon?: number;
-  lastFix?: { lat: number; lon: number; tUtcMs: number; altM?: number; battery?: number; speedKmh?: number; azimuth?: number; accuracy?: number; receivedAtMs: number };
+  lastFix?: { lat: number; lon: number; tUtcMs: number; altM?: number; battery?: number; speedKmh?: number; azimuth?: number; accuracy?: number; hdop?: number; sats?: number; receivedAtMs: number };
   /** Speed computed from successive snapped fixes, mph (legacy speed_cal). */
   speedCalMph?: number;
 }
@@ -107,6 +107,8 @@ export class RaceEngine {
       speedKmh: fix.speedKmh,
       azimuth: fix.azimuth,
       accuracy: fix.accuracy,
+      hdop: fix.hdop,
+      sats: fix.sats,
       receivedAtMs: fix.receivedAtMs,
     };
 

@@ -127,6 +127,86 @@ button.mini.primary { background: var(--accent); border-color: var(--accent); fo
 .dialog-actions .spacer { flex: 1; }
 
 .whoami { color: var(--dim); font-size: 12px; }
+.units-toggle { min-width: 42px; font-weight: 700; }
+.dim { color: var(--dim); }
+.mono { font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+
+/* Battery */
+.batt { display: inline-flex; align-items: center; gap: 5px; }
+.batt-shell {
+  width: 34px; height: 10px; border: 1px solid var(--border); border-radius: 3px; overflow: hidden;
+  background: var(--bg); display: inline-block;
+}
+.batt-fill { display: block; height: 100%; }
+.batt.high .batt-fill { background: var(--ok); }
+.batt.mid .batt-fill { background: var(--warn); }
+.batt.low .batt-fill { background: var(--bad); }
+.batt-pct { font-size: 11px; font-variant-numeric: tabular-nums; color: var(--dim); min-width: 30px; }
+.batt.low .batt-pct { color: var(--bad); font-weight: 700; }
+.batt-ext {
+  font-size: 10px; font-weight: 700; color: var(--dim); border: 1px solid var(--border);
+  border-radius: 3px; padding: 1px 4px;
+}
+
+/* GPS lock certainty */
+.gps-chip {
+  display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 800;
+  border-radius: 3px; padding: 2px 5px; letter-spacing: 0.5px;
+}
+.gps-chip.good { background: rgba(31, 168, 96, 0.18); color: var(--ok); }
+.gps-chip.ok { background: rgba(255, 176, 46, 0.18); color: var(--warn); }
+.gps-chip.poor { background: rgba(232, 72, 77, 0.2); color: var(--bad); }
+.gps-sats { font-weight: 600; opacity: 0.85; }
+.gap-badge { color: var(--warn); font-size: 11px; margin-left: 6px; font-weight: 700; }
+
+/* Setup */
+.setup { flex: 1; overflow-y: auto; }
+.setup-bar {
+  position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 12px;
+  background: var(--panel); border-bottom: 1px solid var(--border); padding: 10px 16px;
+}
+.setup-title { font-weight: 700; }
+.setup-msg.ok { color: var(--ok); font-size: 13px; }
+.setup-msg.err { color: var(--bad); font-size: 13px; }
+.setup-bar .spacer { flex: 1; }
+.setup-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(430px, 1fr)); gap: 16px; padding: 16px;
+  align-items: start;
+}
+.setup-grid section {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px;
+}
+.setup-grid h3 { margin-bottom: 10px; }
+.setup-grid h4 { margin: 14px 0 6px; color: var(--dim); font-size: 12px; text-transform: uppercase; }
+.form-row { display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; align-items: flex-end; }
+.form-row label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--dim); flex: 1; min-width: 90px; }
+.setup input, .setup select {
+  background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 5px;
+  padding: 6px 8px; font-size: 13px; width: 100%;
+}
+.setup input.w-imei { width: 150px; font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+.setup input.w-num { width: 64px; }
+.setup-table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+.setup-table th {
+  text-align: left; color: var(--dim); font-size: 11px; text-transform: uppercase; padding: 4px 6px;
+}
+.setup-table td { padding: 3px 6px; }
+.setup-table .center { text-align: center; }
+.dim-table td { color: var(--dim); font-size: 12px; }
+button.mini.danger { color: var(--bad); border-color: rgba(232, 72, 77, 0.5); }
+button.self-end { align-self: flex-end; }
+.role-edit { border: 1px solid var(--border); border-radius: 8px; padding: 10px; margin-bottom: 10px; }
+.role-trackers-edit { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.role-trackers-edit select { width: auto; }
+.chip {
+  display: inline-flex; align-items: center; gap: 5px; background: var(--panel2);
+  border: 1px solid var(--border); border-radius: 20px; padding: 3px 10px; font-size: 12px;
+}
+.chip button {
+  background: none; border: none; color: var(--dim); cursor: pointer; font-size: 11px; padding: 0 2px;
+}
+.chip button:hover { color: var(--text); }
+.hint { color: var(--dim); font-size: 12px; margin-top: 8px; }
 button.linklike {
   background: none; border: none; color: var(--accent); cursor: pointer; font-size: 12px; padding: 0;
   text-decoration: underline;

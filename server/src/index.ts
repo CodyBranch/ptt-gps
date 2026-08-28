@@ -1,7 +1,8 @@
 import { loadEventConfig } from './config/load.js';
+import { ConfigManager } from './config/manager.js';
 import { App } from './app.js';
 import { Store } from './state/store.js';
-import { startApi } from './api/server.js';
+import { startApi, type AppHolder } from './api/server.js';
 import { startListener } from './ingest/source.js';
 
 function arg(name: string, fallback?: string): string | undefined {
@@ -22,15 +23,28 @@ const store = new Store(arg('db', 'data/ptt.db')!);
 
 // Late-bound so App can emit before the socket server exists during startup.
 let emitFn: (event: string, payload: unknown) => void = () => {};
-const app = new App(cfg, store, { emit: (e, p) => emitFn(e, p) });
+const out = { emit: (e: string, p: unknown) => emitFn(e, p) };
 
-const { io } = startApi(app, Number(arg('api-port', '8080')));
+const manager = new ConfigManager(eventPath);
+const holder: AppHolder = {
+  app: new App(cfg, store, out),
+  manager,
+  rebuild: (json: unknown) => {
+    const resolved = manager.update(json);
+    holder.app = new App(resolved, store, out);
+    console.log(`[config] event config updated — engines rebuilt (${resolved.races.length} race(s))`);
+  },
+};
+
+const { io } = startApi(holder, Number(arg('api-port', '8080')));
 emitFn = (e, p) => io.emit(e, p);
 
+// Listeners are bound once at startup (changing ports requires a restart);
+// they always deliver to the current App instance.
 for (const listener of cfg.listeners) {
   startListener(listener, {
-    onFix: (fix) => app.onFix(fix),
-    onTelemetry: (t) => app.onTelemetry(t),
+    onFix: (fix) => holder.app.onFix(fix),
+    onTelemetry: (t) => holder.app.onTelemetry(t),
     onConnection: (event, ip, source) => {
       console.log(`[${source}] ${ip} ${event}`);
       io.emit('connection', { event, ip, source, tMs: Date.now() });

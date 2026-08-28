@@ -5,16 +5,27 @@ import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { Server as SocketIOServer } from 'socket.io';
 import type { App } from '../app.js';
+import type { ConfigManager } from '../config/manager.js';
 import { AuthService } from './auth.js';
+
+export interface AppHolder {
+  app: App;
+  /** Rebuild engines/publishers from an edited config (setup UI saves). */
+  rebuild: (json: unknown) => void;
+  manager: ConfigManager;
+}
 
 /**
  * REST for operator commands + socket.io for live streaming to the admin UI.
  * Serves the built admin UI (admin-ui/dist) when present, so operators reach
  * the console at http://<server>:<port>/ with nothing else running.
  */
-export function startApi(app: App, port: number): { httpServer: http.Server; io: SocketIOServer } {
+export function startApi(holder: AppHolder, port: number): { httpServer: http.Server; io: SocketIOServer } {
+  const app = new Proxy({} as App, {
+    get: (_t, prop) => (holder.app as unknown as Record<string | symbol, unknown>)[prop],
+  }) as App;
   const ex = express();
-  ex.use(express.json());
+  ex.use(express.json({ limit: '5mb' }));
 
   const uiDist = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../admin-ui/dist');
   if (fs.existsSync(path.join(uiDist, 'index.html'))) {
@@ -117,6 +128,42 @@ export function startApi(app: App, port: number): { httpServer: http.Server; io:
       const engine = app.engines.get(req.params.raceId as string);
       if (!engine) throw new Error('unknown race');
       engine.releaseClamp(req.params.imei as string, req.operator);
+    }),
+  );
+
+  // --- setup: event config + courses ---
+
+  const guardIdle = () => {
+    for (const engine of app.engines.values()) {
+      if (engine.status === 'armed' || engine.status === 'live') {
+        throw new Error(`Race "${engine.race.id}" is ${engine.status} — finish or reset it before editing setup`);
+      }
+    }
+  };
+
+  ex.get('/api/config', (_req, res) => {
+    res.json(holder.manager.raw);
+  });
+
+  ex.put(
+    '/api/config',
+    act((req) => {
+      guardIdle();
+      holder.rebuild(req.body);
+      io.emit('snapshot', holder.app.snapshot());
+    }),
+  );
+
+  ex.get('/api/courses', (_req, res) => {
+    res.json(holder.manager.listCourses());
+  });
+
+  ex.post(
+    '/api/courses/:name',
+    express.text({ type: () => true, limit: '25mb' }),
+    act((req) => {
+      if (typeof req.body !== 'string' || req.body.length === 0) throw new Error('Empty upload');
+      return holder.manager.saveCourse(req.params.name as string, req.body);
     }),
   );
 

@@ -5,9 +5,10 @@ import { Login } from './components/Login';
 import { MapView } from './components/MapView';
 import { RacePanel } from './components/RacePanel';
 import { RolesPanel } from './components/RolesPanel';
+import { SetupView } from './components/SetupView';
 import { TrackerTable } from './components/TrackerTable';
 import { WindowDialog } from './components/WindowDialog';
-import type { RaceSnap, Snapshot, TrackerPub } from './types';
+import type { RaceSnap, Snapshot, TrackerPub, Units } from './types';
 
 interface State {
   snapshot?: Snapshot;
@@ -51,7 +52,25 @@ export default function App() {
   const [raceId, setRaceId] = useState<string>();
   const [selectedImei, setSelectedImei] = useState<string>();
   const [windowDialogImei, setWindowDialogImei] = useState<string>();
+  const [view, setView] = useState<'ops' | 'setup'>('ops');
+  const [displayUnits, setDisplayUnits] = useState<Units>(() => {
+    try {
+      return (localStorage.getItem('ptt-display-units') as Units) || 'miles';
+    } catch {
+      return 'miles';
+    }
+  });
   const [, tick] = useReducer((n: number) => n + 1, 0);
+
+  const toggleUnits = () => {
+    const next: Units = displayUnits === 'miles' ? 'kilometers' : 'miles';
+    setDisplayUnits(next);
+    try {
+      localStorage.setItem('ptt-display-units', next);
+    } catch {
+      /* per-viewer convenience only */
+    }
+  };
 
   useEffect(() => {
     fetch('/api/me')
@@ -120,31 +139,46 @@ export default function App() {
           {state.snapshot.races.map((r) => (
             <button
               key={r.raceId}
-              className={r.raceId === race.raceId ? 'active' : ''}
-              onClick={() => setRaceId(r.raceId)}
+              className={view === 'ops' && r.raceId === race.raceId ? 'active' : ''}
+              onClick={() => {
+                setView('ops');
+                setRaceId(r.raceId);
+              }}
             >
               {r.name}
               <span className={`status-dot ${r.status}`} />
             </button>
           ))}
+          <button className={view === 'setup' ? 'active' : ''} onClick={() => setView('setup')}>
+            ⚙ Setup
+          </button>
         </nav>
-        <RacePanel race={race} onAction={(a) => api.lifecycle(race.raceId, a).catch(alert)} />
+        <button className="mini units-toggle" onClick={toggleUnits} title="Display units (does not change published output)">
+          {displayUnits === 'miles' ? 'mi' : 'km'}
+        </button>
+        {view === 'ops' && <RacePanel race={race} onAction={(a) => api.lifecycle(race.raceId, a).catch(alert)} />}
       </header>
-      <div className="main">
-        <aside>
-          <RolesPanel
-            race={race}
-            onActivate={(roleKey, imei) => api.setActive(race.raceId, roleKey, imei).catch(alert)}
-          />
-          <TrackerTable
-            race={race}
-            selectedImei={selectedImei}
-            onSelect={setSelectedImei}
-            onWindow={setWindowDialogImei}
-          />
-        </aside>
-        <MapView race={race} selectedImei={selectedImei} />
-      </div>
+      {view === 'setup' ? (
+        <SetupView onSaved={() => setRaceId(undefined)} />
+      ) : (
+        <div className="main">
+          <aside>
+            <RolesPanel
+              race={race}
+              displayUnits={displayUnits}
+              onActivate={(roleKey, imei) => api.setActive(race.raceId, roleKey, imei).catch(alert)}
+            />
+            <TrackerTable
+              race={race}
+              displayUnits={displayUnits}
+              selectedImei={selectedImei}
+              onSelect={setSelectedImei}
+              onWindow={setWindowDialogImei}
+            />
+          </aside>
+          <MapView race={race} selectedImei={selectedImei} />
+        </div>
+      )}
       {windowTracker && (
         <WindowDialog
           race={race}

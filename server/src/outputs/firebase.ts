@@ -33,13 +33,19 @@ export class FirebasePublisher implements Publisher {
         `Firebase target "${target.name}": env ${target.credentialEnv} must point to a service-account JSON file`,
       );
     }
-    const app = admin.initializeApp(
-      {
-        credential: admin.credential.cert(JSON.parse(fs.readFileSync(credPath, 'utf8'))),
-        databaseURL: target.databaseURL,
-      },
-      `target-${target.name}`,
-    );
+    // Reuse the named app if it already exists — publishers are re-created when
+    // the event config is edited, but firebase-admin apps are process-global.
+    const appName = `target-${target.name}`;
+    const existing = admin.apps.find((a) => a?.name === appName);
+    const app =
+      existing ??
+      admin.initializeApp(
+        {
+          credential: admin.credential.cert(JSON.parse(fs.readFileSync(credPath, 'utf8'))),
+          databaseURL: target.databaseURL,
+        },
+        appName,
+      );
     this.db = app.database();
   }
 
@@ -50,10 +56,9 @@ export class FirebasePublisher implements Publisher {
     this.record(this.name, path, value);
   }
 
-  roleDistance(meetId: number, role: RoleState, state: TrackerState): void {
-    if (state.distance === undefined) return;
-    const d1 = state.distance.toFixed(1);
-    const d2 = state.distance.toFixed(2);
+  roleDistance(meetId: number, role: RoleState, distanceOut: number, state: TrackerState): void {
+    const d1 = distanceOut.toFixed(1);
+    const d2 = distanceOut.toFixed(2);
 
     if (role.clockSlot !== undefined) {
       const suffix = slotSuffix(role.clockSlot);
@@ -71,10 +76,10 @@ export class FirebasePublisher implements Publisher {
     }
   }
 
-  trackerData(meetId: number, state: TrackerState, fix: Fix, isLead: boolean): void {
+  trackerData(meetId: number, state: TrackerState, distanceOut: number | undefined, fix: Fix, isLead: boolean): void {
     this.update(`${meetId}/GPS/${state.imei}`, {
       imei: state.imei,
-      distance: state.distance ?? null,
+      distance: distanceOut ?? null,
       is_lead: isLead ? 'Y' : 'N',
       lat: fix.lat,
       long: fix.lon,
