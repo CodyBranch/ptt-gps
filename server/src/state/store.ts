@@ -75,6 +75,17 @@ export class Store {
         path TEXT NOT NULL,
         value TEXT NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS users (
+        username TEXT PRIMARY KEY,
+        password_hash TEXT NOT NULL,
+        created_at_ms INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS auth_tokens (
+        token_hash TEXT PRIMARY KEY,
+        username TEXT NOT NULL,
+        created_at_ms INTEGER NOT NULL,
+        expires_at_ms INTEGER NOT NULL
+      );
     `);
   }
 
@@ -183,6 +194,54 @@ export class Store {
 
   devices(): unknown[] {
     return this.db.prepare(`SELECT * FROM devices ORDER BY imei`).all();
+  }
+
+  // --- auth ---
+
+  addUser(username: string, passwordHash: string): void {
+    this.db
+      .prepare(`INSERT INTO users (username, password_hash, created_at_ms) VALUES (?, ?, ?)
+                ON CONFLICT(username) DO UPDATE SET password_hash = excluded.password_hash`)
+      .run(username, passwordHash, Date.now());
+  }
+
+  deleteUser(username: string): boolean {
+    this.db.prepare(`DELETE FROM auth_tokens WHERE username = ?`).run(username);
+    return this.db.prepare(`DELETE FROM users WHERE username = ?`).run(username).changes > 0;
+  }
+
+  getUser(username: string): { username: string; password_hash: string } | undefined {
+    return this.db.prepare(`SELECT username, password_hash FROM users WHERE username = ?`).get(username) as
+      | { username: string; password_hash: string }
+      | undefined;
+  }
+
+  listUsers(): Array<{ username: string; created_at_ms: number }> {
+    return this.db.prepare(`SELECT username, created_at_ms FROM users ORDER BY username`).all() as Array<{
+      username: string;
+      created_at_ms: number;
+    }>;
+  }
+
+  insertToken(tokenHash: string, username: string, expiresAtMs: number): void {
+    this.db.prepare(`DELETE FROM auth_tokens WHERE expires_at_ms < ?`).run(Date.now());
+    this.db
+      .prepare(`INSERT INTO auth_tokens (token_hash, username, created_at_ms, expires_at_ms) VALUES (?, ?, ?, ?)`)
+      .run(tokenHash, username, Date.now(), expiresAtMs);
+  }
+
+  getToken(tokenHash: string): { username: string; expires_at_ms: number } | undefined {
+    return this.db.prepare(`SELECT username, expires_at_ms FROM auth_tokens WHERE token_hash = ?`).get(tokenHash) as
+      | { username: string; expires_at_ms: number }
+      | undefined;
+  }
+
+  touchToken(tokenHash: string, expiresAtMs: number): void {
+    this.db.prepare(`UPDATE auth_tokens SET expires_at_ms = ? WHERE token_hash = ?`).run(expiresAtMs, tokenHash);
+  }
+
+  deleteToken(tokenHash: string): void {
+    this.db.prepare(`DELETE FROM auth_tokens WHERE token_hash = ?`).run(tokenHash);
   }
 
   close(): void {

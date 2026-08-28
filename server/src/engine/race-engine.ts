@@ -121,7 +121,7 @@ export class RaceEngine {
     }
   }
 
-  setStatus(status: RaceStatus): void {
+  setStatus(status: RaceStatus, by?: string): void {
     const prev = this.status;
     this.status = status;
     if (status === 'armed' && prev === 'scheduled') {
@@ -130,10 +130,10 @@ export class RaceEngine {
         s.window = initialWindow(this.snap, this.course.length);
       }
     }
-    this.hooks.onSessionEvent(this.race.id, 'status', { from: prev, to: status });
+    this.hooks.onSessionEvent(this.race.id, 'status', { from: prev, to: status, by });
   }
 
-  setActive(roleKey: string, imei: string): void {
+  setActive(roleKey: string, imei: string, by?: string): void {
     const role = this.roles.find((r) => r.key === roleKey);
     if (!role) throw new Error(`Unknown role: ${roleKey}`);
     if (!role.trackers.includes(imei)) {
@@ -141,7 +141,7 @@ export class RaceEngine {
     }
     const prev = role.activeImei;
     role.activeImei = imei;
-    this.hooks.onSessionEvent(this.race.id, 'active-tracker', { role: roleKey, from: prev, to: imei });
+    this.hooks.onSessionEvent(this.race.id, 'active-tracker', { role: roleKey, from: prev, to: imei, by });
   }
 
   /**
@@ -149,7 +149,7 @@ export class RaceEngine {
    * latch=false → one-shot reset: re-slice there, auto-advance resumes.
    * latch=true  → hold-to-zone: window clamped inside [start,end] until released.
    */
-  setWindow(imei: string, start: number, end: number, latch: boolean): void {
+  setWindow(imei: string, start: number, end: number, latch: boolean, by?: string): void {
     const state = this.trackers.get(imei);
     if (!state) throw new Error(`Tracker ${imei} not in race ${this.race.id}`);
     if (!(end > start)) throw new Error('Window end must be greater than start');
@@ -161,15 +161,15 @@ export class RaceEngine {
       : { min: start, max: end, mode: 'auto' };
     // Operator re-sliced on purpose — stale distance must not forward-bias the next snap.
     state.distance = undefined;
-    this.hooks.onSessionEvent(this.race.id, 'window-override', { imei, start, end, latch });
+    this.hooks.onSessionEvent(this.race.id, 'window-override', { imei, start, end, latch, by });
     this.hooks.onTrackerUpdate(this.race.id, state);
   }
 
-  releaseClamp(imei: string): void {
+  releaseClamp(imei: string, by?: string): void {
     const state = this.trackers.get(imei);
     if (!state) throw new Error(`Tracker ${imei} not in race ${this.race.id}`);
     state.window = { min: state.window.min, max: state.window.max, mode: 'auto' };
-    this.hooks.onSessionEvent(this.race.id, 'window-release', { imei });
+    this.hooks.onSessionEvent(this.race.id, 'window-release', { imei, by });
     this.hooks.onTrackerUpdate(this.race.id, state);
   }
 

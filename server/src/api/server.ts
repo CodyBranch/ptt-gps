@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { Server as SocketIOServer } from 'socket.io';
 import type { App } from '../app.js';
+import { AuthService } from './auth.js';
 
 /**
  * REST for operator commands + socket.io for live streaming to the admin UI.
@@ -25,10 +26,43 @@ export function startApi(app: App, port: number): { httpServer: http.Server; io:
 
   const httpServer = http.createServer(ex);
   const io = new SocketIOServer(httpServer, { cors: { origin: true } });
+  const auth = new AuthService(app.store);
 
+  io.use((socket, next) => {
+    const user = auth.check(auth.tokenFromRequest(socket.handshake));
+    if (!user) return next(new Error('not authenticated'));
+    next();
+  });
   io.on('connection', (socket) => {
     socket.emit('snapshot', app.snapshot());
   });
+
+  // --- unauthenticated: login/logout/me ---
+  ex.post('/api/login', (req, res) => {
+    const { username, password } = req.body ?? {};
+    const ip = (req.socket.remoteAddress ?? '?').replace('::ffff:', '');
+    const token = typeof username === 'string' && typeof password === 'string'
+      ? auth.login(username, password, ip)
+      : null;
+    if (!token) return void res.status(401).json({ ok: false, error: 'invalid credentials' });
+    res.setHeader('Set-Cookie', auth.cookie(token));
+    res.json({ ok: true, username });
+  });
+
+  ex.post('/api/logout', (req, res) => {
+    auth.logout(auth.tokenFromRequest(req));
+    res.setHeader('Set-Cookie', auth.clearCookie());
+    res.json({ ok: true });
+  });
+
+  ex.get('/api/me', (req, res) => {
+    const user = auth.check(auth.tokenFromRequest(req));
+    if (!user) return void res.status(401).json({ ok: false });
+    res.json({ ok: true, username: user });
+  });
+
+  // --- everything below requires a logged-in operator ---
+  ex.use('/api', auth.middleware);
 
   ex.get('/api/state', (_req, res) => {
     res.json(app.snapshot());
@@ -44,9 +78,10 @@ export function startApi(app: App, port: number): { httpServer: http.Server; io:
     res.json(app.store.devices());
   });
 
-  const act = (fn: (req: express.Request) => unknown) => (req: express.Request, res: express.Response) => {
+  type OpRequest = express.Request & { operator?: string };
+  const act = (fn: (req: OpRequest) => unknown) => (req: express.Request, res: express.Response) => {
     try {
-      res.json({ ok: true, result: fn(req) ?? null });
+      res.json({ ok: true, result: fn(req as OpRequest) ?? null });
     } catch (err) {
       res.status(400).json({ ok: false, error: (err as Error).message });
     }
@@ -54,7 +89,7 @@ export function startApi(app: App, port: number): { httpServer: http.Server; io:
 
   ex.post(
     '/api/races/:raceId/lifecycle',
-    act((req) => app.lifecycle(req.params.raceId as string, req.body.action, req.body.atMs)),
+    act((req) => app.lifecycle(req.params.raceId as string, req.body.action, req.body.atMs, req.operator)),
   );
 
   ex.post(
@@ -62,7 +97,7 @@ export function startApi(app: App, port: number): { httpServer: http.Server; io:
     act((req) => {
       const engine = app.engines.get(req.params.raceId as string);
       if (!engine) throw new Error('unknown race');
-      engine.setActive(req.params.roleKey as string, req.body.imei);
+      engine.setActive(req.params.roleKey as string, req.body.imei, req.operator);
       io.emit('race', app.raceSnapshot(req.params.raceId as string));
     }),
   );
@@ -72,7 +107,7 @@ export function startApi(app: App, port: number): { httpServer: http.Server; io:
     act((req) => {
       const engine = app.engines.get(req.params.raceId as string);
       if (!engine) throw new Error('unknown race');
-      engine.setWindow(req.params.imei as string, req.body.start, req.body.end, !!req.body.latch);
+      engine.setWindow(req.params.imei as string, req.body.start, req.body.end, !!req.body.latch, req.operator);
     }),
   );
 
@@ -81,7 +116,7 @@ export function startApi(app: App, port: number): { httpServer: http.Server; io:
     act((req) => {
       const engine = app.engines.get(req.params.raceId as string);
       if (!engine) throw new Error('unknown race');
-      engine.releaseClamp(req.params.imei as string);
+      engine.releaseClamp(req.params.imei as string, req.operator);
     }),
   );
 

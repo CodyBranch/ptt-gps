@@ -7,6 +7,7 @@
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
     "sim": "tsx src/sim/simulator.ts",
+    "user": "tsx src/tools/user.ts",
     "replay": "tsx src/replay/replay.ts",
     "test": "vitest run",
     "build": "tsc -p tsconfig.json"

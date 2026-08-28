@@ -127,25 +127,25 @@ export class App {
     }
   }
 
-  lifecycle(raceId: string, action: 'arm' | 'start' | 'finish' | 'reset', atMs?: number): RaceStatus {
+  lifecycle(raceId: string, action: 'arm' | 'start' | 'finish' | 'reset', atMs?: number, by?: string): RaceStatus {
     const engine = this.engines.get(raceId);
     if (!engine) throw new Error(`Unknown race: ${raceId}`);
     switch (action) {
       case 'arm':
-        engine.setStatus('armed');
+        engine.setStatus('armed', by);
         break;
       case 'start': {
         const race = this.cfg.races.find((r) => r.id === raceId)!;
-        const snapshot = { race, resolved: resolveRace(this.cfg, race) };
+        const snapshot = { race, resolved: resolveRace(this.cfg, race), startedBy: by };
         // atMs allows back-dating a start — the fixes are already in the store.
         const sessionId = this.store.startSession(this.cfg.id, raceId, snapshot, atMs ?? Date.now());
         this.sessions.set(raceId, sessionId);
-        engine.setStatus('live');
+        engine.setStatus('live', by);
         for (const p of this.publishers) p.showDistance(this.cfg.meetId, true);
         break;
       }
       case 'finish': {
-        engine.setStatus('finished');
+        engine.setStatus('finished', by);
         for (const p of this.publishers) p.showDistance(this.cfg.meetId, false);
         const sessionId = this.sessions.get(raceId);
         if (sessionId !== undefined) {
@@ -155,7 +155,7 @@ export class App {
         break;
       }
       case 'reset':
-        engine.setStatus('scheduled');
+        engine.setStatus('scheduled', by);
         break;
     }
     this.out.emit('race', this.raceSnapshot(raceId));

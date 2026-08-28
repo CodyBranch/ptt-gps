@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useReducer, useState } from 'react';
 import { io } from 'socket.io-client';
 import { api } from './api';
+import { Login } from './components/Login';
 import { MapView } from './components/MapView';
 import { RacePanel } from './components/RacePanel';
 import { RolesPanel } from './components/RolesPanel';
@@ -46,14 +47,26 @@ function reducer(state: State, action: Action): State {
 
 export default function App() {
   const [state, dispatch] = useReducer(reducer, { connected: false });
+  const [auth, setAuth] = useState<'checking' | 'out' | string>('checking'); // string = username
   const [raceId, setRaceId] = useState<string>();
   const [selectedImei, setSelectedImei] = useState<string>();
   const [windowDialogImei, setWindowDialogImei] = useState<string>();
   const [, tick] = useReducer((n: number) => n + 1, 0);
 
   useEffect(() => {
+    fetch('/api/me')
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((j) => setAuth(j.username ?? 'operator'))
+      .catch(() => setAuth('out'));
+  }, []);
+
+  useEffect(() => {
+    if (auth === 'checking' || auth === 'out') return;
     const socket = io();
     socket.on('connect', () => dispatch({ type: 'connected', connected: true }));
+    socket.on('connect_error', (err) => {
+      if (/not authenticated/i.test(err.message)) setAuth('out');
+    });
     socket.on('disconnect', () => dispatch({ type: 'connected', connected: false }));
     socket.on('snapshot', (snapshot: Snapshot) => dispatch({ type: 'snapshot', snapshot }));
     socket.on('race', (race: RaceSnap) => dispatch({ type: 'race', race }));
@@ -65,12 +78,15 @@ export default function App() {
       socket.close();
       clearInterval(t);
     };
-  }, []);
+  }, [auth]);
 
   const race = useMemo(() => {
     const races = state.snapshot?.races ?? [];
     return races.find((r) => r.raceId === raceId) ?? races[0];
   }, [state.snapshot, raceId]);
+
+  if (auth === 'checking') return <div className="loading">Checking sign-in…</div>;
+  if (auth === 'out') return <Login onSuccess={(username) => setAuth(username)} />;
 
   if (!state.snapshot || !race) {
     return (
@@ -79,6 +95,11 @@ export default function App() {
       </div>
     );
   }
+
+  const logout = async () => {
+    await fetch('/api/logout', { method: 'POST' });
+    window.location.reload();
+  };
 
   const windowTracker = race.trackers.find((t) => t.imei === windowDialogImei);
 
@@ -90,6 +111,9 @@ export default function App() {
           <span className="event-name">{state.snapshot.event.name}</span>
           <span className={`conn ${state.connected ? 'ok' : 'bad'}`}>
             {state.connected ? '● server' : '○ disconnected'}
+          </span>
+          <span className="whoami">
+            {auth} · <button className="linklike" onClick={logout}>sign out</button>
           </span>
         </div>
         <nav className="race-tabs">
