@@ -1,0 +1,16 @@
+{
+  "name": "ptt-gps",
+  "version": "0.1.0",
+  "private": true,
+  "description": "PT Timing race GPS tracking system",
+  "workspaces": [
+    "server",
+    "admin-ui"
+  ],
+  "scripts": {
+    "dev:server": "npm run dev -w server",
+    "dev:ui": "npm run dev -w admin-ui",
+    "test": "npm run test -w server",
+    "build": "npm run build -w server && npm run build -w admin-ui"
+  }
+}

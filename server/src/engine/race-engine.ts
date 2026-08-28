@@ -1,0 +1,182 @@
+import * as turf from '@turf/turf';
+import type { EventConfig, RaceConfig, RoleConfig, SnapConfig, TrackerConfig } from '../config/schema.js';
+import { resolveRace } from '../config/schema.js';
+import { loadCourse, type Course } from './course.js';
+import { initialWindow, snapFix, windowSlice, type SnapWindow } from './snap.js';
+import type { Fix } from '../ingest/types.js';
+
+export type RaceStatus = 'scheduled' | 'armed' | 'live' | 'finished';
+
+export interface TrackerState {
+  imei: string;
+  label: string;
+  hasBattery: boolean;
+  window: SnapWindow;
+  distance?: number;
+  offCourse?: number;
+  suspect?: boolean;
+  pathLat?: number;
+  pathLon?: number;
+  lastFix?: { lat: number; lon: number; tUtcMs: number; altM?: number; battery?: number; speedKmh?: number; azimuth?: number; accuracy?: number; receivedAtMs: number };
+  /** Speed computed from successive snapped fixes, mph (legacy speed_cal). */
+  speedCalMph?: number;
+}
+
+export interface RoleState extends RoleConfig {
+  activeImei: string;
+}
+
+export interface EngineHooks {
+  /** A tracker in this race produced a new snapped position. */
+  onTrackerUpdate: (raceId: string, state: TrackerState) => void;
+  /**
+   * The *active* tracker of a role produced a distance while the race is live —
+   * this is what publishers forward to Firebase.
+   */
+  onRoleDistance: (raceId: string, role: RoleState, state: TrackerState, fix: Fix) => void;
+  /** Lifecycle / operator actions worth recording into the session timeline. */
+  onSessionEvent: (raceId: string, type: string, payload: Record<string, unknown>) => void;
+}
+
+/**
+ * One RaceEngine per race. Keyed on (race, tracker): the same physical tracker
+ * gets independent window state in each race, so reassignment across races in
+ * a meet resets cleanly.
+ */
+export class RaceEngine {
+  readonly race: RaceConfig;
+  readonly course: Course;
+  readonly snap: SnapConfig;
+  readonly trackers = new Map<string, TrackerState>();
+  readonly roles: RoleState[];
+  status: RaceStatus = 'scheduled';
+
+  private trackerCfg = new Map<string, TrackerConfig>();
+  private hooks: EngineHooks;
+
+  constructor(event: EventConfig, race: RaceConfig, hooks: EngineHooks) {
+    this.race = race;
+    this.hooks = hooks;
+    const { trackers, roles, snap } = resolveRace(event, race);
+    this.snap = snap;
+    this.course = loadCourse(race.course, race.units);
+    for (const t of trackers) {
+      this.trackerCfg.set(t.imei, t);
+      this.trackers.set(t.imei, {
+        imei: t.imei,
+        label: t.label,
+        hasBattery: t.hasBattery,
+        window: initialWindow(snap, this.course.length),
+      });
+    }
+    this.roles = roles.map((r) => ({ ...r, activeImei: r.trackers[0] }));
+  }
+
+  /** Feed one hygiene-accepted fix. Ignores IMEIs not in this race's roster. */
+  onFix(fix: Fix): void {
+    const state = this.trackers.get(fix.imei);
+    if (!state) return;
+    if (this.status !== 'armed' && this.status !== 'live') return;
+
+    const result = snapFix(this.course, state.window, fix.lon, fix.lat, this.snap, state.distance);
+
+    if (state.lastFix) {
+      const dtH = (fix.tUtcMs - state.lastFix.tUtcMs) / 3600_000;
+      if (dtH > 0) {
+        const dMi = turf.distance(
+          [state.lastFix.lon, state.lastFix.lat],
+          [fix.lon, fix.lat],
+          { units: 'miles' },
+        );
+        state.speedCalMph = dMi / dtH;
+      }
+    }
+
+    state.window = result.window;
+    state.distance = result.distance;
+    state.offCourse = result.offCourse;
+    state.suspect = result.suspect;
+    state.pathLat = result.pathLat;
+    state.pathLon = result.pathLon;
+    state.lastFix = {
+      lat: fix.lat,
+      lon: fix.lon,
+      tUtcMs: fix.tUtcMs,
+      altM: fix.altM,
+      battery: fix.battery,
+      speedKmh: fix.speedKmh,
+      azimuth: fix.azimuth,
+      accuracy: fix.accuracy,
+      receivedAtMs: fix.receivedAtMs,
+    };
+
+    this.hooks.onTrackerUpdate(this.race.id, state);
+
+    if (this.status === 'live') {
+      for (const role of this.roles) {
+        if (role.activeImei === fix.imei) {
+          this.hooks.onRoleDistance(this.race.id, role, state, fix);
+        }
+      }
+    }
+  }
+
+  setStatus(status: RaceStatus): void {
+    const prev = this.status;
+    this.status = status;
+    if (status === 'armed' && prev === 'scheduled') {
+      // fresh windows when arming — stale state from tests/previous race is gone
+      for (const s of this.trackers.values()) {
+        s.window = initialWindow(this.snap, this.course.length);
+      }
+    }
+    this.hooks.onSessionEvent(this.race.id, 'status', { from: prev, to: status });
+  }
+
+  setActive(roleKey: string, imei: string): void {
+    const role = this.roles.find((r) => r.key === roleKey);
+    if (!role) throw new Error(`Unknown role: ${roleKey}`);
+    if (!role.trackers.includes(imei)) {
+      throw new Error(`Tracker ${imei} is not in role ${roleKey}`);
+    }
+    const prev = role.activeImei;
+    role.activeImei = imei;
+    this.hooks.onSessionEvent(this.race.id, 'active-tracker', { role: roleKey, from: prev, to: imei });
+  }
+
+  /**
+   * Operator window override.
+   * latch=false → one-shot reset: re-slice there, auto-advance resumes.
+   * latch=true  → hold-to-zone: window clamped inside [start,end] until released.
+   */
+  setWindow(imei: string, start: number, end: number, latch: boolean): void {
+    const state = this.trackers.get(imei);
+    if (!state) throw new Error(`Tracker ${imei} not in race ${this.race.id}`);
+    if (!(end > start)) throw new Error('Window end must be greater than start');
+    if (start < 0 || end > this.course.length) {
+      throw new Error(`Window must be within 0..${this.course.length.toFixed(2)} ${this.course.units}`);
+    }
+    state.window = latch
+      ? { min: start, max: end, mode: 'clamped', clamp: { start, end } }
+      : { min: start, max: end, mode: 'auto' };
+    // Operator re-sliced on purpose — stale distance must not forward-bias the next snap.
+    state.distance = undefined;
+    this.hooks.onSessionEvent(this.race.id, 'window-override', { imei, start, end, latch });
+    this.hooks.onTrackerUpdate(this.race.id, state);
+  }
+
+  releaseClamp(imei: string): void {
+    const state = this.trackers.get(imei);
+    if (!state) throw new Error(`Tracker ${imei} not in race ${this.race.id}`);
+    state.window = { min: state.window.min, max: state.window.max, mode: 'auto' };
+    this.hooks.onSessionEvent(this.race.id, 'window-release', { imei });
+    this.hooks.onTrackerUpdate(this.race.id, state);
+  }
+
+  /** Current window slice coordinates for the admin map. */
+  sliceFor(imei: string): [number, number][] {
+    const state = this.trackers.get(imei);
+    if (!state) return [];
+    return windowSlice(this.course, state.window);
+  }
+}

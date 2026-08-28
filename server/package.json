@@ -1,0 +1,32 @@
+{
+  "name": "server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "sim": "tsx src/sim/simulator.ts",
+    "replay": "tsx src/replay/replay.ts",
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@tmcw/togeojson": "^7.1.2",
+    "@turf/turf": "^7.2.0",
+    "@xmldom/xmldom": "^0.9.8",
+    "better-sqlite3": "^12.2.0",
+    "express": "^5.1.0",
+    "firebase-admin": "^13.4.0",
+    "socket.io": "^4.8.1",
+    "zod": "^4.1.5"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/express": "^5.0.3",
+    "@types/node": "^24.3.0",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}

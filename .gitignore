@@ -1,0 +1,16 @@
+# Legacy system — contains embedded credentials and race logs; kept locally as reference only
+legacy/
+
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Runtime data (SQLite DB, raw frame logs)
+data/
+
+# Secrets
+.env
+.env.*
+*serviceaccount*.json
+*firebase-adminsdk*.json
+secrets/
