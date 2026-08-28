@@ -20,6 +20,8 @@ export class App {
   readonly publishers: Publisher[] = [];
   /** Active session per race (only while live). */
   readonly sessions = new Map<string, number>();
+  /** Session to attribute the publish being emitted right now (single-threaded). */
+  private publishContextSession: number | null = null;
   private out: AppEvents;
 
   constructor(cfg: EventConfig, store: Store, out: AppEvents) {
@@ -29,10 +31,10 @@ export class App {
     this.gate = new FixGate();
 
     const recorder = (target: string, path: string, value: unknown) => {
-      // Attribute the publish to whichever race is currently live (session-stamped
-      // for replay); with multiple simultaneous live races this records the first.
-      const sessionId = this.sessions.values().next().value ?? null;
-      this.store.recordPublish(sessionId, target, path, value);
+      // publishContextSession is set synchronously by whichever race triggered
+      // the publish, so records stay correctly attributed when several races
+      // are live at once.
+      this.store.recordPublish(this.publishContextSession, target, path, value);
     };
 
     if (cfg.firebase.length === 0) {
@@ -50,6 +52,7 @@ export class App {
         onTrackerUpdate: (raceId, state) => this.handleTrackerUpdate(raceId, state),
         onRoleDistance: (raceId, role, state, fix) => {
           if (state.distance === undefined) return;
+          this.publishContextSession = this.sessions.get(raceId) ?? null;
           const distOut = convertUnits(state.distance, race.units, cfg.outputUnits);
           for (const p of this.publishers) p.roleDistance(cfg.meetId, role, distOut, state, fix);
         },
@@ -101,6 +104,7 @@ export class App {
       health: this.gate.health(state.imei),
     });
     if (engine.status === 'live' && state.lastFix) {
+      this.publishContextSession = this.sessions.get(raceId) ?? null;
       const isLead = engine.roles.some((r) => r.activeImei === state.imei);
       const distOut =
         state.distance !== undefined
@@ -144,20 +148,29 @@ export class App {
       case 'start': {
         const race = this.cfg.races.find((r) => r.id === raceId)!;
         const snapshot = { race, resolved: resolveRace(this.cfg, race), startedBy: by };
+        const firstLive = this.sessions.size === 0;
         // atMs allows back-dating a start — the fixes are already in the store.
         const sessionId = this.store.startSession(this.cfg.id, raceId, snapshot, atMs ?? Date.now());
         this.sessions.set(raceId, sessionId);
         engine.setStatus('live', by);
-        for (const p of this.publishers) p.showDistance(this.cfg.meetId, true);
+        // showDistance is meet-wide: turn on with the first live race only.
+        if (firstLive) {
+          this.publishContextSession = sessionId;
+          for (const p of this.publishers) p.showDistance(this.cfg.meetId, true);
+        }
         break;
       }
       case 'finish': {
         engine.setStatus('finished', by);
-        for (const p of this.publishers) p.showDistance(this.cfg.meetId, false);
         const sessionId = this.sessions.get(raceId);
         if (sessionId !== undefined) {
           this.store.endSession(sessionId, atMs ?? Date.now());
           this.sessions.delete(raceId);
+        }
+        // ...and off only when the last live race finishes.
+        if (this.sessions.size === 0) {
+          this.publishContextSession = sessionId ?? null;
+          for (const p of this.publishers) p.showDistance(this.cfg.meetId, false);
         }
         break;
       }

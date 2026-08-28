@@ -2,7 +2,7 @@ import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
-import type { RaceSnap } from '../types';
+import type { RaceSnap, TrackerPub } from '../types';
 
 // Public (pk.) Mapbox token — same account/token the legacy admin pages use.
 // Override with VITE_MAPBOX_TOKEN at build time if the token is ever rotated.
@@ -17,31 +17,61 @@ const STYLES = {
 type StyleKey = keyof typeof STYLES;
 
 const MARKER_COLORS = ['#e8484d', '#2f7ded', '#1fa860', '#c85fd4', '#e8842f', '#12a5a5', '#96981f', '#777'];
+const COURSE_COLORS = ['#2f7ded', '#1fa860', '#c85fd4', '#e8842f', '#12a5a5'];
 
-export function MapView({ race, selectedImei }: { race: RaceSnap; selectedImei?: string }) {
+export interface MapSelection {
+  raceId: string;
+  imei: string;
+}
+
+/** One map for one or many races: a course line per race, markers deduped by IMEI. */
+export function MapView({ races, selected }: { races: RaceSnap[]; selected?: MapSelection }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map>(null);
   const markersRef = useRef(new Map<string, mapboxgl.Marker>());
-  const courseRef = useRef<GeoJSON.Feature | null>(null);
-  const loadedRaceRef = useRef<string>(null);
+  const coursesRef = useRef(new Map<string, GeoJSON.Feature>());
+  const loadedKeyRef = useRef<string>(null);
   const [styleKey, setStyleKey] = useState<StyleKey>('streets');
 
-  /** (Re-)add course + window-slice layers — needed after every setStyle. */
+  /** (Re-)add per-race course layers + the window-slice layer (lost on setStyle). */
   const applyCourseLayers = (fit: boolean) => {
     const map = mapRef.current;
-    const course = courseRef.current;
-    if (!map || !course) return;
-    for (const id of ['course-line', 'window-slice']) {
-      if (map.getLayer(id)) map.removeLayer(id);
-      if (map.getSource(id)) map.removeSource(id);
+    if (!map) return;
+    // clear all our layers, then re-add in order
+    const style = map.getStyle();
+    for (const layer of style?.layers ?? []) {
+      if (layer.id.startsWith('course-') || layer.id === 'window-slice') {
+        if (map.getLayer(layer.id)) map.removeLayer(layer.id);
+      }
     }
-    map.addSource('course-line', { type: 'geojson', data: course });
-    map.addLayer({
-      id: 'course-line',
-      type: 'line',
-      source: 'course-line',
-      paint: { 'line-color': '#2f7ded', 'line-width': 3, 'line-opacity': 0.8 },
-    });
+    for (const srcId of Object.keys(style?.sources ?? {})) {
+      if (srcId.startsWith('course-') || srcId === 'window-slice') {
+        if (map.getSource(srcId)) map.removeSource(srcId);
+      }
+    }
+
+    const bounds = new mapboxgl.LngLatBounds();
+    let raceIdx = 0;
+    for (const race of races) {
+      const course = coursesRef.current.get(race.raceId);
+      if (!course) continue;
+      const id = `course-${race.raceId}`;
+      map.addSource(id, { type: 'geojson', data: course });
+      map.addLayer({
+        id,
+        type: 'line',
+        source: id,
+        paint: {
+          'line-color': COURSE_COLORS[raceIdx % COURSE_COLORS.length],
+          'line-width': 3,
+          'line-opacity': 0.75,
+        },
+      });
+      for (const c of (course as GeoJSON.Feature<GeoJSON.LineString>).geometry.coordinates) {
+        bounds.extend(c as [number, number]);
+      }
+      raceIdx++;
+    }
     map.addSource('window-slice', {
       type: 'geojson',
       data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: [] } },
@@ -52,14 +82,7 @@ export function MapView({ race, selectedImei }: { race: RaceSnap; selectedImei?:
       source: 'window-slice',
       paint: { 'line-color': '#ffb02e', 'line-width': 6, 'line-opacity': 0.85 },
     });
-    if (fit) {
-      const coords = (course as GeoJSON.Feature<GeoJSON.LineString>).geometry.coordinates;
-      const bounds = coords.reduce(
-        (b, c) => b.extend(c as [number, number]),
-        new mapboxgl.LngLatBounds(coords[0] as [number, number], coords[0] as [number, number]),
-      );
-      map.fitBounds(bounds, { padding: 48 });
-    }
+    if (fit && !bounds.isEmpty()) map.fitBounds(bounds, { padding: 48 });
   };
 
   // init once
@@ -75,17 +98,23 @@ export function MapView({ race, selectedImei }: { race: RaceSnap; selectedImei?:
     return () => map.remove();
   }, []);
 
-  // course per race
+  // load courses whenever the set of races changes
+  const raceKey = races.map((r) => r.raceId).join('|');
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || loadedRaceRef.current === race.raceId) return;
+    if (!map || loadedKeyRef.current === raceKey) return;
     let cancelled = false;
-    api
-      .course(race.raceId)
-      .then((course) => {
+    Promise.all(
+      races.map(async (r) => {
+        if (!coursesRef.current.has(r.raceId)) {
+          const course = await api.course(r.raceId);
+          coursesRef.current.set(r.raceId, course.line);
+        }
+      }),
+    )
+      .then(() => {
         if (cancelled) return;
-        courseRef.current = course.line;
-        loadedRaceRef.current = race.raceId;
+        loadedKeyRef.current = raceKey;
         const run = () => applyCourseLayers(true);
         if (map.isStyleLoaded()) run();
         else map.once('load', run);
@@ -94,7 +123,8 @@ export function MapView({ race, selectedImei }: { race: RaceSnap; selectedImei?:
     return () => {
       cancelled = true;
     };
-  }, [race.raceId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [raceKey]);
 
   // basemap style toggle — layers are lost on setStyle, so re-add after load
   const switchStyle = (key: StyleKey) => {
@@ -112,30 +142,45 @@ export function MapView({ race, selectedImei }: { race: RaceSnap; selectedImei?:
     const markers = markersRef.current;
     const seen = new Set<string>();
 
-    race.trackers.forEach((t, i) => {
-      if (!t.lastFix) return;
-      seen.add(t.imei);
-      let marker = markers.get(t.imei);
+    // Union of trackers across races, deduped by IMEI (one physical device =
+    // one marker). Prefer the selected race's copy, else the first with a fix.
+    const byImei = new Map<string, { t: TrackerPub; colorIdx: number }>();
+    let idx = 0;
+    for (const race of races) {
+      for (const t of race.trackers) {
+        const existing = byImei.get(t.imei);
+        const preferThis = selected?.imei === t.imei && selected.raceId === race.raceId;
+        if (!existing || preferThis) {
+          byImei.set(t.imei, { t, colorIdx: existing?.colorIdx ?? idx });
+        }
+        if (!existing) idx++;
+      }
+    }
+
+    for (const [imei, { t, colorIdx }] of byImei) {
+      if (!t.lastFix) continue;
+      seen.add(imei);
+      let marker = markers.get(imei);
       if (!marker) {
         const el = document.createElement('div');
         el.className = 'map-marker';
         const dot = document.createElement('div');
         dot.className = 'map-marker-dot';
-        dot.style.background = MARKER_COLORS[i % MARKER_COLORS.length];
+        dot.style.background = MARKER_COLORS[colorIdx % MARKER_COLORS.length];
         const label = document.createElement('div');
         label.className = 'map-marker-label';
         el.append(dot, label);
         marker = new mapboxgl.Marker({ element: el }).setLngLat([t.lastFix.lon, t.lastFix.lat]).addTo(map);
-        markers.set(t.imei, marker);
+        markers.set(imei, marker);
       } else {
         marker.setLngLat([t.lastFix.lon, t.lastFix.lat]);
       }
       const el = marker.getElement();
-      el.classList.toggle('selected', t.imei === selectedImei);
+      el.classList.toggle('selected', imei === selected?.imei);
       el.classList.toggle('suspect', !!t.suspect);
       const label = el.querySelector('.map-marker-label') as HTMLDivElement;
       label.textContent = `${t.label}${t.distance !== undefined ? ` · ${t.distance.toFixed(2)}` : ''}`;
-    });
+    }
     for (const [imei, m] of markers) {
       if (!seen.has(imei)) {
         m.remove();
@@ -143,14 +188,15 @@ export function MapView({ race, selectedImei }: { race: RaceSnap; selectedImei?:
       }
     }
 
-    const sel = race.trackers.find((t) => t.imei === selectedImei);
+    const selRace = races.find((r) => r.raceId === selected?.raceId);
+    const sel = selRace?.trackers.find((t) => t.imei === selected?.imei);
     const src = map.getSource('window-slice') as mapboxgl.GeoJSONSource | undefined;
     src?.setData({
       type: 'Feature',
       properties: {},
       geometry: { type: 'LineString', coordinates: sel?.slice && sel.slice.length > 1 ? sel.slice : [] },
     });
-  }, [race, selectedImei]);
+  }, [races, selected]);
 
   return (
     <div className="map-wrap">
@@ -163,6 +209,16 @@ export function MapView({ race, selectedImei }: { race: RaceSnap; selectedImei?:
           Satellite
         </button>
       </div>
+      {races.length > 1 && (
+        <div className="map-legend">
+          {races.map((r, i) => (
+            <span key={r.raceId}>
+              <span className="legend-swatch" style={{ background: COURSE_COLORS[i % COURSE_COLORS.length] }} />
+              {r.name}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -24,8 +24,19 @@ export interface AppHolder {
  * the console at http://<server>:<port>/ with nothing else running.
  */
 export function startApi(holder: AppHolder, port: number): { httpServer: http.Server; io: SocketIOServer } {
+  // Routes capture `app` once, but the holder swaps App instances on config
+  // edits/event activation — so resolve every access against the current
+  // instance, and bind methods to it so `this` mutations land on the real App.
   const app = new Proxy({} as App, {
-    get: (_t, prop) => (holder.app as unknown as Record<string | symbol, unknown>)[prop],
+    get: (_t, prop) => {
+      const current = holder.app as unknown as Record<string | symbol, unknown>;
+      const v = current[prop];
+      return typeof v === 'function' ? (v as (...a: unknown[]) => unknown).bind(holder.app) : v;
+    },
+    set: (_t, prop, value) => {
+      (holder.app as unknown as Record<string | symbol, unknown>)[prop] = value;
+      return true;
+    },
   }) as App;
   const ex = express();
   ex.use(express.json({ limit: '5mb' }));

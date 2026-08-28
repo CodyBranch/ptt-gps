@@ -4,7 +4,7 @@ import { api } from './api';
 import { ConfirmDialog, type ConfirmRequest } from './components/Confirm';
 import { EventsView } from './components/EventsView';
 import { Login } from './components/Login';
-import { MapView } from './components/MapView';
+import { MapView, type MapSelection } from './components/MapView';
 import { RacePanel } from './components/RacePanel';
 import { RolesPanel } from './components/RolesPanel';
 import { SetupView } from './components/SetupView';
@@ -52,9 +52,9 @@ export default function App() {
   const [state, dispatch] = useReducer(reducer, { connected: false });
   const [auth, setAuth] = useState<'checking' | 'out' | string>('checking'); // string = username
   const [raceId, setRaceId] = useState<string>();
-  const [selectedImei, setSelectedImei] = useState<string>();
-  const [windowDialogImei, setWindowDialogImei] = useState<string>();
-  const [view, setView] = useState<'ops' | 'setup' | 'events'>('ops');
+  const [selected, setSelected] = useState<MapSelection>();
+  const [windowDialog, setWindowDialog] = useState<MapSelection>();
+  const [view, setView] = useState<'ops' | 'all' | 'setup' | 'events'>('ops');
   const [displayUnits, setDisplayUnits] = useState<Units>(() => {
     try {
       return (localStorage.getItem('ptt-display-units') as Units) || 'miles';
@@ -126,12 +126,33 @@ export default function App() {
     );
   }
 
+  const races = state.snapshot.races;
+  const dialogRace = races.find((r) => r.raceId === windowDialog?.raceId);
+  const dialogTracker = dialogRace?.trackers.find((t) => t.imei === windowDialog?.imei);
+
   const logout = async () => {
     await fetch('/api/logout', { method: 'POST' });
     window.location.reload();
   };
 
-  const windowTracker = race?.trackers.find((t) => t.imei === windowDialogImei);
+  /** The per-race operations block: roles + tracker table wired to one race. */
+  const racePanels = (r: RaceSnap) => (
+    <>
+      <RolesPanel
+        race={r}
+        displayUnits={displayUnits}
+        ask={ask}
+        onActivate={(roleKey, imei) => api.setActive(r.raceId, roleKey, imei).catch(alert)}
+      />
+      <TrackerTable
+        race={r}
+        displayUnits={displayUnits}
+        selectedImei={selected?.raceId === r.raceId ? selected.imei : undefined}
+        onSelect={(imei) => setSelected({ raceId: r.raceId, imei })}
+        onWindow={(imei) => setWindowDialog({ raceId: r.raceId, imei })}
+      />
+    </>
+  );
 
   return (
     <div className="app">
@@ -147,7 +168,13 @@ export default function App() {
           </span>
         </div>
         <nav className="race-tabs">
-          {state.snapshot.races.map((r) => (
+          {races.length > 1 && (
+            <button className={view === 'all' ? 'active' : ''} onClick={() => setView('all')}>
+              All races
+              {races.some((r) => r.status === 'live') && <span className="status-dot live" />}
+            </button>
+          )}
+          {races.map((r) => (
             <button
               key={r.raceId}
               className={view === 'ops' && r.raceId === race?.raceId ? 'active' : ''}
@@ -179,29 +206,30 @@ export default function App() {
           ask={ask}
           onActivated={() => {
             setRaceId(undefined);
-            setSelectedImei(undefined);
+            setSelected(undefined);
           }}
         />
       ) : view === 'setup' ? (
         <SetupView onSaved={() => setRaceId(undefined)} />
+      ) : view === 'all' ? (
+        <div className="main">
+          <aside className="all-races">
+            {races.map((r) => (
+              <div className="race-section" key={r.raceId}>
+                <div className="race-section-head">
+                  <span className="race-section-name">{r.name}</span>
+                  <RacePanel race={r} ask={ask} onAction={(a) => api.lifecycle(r.raceId, a).catch(alert)} />
+                </div>
+                {racePanels(r)}
+              </div>
+            ))}
+          </aside>
+          <MapView races={races} selected={selected} />
+        </div>
       ) : race ? (
         <div className="main">
-          <aside>
-            <RolesPanel
-              race={race}
-              displayUnits={displayUnits}
-              ask={ask}
-              onActivate={(roleKey, imei) => api.setActive(race.raceId, roleKey, imei).catch(alert)}
-            />
-            <TrackerTable
-              race={race}
-              displayUnits={displayUnits}
-              selectedImei={selectedImei}
-              onSelect={setSelectedImei}
-              onWindow={setWindowDialogImei}
-            />
-          </aside>
-          <MapView race={race} selectedImei={selectedImei} />
+          <aside>{racePanels(race)}</aside>
+          <MapView races={[race]} selected={selected?.raceId === race.raceId ? selected : undefined} />
         </div>
       ) : (
         <div className="loading">
@@ -212,16 +240,16 @@ export default function App() {
         </div>
       )}
       {confirm && <ConfirmDialog req={confirm} onClose={() => setConfirm(undefined)} />}
-      {windowTracker && race && (
+      {dialogRace && dialogTracker && (
         <WindowDialog
-          race={race}
-          tracker={windowTracker}
-          onClose={() => setWindowDialogImei(undefined)}
+          race={dialogRace}
+          tracker={dialogTracker}
+          onClose={() => setWindowDialog(undefined)}
           onSet={(start, end, latch) =>
-            api.setWindow(race.raceId, windowTracker.imei, start, end, latch).then(() => setWindowDialogImei(undefined), alert)
+            api.setWindow(dialogRace.raceId, dialogTracker.imei, start, end, latch).then(() => setWindowDialog(undefined), alert)
           }
           onRelease={() =>
-            api.releaseWindow(race.raceId, windowTracker.imei).then(() => setWindowDialogImei(undefined), alert)
+            api.releaseWindow(dialogRace.raceId, dialogTracker.imei).then(() => setWindowDialog(undefined), alert)
           }
         />
       )}

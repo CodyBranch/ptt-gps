@@ -117,6 +117,12 @@
       "name": "Marathon",
       "course": "courses/boston-marathon.kml",
       "units": "miles"
+    },
+    {
+      "id": "wheelchair",
+      "name": "Wheelchair",
+      "course": "courses/boston-marathon.kml",
+      "units": "miles"
     }
   ]
 }

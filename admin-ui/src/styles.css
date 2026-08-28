@@ -212,6 +212,24 @@ button.self-end { align-self: flex-end; }
 .retired-row td { opacity: 0.45; }
 .course-dist { white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--accent); font-weight: 600; }
 
+/* All-races view */
+.all-races { width: 520px; min-width: 440px; }
+.race-section { border-bottom: 2px solid var(--border); padding-bottom: 8px; }
+.race-section-head {
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px 2px; flex-wrap: wrap;
+  position: sticky; top: 0; background: var(--panel); z-index: 5;
+}
+.race-section-name { font-weight: 800; font-size: 15px; }
+.race-section .race-panel { margin-left: auto; }
+
+.map-legend {
+  position: absolute; bottom: 24px; left: 10px; z-index: 5; display: flex; gap: 12px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px;
+  font-size: 12px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+.map-legend > span { display: inline-flex; align-items: center; gap: 6px; }
+.legend-swatch { width: 14px; height: 4px; border-radius: 2px; display: inline-block; }
+
 /* Event library */
 .events-list {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; padding: 16px;
