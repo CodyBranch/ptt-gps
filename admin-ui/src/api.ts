@@ -88,6 +88,29 @@ export const api = {
     const res = await fetch(`/api/fleet/${imei}`, { method: 'DELETE' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
   },
+
+  events: async () => {
+    const res = await fetch('/api/events');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  },
+
+  createEvent: async (opts: { id: string; name: string; meetId: number; copyFromFile?: string }) => {
+    const res = await fetch('/api/events', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(opts),
+    });
+    const json = await res.json();
+    if (!res.ok || json.ok === false) throw new Error(json.error ?? `HTTP ${res.status}`);
+    return json.result as { file: string };
+  },
+
+  activateEvent: async (file: string) => {
+    const res = await fetch(`/api/events/${encodeURIComponent(file)}/activate`, { method: 'POST' });
+    const json = await res.json();
+    if (!res.ok || json.ok === false) throw new Error(json.error ?? `HTTP ${res.status}`);
+  },
 };
 
 const MI_PER_KM = 0.621371;

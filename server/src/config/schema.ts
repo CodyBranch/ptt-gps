@@ -80,7 +80,8 @@ export const EventSchema = z.object({
   trackers: z.array(TrackerSchema),
   roles: z.array(RoleSchema),
   snapDefaults: SnapSchema.prefault({}),
-  races: z.array(RaceSchema).min(1),
+  /** A freshly created event legitimately has no races yet — add them in Setup. */
+  races: z.array(RaceSchema).default([]),
 });
 
 export type EventConfig = z.infer<typeof EventSchema>;

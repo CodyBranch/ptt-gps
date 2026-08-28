@@ -5,14 +5,17 @@ import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { Server as SocketIOServer } from 'socket.io';
 import type { App } from '../app.js';
-import type { ConfigManager } from '../config/manager.js';
+import { listEvents, createEvent, type ConfigManager } from '../config/manager.js';
 import { AuthService } from './auth.js';
 
 export interface AppHolder {
   app: App;
   /** Rebuild engines/publishers from an edited config (setup UI saves). */
   rebuild: (json: unknown) => void;
-  manager: ConfigManager;
+  readonly manager: ConfigManager;
+  eventsDir: string;
+  /** Switch the running server to another event file in eventsDir. */
+  activateEvent: (file: string) => void;
 }
 
 /**
@@ -163,6 +166,34 @@ export function startApi(holder: AppHolder, port: number): { httpServer: http.Se
       }
     }
   };
+
+  // --- event library ---
+
+  ex.get('/api/events', (_req, res) => {
+    res.json({ active: holder.manager.raw.id, events: listEvents(holder.eventsDir) });
+  });
+
+  ex.post(
+    '/api/events',
+    act((req) => {
+      const { id, name, meetId, copyFromFile } = req.body ?? {};
+      if (!name || typeof name !== 'string') throw new Error('Event name is required');
+      return { file: createEvent(holder.eventsDir, { id: id || name, name, meetId: Number(meetId) || 0, copyFromFile }) };
+    }),
+  );
+
+  ex.post(
+    '/api/events/:file/activate',
+    act((req) => {
+      guardIdle();
+      const file = req.params.file as string;
+      const listing = listEvents(holder.eventsDir).find((e) => e.file === file);
+      if (!listing) throw new Error(`Unknown event file: ${file}`);
+      if (listing.error) throw new Error(`Event file is invalid: ${listing.error}`);
+      holder.activateEvent(file);
+      io.emit('snapshot', holder.app.snapshot());
+    }),
+  );
 
   ex.get('/api/config', (_req, res) => {
     res.json(holder.manager.raw);

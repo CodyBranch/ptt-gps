@@ -2,6 +2,7 @@ import { useEffect, useMemo, useReducer, useState } from 'react';
 import { io } from 'socket.io-client';
 import { api } from './api';
 import { ConfirmDialog, type ConfirmRequest } from './components/Confirm';
+import { EventsView } from './components/EventsView';
 import { Login } from './components/Login';
 import { MapView } from './components/MapView';
 import { RacePanel } from './components/RacePanel';
@@ -53,7 +54,7 @@ export default function App() {
   const [raceId, setRaceId] = useState<string>();
   const [selectedImei, setSelectedImei] = useState<string>();
   const [windowDialogImei, setWindowDialogImei] = useState<string>();
-  const [view, setView] = useState<'ops' | 'setup'>('ops');
+  const [view, setView] = useState<'ops' | 'setup' | 'events'>('ops');
   const [displayUnits, setDisplayUnits] = useState<Units>(() => {
     try {
       return (localStorage.getItem('ptt-display-units') as Units) || 'miles';
@@ -117,7 +118,7 @@ export default function App() {
   if (auth === 'checking') return <div className="loading">Checking sign-in…</div>;
   if (auth === 'out') return <Login onSuccess={(username) => setAuth(username)} />;
 
-  if (!state.snapshot || !race) {
+  if (!state.snapshot) {
     return (
       <div className="loading">
         {state.connected ? 'Waiting for event snapshot…' : 'Connecting to server…'}
@@ -130,7 +131,7 @@ export default function App() {
     window.location.reload();
   };
 
-  const windowTracker = race.trackers.find((t) => t.imei === windowDialogImei);
+  const windowTracker = race?.trackers.find((t) => t.imei === windowDialogImei);
 
   return (
     <div className="app">
@@ -149,7 +150,7 @@ export default function App() {
           {state.snapshot.races.map((r) => (
             <button
               key={r.raceId}
-              className={view === 'ops' && r.raceId === race.raceId ? 'active' : ''}
+              className={view === 'ops' && r.raceId === race?.raceId ? 'active' : ''}
               onClick={() => {
                 setView('ops');
                 setRaceId(r.raceId);
@@ -159,6 +160,9 @@ export default function App() {
               <span className={`status-dot ${r.status}`} />
             </button>
           ))}
+          <button className={view === 'events' ? 'active' : ''} onClick={() => setView('events')}>
+            ☰ Events
+          </button>
           <button className={view === 'setup' ? 'active' : ''} onClick={() => setView('setup')}>
             ⚙ Setup
           </button>
@@ -166,13 +170,21 @@ export default function App() {
         <button className="mini units-toggle" onClick={toggleUnits} title="Display units (does not change published output)">
           {displayUnits === 'miles' ? 'mi' : 'km'}
         </button>
-        {view === 'ops' && (
+        {view === 'ops' && race && (
           <RacePanel race={race} ask={ask} onAction={(a) => api.lifecycle(race.raceId, a).catch(alert)} />
         )}
       </header>
-      {view === 'setup' ? (
+      {view === 'events' ? (
+        <EventsView
+          ask={ask}
+          onActivated={() => {
+            setRaceId(undefined);
+            setSelectedImei(undefined);
+          }}
+        />
+      ) : view === 'setup' ? (
         <SetupView onSaved={() => setRaceId(undefined)} />
-      ) : (
+      ) : race ? (
         <div className="main">
           <aside>
             <RolesPanel
@@ -191,9 +203,16 @@ export default function App() {
           </aside>
           <MapView race={race} selectedImei={selectedImei} />
         </div>
+      ) : (
+        <div className="loading">
+          <span>
+            No races configured for this event yet — add one in{' '}
+            <button className="linklike" onClick={() => setView('setup')}>Setup</button>.
+          </span>
+        </div>
       )}
       {confirm && <ConfirmDialog req={confirm} onClose={() => setConfirm(undefined)} />}
-      {windowTracker && (
+      {windowTracker && race && (
         <WindowDialog
           race={race}
           tracker={windowTracker}

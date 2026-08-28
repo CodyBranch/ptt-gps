@@ -68,6 +68,16 @@ export interface EventConfigT {
   races: Array<{ id: string; name: string; course: string; units: Units }>;
 }
 
+export interface EventListing {
+  id: string;
+  name: string;
+  meetId: number;
+  file: string;
+  races: number;
+  trackers: number;
+  error?: string;
+}
+
 export interface CourseInfo {
   file: string;
   points: number;

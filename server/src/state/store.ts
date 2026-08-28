@@ -75,6 +75,10 @@ export class Store {
         path TEXT NOT NULL,
         value TEXT NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
       CREATE TABLE IF NOT EXISTS fleet (
         imei TEXT PRIMARY KEY,
         label TEXT NOT NULL,
@@ -203,6 +207,17 @@ export class Store {
 
   devices(): unknown[] {
     return this.db.prepare(`SELECT * FROM devices ORDER BY imei`).all();
+  }
+
+  getSetting(key: string): string | undefined {
+    const row = this.db.prepare(`SELECT value FROM settings WHERE key = ?`).get(key) as { value: string } | undefined;
+    return row?.value;
+  }
+
+  setSetting(key: string, value: string): void {
+    this.db
+      .prepare(`INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`)
+      .run(key, value);
   }
 
   // --- fleet registry (curated tracker inventory, event-independent) ---

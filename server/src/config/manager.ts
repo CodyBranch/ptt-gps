@@ -10,6 +10,67 @@ import type { EventConfig } from './schema.js';
  * every accepted update is validated, persisted, and handed back resolved
  * for an engine rebuild.
  */
+export interface EventListing {
+  id: string;
+  name: string;
+  meetId: number;
+  file: string;
+  races: number;
+  trackers: number;
+  error?: string;
+}
+
+/** Scan an events directory for event config files. */
+export function listEvents(dir: string): EventListing[] {
+  const out: EventListing[] = [];
+  for (const f of fs.readdirSync(dir)) {
+    if (!f.endsWith('.json')) continue;
+    const file = path.join(dir, f);
+    try {
+      const json = JSON.parse(fs.readFileSync(file, 'utf8'));
+      out.push({
+        id: String(json.id ?? f.replace(/\.json$/, '')),
+        name: String(json.name ?? f),
+        meetId: Number(json.meetId ?? 0),
+        file: f,
+        races: Array.isArray(json.races) ? json.races.length : 0,
+        trackers: Array.isArray(json.trackers) ? json.trackers.length : 0,
+      });
+    } catch (err) {
+      out.push({ id: f, name: f, meetId: 0, file: f, races: 0, trackers: 0, error: (err as Error).message });
+    }
+  }
+  return out.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * Create a new event config file — blank, or copied from an existing event
+ * (the copy-last-year workflow: everything carries over, you update meet ID,
+ * name, and whatever changed).
+ */
+export function createEvent(
+  dir: string,
+  opts: { id: string; name: string; meetId: number; copyFromFile?: string },
+): string {
+  const slug = opts.id.toLowerCase().replace(/[^a-z0-9-_]+/g, '-').replace(/^-+|-+$/g, '');
+  if (!slug) throw new Error('Event id is required');
+  const file = path.join(dir, `${slug}.json`);
+  if (fs.existsSync(file)) throw new Error(`Event file ${slug}.json already exists`);
+
+  let base: Record<string, unknown>;
+  if (opts.copyFromFile) {
+    const src = path.join(dir, path.basename(opts.copyFromFile));
+    if (!fs.existsSync(src)) throw new Error(`Copy source not found: ${opts.copyFromFile}`);
+    base = JSON.parse(fs.readFileSync(src, 'utf8'));
+  } else {
+    base = { listeners: [{ name: 'queclink', port: 1000 }], firebase: [], trackers: [], roles: [], races: [] };
+  }
+  const json = { ...base, id: slug, name: opts.name, meetId: opts.meetId };
+  parseEventConfig(json, dir); // validate before writing
+  fs.writeFileSync(file, JSON.stringify(json, null, 2) + '\n');
+  return `${slug}.json`;
+}
+
 export class ConfigManager {
   raw: EventConfig;
   readonly baseDir: string;
@@ -22,6 +83,11 @@ export class ConfigManager {
 
   get coursesDir(): string {
     return path.join(this.baseDir, 'courses');
+  }
+
+  /** The engine-ready form (absolute course paths) of the current raw config. */
+  resolved(): EventConfig {
+    return parseEventConfig(this.raw, this.baseDir).resolved;
   }
 
   /** Validate + persist a full event config; returns the resolved form. */
