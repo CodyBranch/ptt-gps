@@ -1,24 +1,34 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
-import type { CourseInfo, DeviceRow, EventConfigT } from '../types';
+import type { CourseInfo, DeviceRow, EventConfigT, FleetRow } from '../types';
 
 /**
- * Event setup: edit the event config (trackers, roles, races, units) and manage
- * course files. Saves write the JSON back on the server and rebuild the engines
- * — the server refuses while any race is armed or live.
+ * Event setup.
+ * The fleet registry (tracker inventory) is persistent and event-independent —
+ * edits there save immediately. The event sections (what we're tracking, which
+ * fleet trackers are matched to it, races/courses) edit the event config and
+ * apply on "Save & rebuild"; the server refuses while a race is armed or live.
  */
 export function SetupView({ onSaved }: { onSaved: () => void }) {
   const [cfg, setCfg] = useState<EventConfigT>();
   const [courses, setCourses] = useState<CourseInfo[]>([]);
+  const [fleet, setFleet] = useState<FleetRow[]>([]);
   const [devices, setDevices] = useState<DeviceRow[]>([]);
   const [dirty, setDirty] = useState(false);
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string }>();
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const reload = () => {
-    api.getConfig().then(setCfg).catch(console.error);
-    api.courses().then(setCourses).catch(console.error);
+  const reloadFleet = () => {
+    api.fleet().then(setFleet).catch(console.error);
     api.devices().then(setDevices).catch(console.error);
+  };
+  const reload = () => {
+    api.getConfig().then((c) => {
+      setCfg(c);
+      setDirty(false);
+    }).catch(console.error);
+    api.courses().then(setCourses).catch(console.error);
+    reloadFleet();
   };
   useEffect(reload, []);
 
@@ -55,7 +65,37 @@ export function SetupView({ onSaved }: { onSaved: () => void }) {
     }
   };
 
-  const knownImeis = new Set(cfg.trackers.map((t) => t.imei));
+  const saveFleetRow = async (row: FleetRow) => {
+    try {
+      await api.saveFleet({
+        imei: row.imei,
+        label: row.label,
+        model: row.model,
+        hasBattery: !!row.hasBattery,
+        notes: row.notes,
+        retired: !!row.retired,
+      });
+      setMsg({ kind: 'ok', text: `Fleet tracker ${row.label || row.imei} saved.` });
+      reloadFleet();
+    } catch (err) {
+      setMsg({ kind: 'err', text: (err as Error).message });
+    }
+  };
+
+  const rosterImeis = new Set(cfg.trackers.map((t) => t.imei));
+  const fleetImeis = new Set(fleet.map((f) => f.imei));
+  const fleetByImei = new Map(fleet.map((f) => [f.imei, f]));
+
+  /** Add a fleet tracker to the event roster (label/battery from the registry). */
+  const addToRoster = (c: EventConfigT, imei: string) => {
+    if (c.trackers.some((t) => t.imei === imei)) return;
+    const f = fleetByImei.get(imei);
+    c.trackers.push({ imei, label: f?.label ?? imei, hasBattery: f ? !!f.hasBattery : true });
+  };
+
+  const fmtSeen = (ms: number | null) => (ms ? new Date(ms).toLocaleString() : 'never');
+
+  const courseFor = (file: string) => courses.find((k) => k.file === file);
 
   return (
     <div className="setup">
@@ -72,6 +112,92 @@ export function SetupView({ onSaved }: { onSaved: () => void }) {
       </div>
 
       <div className="setup-grid">
+        <section>
+          <h3>Tracker fleet</h3>
+          <p className="hint">The permanent inventory — shared by every event. Edits save immediately.</p>
+          <table className="setup-table">
+            <thead>
+              <tr><th>Label</th><th>IMEI</th><th>Model</th><th>Batt</th><th>Last seen</th><th></th><th></th></tr>
+            </thead>
+            <tbody>
+              {fleet.map((f, i) => (
+                <tr key={f.imei} className={f.retired ? 'retired-row' : ''}>
+                  <td>
+                    <input
+                      value={f.label}
+                      onChange={(e) => setFleet(fleet.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))}
+                    />
+                  </td>
+                  <td className="mono">{f.imei}</td>
+                  <td>
+                    <input
+                      className="w-num"
+                      value={f.model ?? ''}
+                      placeholder="GL300"
+                      onChange={(e) => setFleet(fleet.map((x, j) => (j === i ? { ...x, model: e.target.value } : x)))}
+                    />
+                  </td>
+                  <td className="center">
+                    <input
+                      type="checkbox"
+                      checked={!!f.hasBattery}
+                      title="Uncheck for vehicle-powered units"
+                      onChange={(e) => setFleet(fleet.map((x, j) => (j === i ? { ...x, hasBattery: e.target.checked ? 1 : 0 } : x)))}
+                    />
+                  </td>
+                  <td className="dim">
+                    {fmtSeen(f.last_received_ms)}
+                    {f.seen_battery != null ? ` · ${f.seen_battery}%` : ''}
+                  </td>
+                  <td>
+                    <button className="mini" onClick={() => saveFleetRow(f)}>Save</button>
+                  </td>
+                  <td>
+                    <button
+                      className="mini"
+                      title={f.retired ? 'Return to service' : 'Retire (kept in history, hidden from pickers)'}
+                      onClick={() => saveFleetRow({ ...f, retired: f.retired ? 0 : 1 })}
+                    >
+                      {f.retired ? 'Unretire' : 'Retire'}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <NewFleetRow onAdd={(imei, label) => saveFleetRow({ imei, label, model: null, hasBattery: 1, notes: null, retired: 0, seen_battery: null, last_received_ms: null, last_t_utc_ms: null, protocol: null })} />
+
+          {devices.filter((dv) => !fleetImeis.has(dv.imei)).length > 0 && (
+            <>
+              <h4>Seen on the wire, not in the fleet</h4>
+              <table className="setup-table dim-table">
+                <tbody>
+                  {devices
+                    .filter((dv) => !fleetImeis.has(dv.imei))
+                    .map((dv) => (
+                      <tr key={dv.imei}>
+                        <td className="mono">{dv.imei}</td>
+                        <td>{dv.protocol}</td>
+                        <td>{dv.battery != null ? `${dv.battery}%` : ''}</td>
+                        <td>{fmtSeen(dv.last_received_ms)}</td>
+                        <td>
+                          <button
+                            className="mini"
+                            onClick={() =>
+                              saveFleetRow({ imei: dv.imei, label: dv.imei, model: null, hasBattery: 1, notes: null, retired: 0, seen_battery: null, last_received_ms: null, last_t_utc_ms: null, protocol: null })
+                            }
+                          >
+                            + To fleet
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </>
+          )}
+        </section>
+
         <section>
           <h3>Event</h3>
           <div className="form-row">
@@ -127,87 +253,11 @@ export function SetupView({ onSaved }: { onSaved: () => void }) {
         </section>
 
         <section>
-          <h3>Trackers</h3>
-          <table className="setup-table">
-            <thead>
-              <tr><th>IMEI</th><th>Label</th><th>Battery</th><th></th></tr>
-            </thead>
-            <tbody>
-              {cfg.trackers.map((t, i) => (
-                <tr key={i}>
-                  <td>
-                    <input
-                      className="w-imei"
-                      value={t.imei}
-                      onChange={(e) => edit((c) => (c.trackers[i].imei = e.target.value.trim()))}
-                    />
-                  </td>
-                  <td>
-                    <input value={t.label} onChange={(e) => edit((c) => (c.trackers[i].label = e.target.value))} />
-                  </td>
-                  <td className="center">
-                    <input
-                      type="checkbox"
-                      checked={t.hasBattery}
-                      title="Uncheck for vehicle-powered units (GV500)"
-                      onChange={(e) => edit((c) => (c.trackers[i].hasBattery = e.target.checked))}
-                    />
-                  </td>
-                  <td>
-                    <button
-                      className="mini danger"
-                      onClick={() =>
-                        edit((c) => {
-                          const imei = c.trackers[i].imei;
-                          c.trackers.splice(i, 1);
-                          for (const r of c.roles) r.trackers = r.trackers.filter((x) => x !== imei);
-                        })
-                      }
-                    >
-                      ✕
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <button
-            className="mini"
-            onClick={() => edit((c) => c.trackers.push({ imei: '', label: '', hasBattery: true }))}
-          >
-            + Add tracker
-          </button>
-
-          {devices.filter((dv) => !knownImeis.has(dv.imei)).length > 0 && (
-            <>
-              <h4>Seen on the wire (not in this event)</h4>
-              <table className="setup-table dim-table">
-                <tbody>
-                  {devices
-                    .filter((dv) => !knownImeis.has(dv.imei))
-                    .map((dv) => (
-                      <tr key={dv.imei}>
-                        <td className="mono">{dv.imei}</td>
-                        <td>{dv.battery != null ? `${dv.battery}%` : ''}</td>
-                        <td>{dv.last_received_ms ? new Date(dv.last_received_ms).toLocaleString() : ''}</td>
-                        <td>
-                          <button
-                            className="mini"
-                            onClick={() => edit((c) => c.trackers.push({ imei: dv.imei, label: dv.imei, hasBattery: true }))}
-                          >
-                            + Add
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            </>
-          )}
-        </section>
-
-        <section>
-          <h3>Roles</h3>
+          <h3>What we're tracking</h3>
+          <p className="hint">
+            Define the roles for this event, then match each to fleet trackers — ★ first is the primary,
+            the rest are failover backups in order.
+          </p>
           {cfg.roles.map((role, ri) => (
             <div className="role-edit" key={ri}>
               <div className="form-row">
@@ -277,15 +327,21 @@ export function SetupView({ onSaved }: { onSaved: () => void }) {
                 <select
                   value=""
                   onChange={(e) => {
-                    if (e.target.value) edit((c) => c.roles[ri].trackers.push(e.target.value));
+                    const imei = e.target.value;
+                    if (imei) {
+                      edit((c) => {
+                        addToRoster(c, imei); // matching a fleet tracker pulls it into the event roster
+                        c.roles[ri].trackers.push(imei);
+                      });
+                    }
                   }}
                 >
-                  <option value="">+ tracker…</option>
-                  {cfg.trackers
-                    .filter((t) => t.imei && !role.trackers.includes(t.imei))
-                    .map((t) => (
-                      <option key={t.imei} value={t.imei}>
-                        {t.label || t.imei}
+                  <option value="">+ match tracker…</option>
+                  {fleet
+                    .filter((f) => !f.retired && !role.trackers.includes(f.imei))
+                    .map((f) => (
+                      <option key={f.imei} value={f.imei}>
+                        {f.label}{rosterImeis.has(f.imei) ? '' : ' (fleet)'}
                       </option>
                     ))}
                 </select>
@@ -298,50 +354,113 @@ export function SetupView({ onSaved }: { onSaved: () => void }) {
           >
             + Add role
           </button>
-          <p className="hint">★ first tracker is the primary; the rest are failover backups in order.</p>
+        </section>
+
+        <section>
+          <h3>Event roster</h3>
+          <p className="hint">Fleet trackers matched to this event. Labels here are per-event (e.g. "Lead A").</p>
+          <table className="setup-table">
+            <thead>
+              <tr><th>Fleet tracker</th><th>Event label</th><th></th></tr>
+            </thead>
+            <tbody>
+              {cfg.trackers.map((t, i) => {
+                const f = fleetByImei.get(t.imei);
+                return (
+                  <tr key={t.imei || i}>
+                    <td>
+                      <span>{f?.label ?? '—'}</span> <span className="mono dim">{t.imei}</span>
+                    </td>
+                    <td>
+                      <input value={t.label} onChange={(e) => edit((c) => (c.trackers[i].label = e.target.value))} />
+                    </td>
+                    <td>
+                      <button
+                        className="mini danger"
+                        onClick={() =>
+                          edit((c) => {
+                            const imei = c.trackers[i].imei;
+                            c.trackers.splice(i, 1);
+                            for (const r of c.roles) r.trackers = r.trackers.filter((x) => x !== imei);
+                          })
+                        }
+                      >
+                        ✕
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <select
+            value=""
+            onChange={(e) => {
+              if (e.target.value) edit((c) => addToRoster(c, e.target.value));
+            }}
+          >
+            <option value="">+ Add from fleet…</option>
+            {fleet
+              .filter((f) => !f.retired && !rosterImeis.has(f.imei))
+              .map((f) => (
+                <option key={f.imei} value={f.imei}>
+                  {f.label} ({f.imei})
+                </option>
+              ))}
+          </select>
         </section>
 
         <section>
           <h3>Races</h3>
           <table className="setup-table">
             <thead>
-              <tr><th>ID</th><th>Name</th><th>Course</th><th>Course units</th><th></th></tr>
+              <tr><th>ID</th><th>Name</th><th>Course</th><th>Distance</th><th>Units</th><th></th></tr>
             </thead>
             <tbody>
-              {cfg.races.map((race, i) => (
-                <tr key={i}>
-                  <td>
-                    <input value={race.id} onChange={(e) => edit((c) => (c.races[i].id = e.target.value))} />
-                  </td>
-                  <td>
-                    <input value={race.name} onChange={(e) => edit((c) => (c.races[i].name = e.target.value))} />
-                  </td>
-                  <td>
-                    <select value={race.course} onChange={(e) => edit((c) => (c.races[i].course = e.target.value))}>
-                      {!courses.some((k) => k.file === race.course) && <option value={race.course}>{race.course}</option>}
-                      {courses.map((k) => (
-                        <option key={k.file} value={k.file}>
-                          {k.file.replace('courses/', '')} ({k.lengthMi.toFixed(1)} mi)
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td>
-                    <select
-                      value={race.units}
-                      onChange={(e) => edit((c) => (c.races[i].units = e.target.value as 'miles' | 'kilometers'))}
-                    >
-                      <option value="miles">miles</option>
-                      <option value="kilometers">kilometers</option>
-                    </select>
-                  </td>
-                  <td>
-                    <button className="mini danger" onClick={() => edit((c) => c.races.splice(i, 1))}>
-                      ✕
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {cfg.races.map((race, i) => {
+                const k = courseFor(race.course);
+                return (
+                  <tr key={i}>
+                    <td>
+                      <input value={race.id} onChange={(e) => edit((c) => (c.races[i].id = e.target.value))} />
+                    </td>
+                    <td>
+                      <input value={race.name} onChange={(e) => edit((c) => (c.races[i].name = e.target.value))} />
+                    </td>
+                    <td>
+                      <select value={race.course} onChange={(e) => edit((c) => (c.races[i].course = e.target.value))}>
+                        {!courses.some((x) => x.file === race.course) && <option value={race.course}>{race.course}</option>}
+                        {courses.map((x) => (
+                          <option key={x.file} value={x.file}>
+                            {x.file.replace('courses/', '')}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="num course-dist">
+                      {k
+                        ? race.units === 'miles'
+                          ? `${k.lengthMi.toFixed(2)} mi`
+                          : `${k.lengthKm.toFixed(2)} km`
+                        : '—'}
+                    </td>
+                    <td>
+                      <select
+                        value={race.units}
+                        onChange={(e) => edit((c) => (c.races[i].units = e.target.value as 'miles' | 'kilometers'))}
+                      >
+                        <option value="miles">miles</option>
+                        <option value="kilometers">kilometers</option>
+                      </select>
+                    </td>
+                    <td>
+                      <button className="mini danger" onClick={() => edit((c) => c.races.splice(i, 1))}>
+                        ✕
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
           <button
@@ -391,6 +510,35 @@ export function SetupView({ onSaved }: { onSaved: () => void }) {
           <p className="hint">Export from Google Earth as a single-path LineString. Length is measured on upload.</p>
         </section>
       </div>
+    </div>
+  );
+}
+
+function NewFleetRow({ onAdd }: { onAdd: (imei: string, label: string) => void }) {
+  const [imei, setImei] = useState('');
+  const [label, setLabel] = useState('');
+  const valid = /^\d{15}$/.test(imei) && label.trim().length > 0;
+  return (
+    <div className="form-row">
+      <label>
+        New IMEI
+        <input className="w-imei" value={imei} onChange={(e) => setImei(e.target.value.trim())} placeholder="15 digits" />
+      </label>
+      <label>
+        Label
+        <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="GL300 #7" />
+      </label>
+      <button
+        className="mini self-end"
+        disabled={!valid}
+        onClick={() => {
+          onAdd(imei, label.trim());
+          setImei('');
+          setLabel('');
+        }}
+      >
+        + Add to fleet
+      </button>
     </div>
   );
 }

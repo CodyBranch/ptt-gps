@@ -1,5 +1,6 @@
 import { toDisplay, unitAbbr } from '../api';
 import type { RaceSnap, TrackerPub, Units } from '../types';
+import type { ConfirmRequest } from './Confirm';
 import { BatteryBar, GpsChip } from './Health';
 
 /** Fix age in seconds, from server receive time. */
@@ -25,10 +26,12 @@ export function fmtAge(age: number | undefined): string {
 export function RolesPanel({
   race,
   displayUnits,
+  ask,
   onActivate,
 }: {
   race: RaceSnap;
   displayUnits: Units;
+  ask: (req: ConfirmRequest) => void;
   onActivate: (roleKey: string, imei: string) => void;
 }) {
   const byImei = new Map(race.trackers.map((t) => [t.imei, t]));
@@ -61,11 +64,17 @@ export function RolesPanel({
                       type="radio"
                       name={`role-${race.raceId}-${role.key}`}
                       checked={isActive}
-                      onChange={() => {
-                        if (window.confirm(`Make ${t?.label ?? imei} the active ${role.label}?`)) {
-                          onActivate(role.key, imei);
-                        }
-                      }}
+                      onChange={() =>
+                        ask({
+                          title: `Make ${t?.label ?? imei} the active ${role.label}?`,
+                          body:
+                            race.status === 'live'
+                              ? 'Published distances switch to this tracker immediately.'
+                              : undefined,
+                          confirmLabel: 'Switch',
+                          onConfirm: () => onActivate(role.key, imei),
+                        })
+                      }
                     />
                     <span className="t-label">{t?.label ?? imei}</span>
                   </label>

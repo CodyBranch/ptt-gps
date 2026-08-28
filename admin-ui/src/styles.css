@@ -125,6 +125,8 @@ button.mini.primary { background: var(--accent); border-color: var(--accent); fo
 .dialog-check { display: flex; gap: 8px; align-items: center; font-size: 13px; margin-bottom: 14px; cursor: pointer; }
 .dialog-actions { display: flex; gap: 8px; align-items: center; }
 .dialog-actions .spacer { flex: 1; }
+.dialog-confirm { width: 340px; }
+button.mini.primary.danger-solid { background: var(--bad); border-color: var(--bad); }
 
 .whoami { color: var(--dim); font-size: 12px; }
 .units-toggle { min-width: 42px; font-weight: 700; }
@@ -206,7 +208,9 @@ button.self-end { align-self: flex-end; }
   background: none; border: none; color: var(--dim); cursor: pointer; font-size: 11px; padding: 0 2px;
 }
 .chip button:hover { color: var(--text); }
-.hint { color: var(--dim); font-size: 12px; margin-top: 8px; }
+.hint { color: var(--dim); font-size: 12px; margin: 4px 0 10px; }
+.retired-row td { opacity: 0.45; }
+.course-dist { white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--accent); font-weight: 600; }
 button.linklike {
   background: none; border: none; color: var(--accent); cursor: pointer; font-size: 12px; padding: 0;
   text-decoration: underline;

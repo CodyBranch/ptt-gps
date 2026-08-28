@@ -75,6 +75,19 @@ export interface CourseInfo {
   lengthKm: number;
 }
 
+export interface FleetRow {
+  imei: string;
+  label: string;
+  model: string | null;
+  hasBattery: number;
+  notes: string | null;
+  retired: number;
+  seen_battery: number | null;
+  last_received_ms: number | null;
+  last_t_utc_ms: number | null;
+  protocol: string | null;
+}
+
 export interface DeviceRow {
   imei: string;
   last_lat: number | null;

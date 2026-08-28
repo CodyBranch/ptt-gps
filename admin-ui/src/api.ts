@@ -67,6 +67,27 @@ export const api = {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return res.json();
   },
+
+  fleet: async () => {
+    const res = await fetch('/api/fleet');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  },
+
+  saveFleet: async (t: { imei: string; label: string; model?: string | null; hasBattery: boolean; notes?: string | null; retired: boolean }) => {
+    const res = await fetch('/api/fleet', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(t),
+    });
+    const json = await res.json();
+    if (!res.ok || json.ok === false) throw new Error(json.error ?? `HTTP ${res.status}`);
+  },
+
+  deleteFleet: async (imei: string) => {
+    const res = await fetch(`/api/fleet/${imei}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  },
 };
 
 const MI_PER_KM = 0.621371;

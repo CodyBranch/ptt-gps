@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useReducer, useState } from 'react';
 import { io } from 'socket.io-client';
 import { api } from './api';
+import { ConfirmDialog, type ConfirmRequest } from './components/Confirm';
 import { Login } from './components/Login';
 import { MapView } from './components/MapView';
 import { RacePanel } from './components/RacePanel';
@@ -60,16 +61,25 @@ export default function App() {
       return 'miles';
     }
   });
+  const [confirm, setConfirm] = useState<ConfirmRequest>();
   const [, tick] = useReducer((n: number) => n + 1, 0);
+  const ask = (req: ConfirmRequest) => setConfirm(req);
 
   const toggleUnits = () => {
     const next: Units = displayUnits === 'miles' ? 'kilometers' : 'miles';
-    setDisplayUnits(next);
-    try {
-      localStorage.setItem('ptt-display-units', next);
-    } catch {
-      /* per-viewer convenience only */
-    }
+    ask({
+      title: `Switch display to ${next}?`,
+      body: 'Changes what this console shows only — published distances keep the event’s output units.',
+      confirmLabel: `Show ${next === 'miles' ? 'miles' : 'kilometers'}`,
+      onConfirm: () => {
+        setDisplayUnits(next);
+        try {
+          localStorage.setItem('ptt-display-units', next);
+        } catch {
+          /* per-viewer convenience only */
+        }
+      },
+    });
   };
 
   useEffect(() => {
@@ -156,7 +166,9 @@ export default function App() {
         <button className="mini units-toggle" onClick={toggleUnits} title="Display units (does not change published output)">
           {displayUnits === 'miles' ? 'mi' : 'km'}
         </button>
-        {view === 'ops' && <RacePanel race={race} onAction={(a) => api.lifecycle(race.raceId, a).catch(alert)} />}
+        {view === 'ops' && (
+          <RacePanel race={race} ask={ask} onAction={(a) => api.lifecycle(race.raceId, a).catch(alert)} />
+        )}
       </header>
       {view === 'setup' ? (
         <SetupView onSaved={() => setRaceId(undefined)} />
@@ -166,6 +178,7 @@ export default function App() {
             <RolesPanel
               race={race}
               displayUnits={displayUnits}
+              ask={ask}
               onActivate={(roleKey, imei) => api.setActive(race.raceId, roleKey, imei).catch(alert)}
             />
             <TrackerTable
@@ -179,6 +192,7 @@ export default function App() {
           <MapView race={race} selectedImei={selectedImei} />
         </div>
       )}
+      {confirm && <ConfirmDialog req={confirm} onClose={() => setConfirm(undefined)} />}
       {windowTracker && (
         <WindowDialog
           race={race}

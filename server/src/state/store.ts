@@ -75,6 +75,15 @@ export class Store {
         path TEXT NOT NULL,
         value TEXT NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS fleet (
+        imei TEXT PRIMARY KEY,
+        label TEXT NOT NULL,
+        model TEXT,
+        has_battery INTEGER NOT NULL DEFAULT 1,
+        notes TEXT,
+        retired INTEGER NOT NULL DEFAULT 0,
+        updated_ms INTEGER NOT NULL
+      );
       CREATE TABLE IF NOT EXISTS users (
         username TEXT PRIMARY KEY,
         password_hash TEXT NOT NULL,
@@ -194,6 +203,40 @@ export class Store {
 
   devices(): unknown[] {
     return this.db.prepare(`SELECT * FROM devices ORDER BY imei`).all();
+  }
+
+  // --- fleet registry (curated tracker inventory, event-independent) ---
+
+  upsertFleet(t: { imei: string; label: string; model?: string; hasBattery: boolean; notes?: string; retired: boolean }): void {
+    this.db
+      .prepare(`INSERT INTO fleet (imei, label, model, has_battery, notes, retired, updated_ms)
+                VALUES (@imei, @label, @model, @hasBattery, @notes, @retired, @now)
+                ON CONFLICT(imei) DO UPDATE SET
+                  label=@label, model=@model, has_battery=@hasBattery, notes=@notes,
+                  retired=@retired, updated_ms=@now`)
+      .run({
+        imei: t.imei,
+        label: t.label,
+        model: t.model ?? null,
+        hasBattery: t.hasBattery ? 1 : 0,
+        notes: t.notes ?? null,
+        retired: t.retired ? 1 : 0,
+        now: Date.now(),
+      });
+  }
+
+  /** Fleet joined with live observations (last position/battery from the wire). */
+  listFleet(): unknown[] {
+    return this.db
+      .prepare(`SELECT f.imei, f.label, f.model, f.has_battery AS hasBattery, f.notes, f.retired,
+                       d.battery AS seen_battery, d.last_received_ms, d.last_t_utc_ms, d.protocol
+                FROM fleet f LEFT JOIN devices d ON d.imei = f.imei
+                ORDER BY f.retired, f.label`)
+      .all();
+  }
+
+  deleteFleet(imei: string): boolean {
+    return this.db.prepare(`DELETE FROM fleet WHERE imei = ?`).run(imei).changes > 0;
   }
 
   // --- auth ---

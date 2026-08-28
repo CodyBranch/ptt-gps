@@ -1,16 +1,51 @@
+import type { ConfirmRequest } from './Confirm';
 import type { RaceSnap } from '../types';
 
-const ACTIONS: Record<string, { label: string; action: 'arm' | 'start' | 'finish' | 'reset'; confirm?: string }[]> = {
+const ACTIONS: Record<
+  string,
+  { label: string; action: 'arm' | 'start' | 'finish' | 'reset'; confirm?: { title: string; body: string; danger?: boolean } }[]
+> = {
   scheduled: [{ label: 'Arm race', action: 'arm' }],
   armed: [
-    { label: '▶ Start race', action: 'start', confirm: 'Start race and begin publishing distances?' },
+    {
+      label: '▶ Start race',
+      action: 'start',
+      confirm: {
+        title: 'Start race?',
+        body: 'Opens a session and begins publishing distances to all configured outputs.',
+      },
+    },
     { label: 'Stand down', action: 'reset' },
   ],
-  live: [{ label: '■ Finish race', action: 'finish', confirm: 'Finish race and stop publishing?' }],
-  finished: [{ label: 'Reset', action: 'reset', confirm: 'Reset race back to scheduled?' }],
+  live: [
+    {
+      label: '■ Finish race',
+      action: 'finish',
+      confirm: {
+        title: 'Finish race?',
+        body: 'Stops publishing and closes the session.',
+        danger: true,
+      },
+    },
+  ],
+  finished: [
+    {
+      label: 'Reset',
+      action: 'reset',
+      confirm: { title: 'Reset race?', body: 'Returns the race to scheduled. The finished session stays recorded.' },
+    },
+  ],
 };
 
-export function RacePanel({ race, onAction }: { race: RaceSnap; onAction: (a: 'arm' | 'start' | 'finish' | 'reset') => void }) {
+export function RacePanel({
+  race,
+  ask,
+  onAction,
+}: {
+  race: RaceSnap;
+  ask: (req: ConfirmRequest) => void;
+  onAction: (a: 'arm' | 'start' | 'finish' | 'reset') => void;
+}) {
   return (
     <div className="race-panel">
       <span className={`race-status ${race.status}`}>{race.status.toUpperCase()}</span>
@@ -20,7 +55,17 @@ export function RacePanel({ race, onAction }: { race: RaceSnap; onAction: (a: 'a
           key={a.action}
           className={`lifecycle ${a.action}`}
           onClick={() => {
-            if (!a.confirm || window.confirm(a.confirm)) onAction(a.action);
+            if (a.confirm) {
+              ask({
+                title: a.confirm.title,
+                body: a.confirm.body,
+                confirmLabel: a.label.replace(/^[▶■] /, ''),
+                danger: a.confirm.danger,
+                onConfirm: () => onAction(a.action),
+              });
+            } else {
+              onAction(a.action);
+            }
           }}
         >
           {a.label}

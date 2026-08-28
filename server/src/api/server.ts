@@ -131,6 +131,29 @@ export function startApi(holder: AppHolder, port: number): { httpServer: http.Se
     }),
   );
 
+  // --- fleet registry ---
+
+  ex.get('/api/fleet', (_req, res) => {
+    res.json(app.store.listFleet());
+  });
+
+  ex.post(
+    '/api/fleet',
+    act((req) => {
+      const { imei, label, model, hasBattery, notes, retired } = req.body ?? {};
+      if (!/^\d{15}$/.test(imei ?? '')) throw new Error('IMEI must be 15 digits');
+      if (!label || typeof label !== 'string') throw new Error('Label is required');
+      app.store.upsertFleet({ imei, label, model, hasBattery: hasBattery !== false, notes, retired: !!retired });
+    }),
+  );
+
+  ex.delete(
+    '/api/fleet/:imei',
+    act((req) => {
+      if (!app.store.deleteFleet(req.params.imei as string)) throw new Error('Unknown tracker');
+    }),
+  );
+
   // --- setup: event config + courses ---
 
   const guardIdle = () => {
