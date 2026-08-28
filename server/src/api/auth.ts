@@ -47,6 +47,14 @@ function parseCookies(header: string | undefined): Record<string, string> {
 
 interface Attempts { fails: number; lockedUntil: number }
 
+export type Role = 'operator' | 'viewer';
+export interface AuthContext {
+  username: string;
+  role: Role;
+}
+
+const VIEWER_PIN_KEY = 'viewer-pin-hash';
+
 export class AuthService {
   readonly disabled = process.env.PTT_AUTH_DISABLED === '1';
   private attempts = new Map<string, Attempts>();
@@ -80,20 +88,55 @@ export class AuthService {
     return token;
   }
 
+  /**
+   * PIN entry for view-only access — shared with announcers/spotters/displays.
+   * Rate-limited with the same per-IP lockout as password login.
+   */
+  loginViewer(pin: string, ip: string): string | null {
+    const a = this.attempts.get(ip);
+    if (a && a.lockedUntil > Date.now()) return null;
+    const stored = this.store.getSetting(VIEWER_PIN_KEY);
+    const ok = stored !== undefined && verifyPassword(pin, stored);
+    if (!ok) {
+      const next: Attempts = { fails: (a?.fails ?? 0) + 1, lockedUntil: 0 };
+      if (next.fails >= 5) {
+        next.lockedUntil = Date.now() + 30_000;
+        next.fails = 0;
+      }
+      this.attempts.set(ip, next);
+      return null;
+    }
+    this.attempts.delete(ip);
+    const token = crypto.randomBytes(32).toString('hex');
+    this.store.insertToken(sha256(token), 'viewer', Date.now() + TOKEN_TTL_MS, 'viewer');
+    return token;
+  }
+
+  viewerPinEnabled(): boolean {
+    return this.store.getSetting(VIEWER_PIN_KEY) !== undefined;
+  }
+
+  /** Set (or clear with null) the viewer PIN; existing viewer sessions are revoked. */
+  setViewerPin(pin: string | null): void {
+    if (pin === null) this.store.deleteSetting(VIEWER_PIN_KEY);
+    else this.store.setSetting(VIEWER_PIN_KEY, hashPassword(pin));
+    this.store.deleteTokensByRole('viewer');
+  }
+
   logout(token: string | undefined): void {
     if (token) this.store.deleteToken(sha256(token));
   }
 
-  /** Username for a valid token, extending its life when past halfway. */
-  check(token: string | undefined): string | null {
-    if (this.disabled) return 'dev';
+  /** Auth context for a valid token, extending its life when past halfway. */
+  check(token: string | undefined): AuthContext | null {
+    if (this.disabled) return { username: 'dev', role: 'operator' };
     if (!token) return null;
     const row = this.store.getToken(sha256(token));
     if (!row || row.expires_at_ms < Date.now()) return null;
     if (row.expires_at_ms - Date.now() < TOKEN_TTL_MS / 2) {
       this.store.touchToken(sha256(token), Date.now() + TOKEN_TTL_MS);
     }
-    return row.username;
+    return { username: row.username, role: row.role === 'viewer' ? 'viewer' : 'operator' };
   }
 
   tokenFromRequest(req: { headers: Record<string, unknown> }): string | undefined {
@@ -109,14 +152,23 @@ export class AuthService {
     return `${COOKIE_NAME}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0`;
   }
 
-  /** Express middleware guarding everything registered after it. */
-  middleware = (req: Request & { operator?: string }, res: Response, next: NextFunction): void => {
-    const user = this.check(this.tokenFromRequest(req));
-    if (!user) {
+  /**
+   * Express middleware guarding everything registered after it.
+   * Viewer tokens are read-only at the API level — any non-GET request is
+   * refused server-side, so hiding buttons in the UI is cosmetic, not the lock.
+   */
+  middleware = (req: Request & { operator?: string; role?: Role }, res: Response, next: NextFunction): void => {
+    const auth = this.check(this.tokenFromRequest(req));
+    if (!auth) {
       res.status(401).json({ ok: false, error: 'not authenticated' });
       return;
     }
-    req.operator = user;
+    if (auth.role === 'viewer' && req.method !== 'GET') {
+      res.status(403).json({ ok: false, error: 'view-only access' });
+      return;
+    }
+    req.operator = auth.username;
+    req.role = auth.role;
     next();
   };
 }

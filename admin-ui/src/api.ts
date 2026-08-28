@@ -89,6 +89,22 @@ export const api = {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
   },
 
+  viewerEnabled: async (): Promise<boolean> => {
+    const res = await fetch('/api/viewer-enabled');
+    if (!res.ok) return false;
+    return !!(await res.json()).enabled;
+  },
+
+  setViewerPin: async (pin: string | null) => {
+    const res = await fetch('/api/viewer-pin', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin }),
+    });
+    const json = await res.json();
+    if (!res.ok || json.ok === false) throw new Error(json.error ?? `HTTP ${res.status}`);
+  },
+
   users: async () => {
     const res = await fetch('/api/users');
     if (!res.ok) throw new Error(`HTTP ${res.status}`);

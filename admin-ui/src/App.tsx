@@ -3,7 +3,7 @@ import { io } from 'socket.io-client';
 import { api } from './api';
 import { ConfirmDialog, type ConfirmRequest } from './components/Confirm';
 import { EventsView } from './components/EventsView';
-import { Login } from './components/Login';
+import { Login, type AuthInfo } from './components/Login';
 import { MapView, type MapSelection } from './components/MapView';
 import { RacePanel } from './components/RacePanel';
 import { RolesPanel } from './components/RolesPanel';
@@ -53,13 +53,12 @@ function reducer(state: State, action: Action): State {
   }
 }
 
-/** Viewer mode (?viewer): live map + panels with every control hidden — for
- *  announcers, spotters, and wall displays. Works on desktop and mobile. */
-const VIEWER = new URLSearchParams(window.location.search).has('viewer');
+/** Forced viewer layout (?viewer) — e.g. an operator setting up a wall display. */
+const VIEWER_URL = new URLSearchParams(window.location.search).has('viewer');
 
 export default function App() {
   const [state, dispatch] = useReducer(reducer, { connected: false, lastSeen: {} });
-  const [auth, setAuth] = useState<'checking' | 'out' | string>('checking'); // string = username
+  const [auth, setAuth] = useState<'checking' | 'out' | AuthInfo>('checking');
   const [raceId, setRaceId] = useState<string>();
   const [selected, setSelected] = useState<MapSelection>();
   const [windowDialog, setWindowDialog] = useState<MapSelection>();
@@ -98,7 +97,7 @@ export default function App() {
   useEffect(() => {
     fetch('/api/me')
       .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((j) => setAuth(j.username ?? 'operator'))
+      .then((j) => setAuth({ username: j.username ?? 'operator', role: j.role === 'viewer' ? 'viewer' : 'operator' }))
       .catch(() => setAuth('out'));
   }, []);
 
@@ -134,7 +133,11 @@ export default function App() {
   }, [state.snapshot, raceId]);
 
   if (auth === 'checking') return <div className="loading">Checking sign-in…</div>;
-  if (auth === 'out') return <Login onSuccess={(username) => setAuth(username)} />;
+  if (auth === 'out') return <Login onSuccess={(a) => setAuth(a)} />;
+
+  // View-only when the token is a viewer PIN token (server-enforced) or the
+  // ?viewer URL is used by an operator for a clean display.
+  const viewer = VIEWER_URL || auth.role === 'viewer';
 
   if (!state.snapshot) {
     return (
@@ -162,7 +165,7 @@ export default function App() {
         displayUnits={displayUnits}
         lastSeen={state.lastSeen}
         intervalS={intervalS}
-        readonly={VIEWER}
+        readonly={viewer}
         ask={ask}
         onActivate={(roleKey, imei) => api.setActive(r.raceId, roleKey, imei).catch(oops('Failover failed'))}
       />
@@ -171,7 +174,7 @@ export default function App() {
         displayUnits={displayUnits}
         lastSeen={state.lastSeen}
         intervalS={intervalS}
-        readonly={VIEWER}
+        readonly={viewer}
         selectedImei={selected?.raceId === r.raceId ? selected.imei : undefined}
         onSelect={(imei) => setSelected({ raceId: r.raceId, imei })}
         onWindow={(imei) => setWindowDialog({ raceId: r.raceId, imei })}
@@ -185,12 +188,12 @@ export default function App() {
         <div className="brand">
           <img className="brand-logo" src="/img/PRIMETIME.png" alt="Primetime" />
           <span className="event-name">{state.snapshot.event.name}</span>
-          {VIEWER && <span className="viewer-badge">VIEW ONLY</span>}
+          {viewer && <span className="viewer-badge">VIEW ONLY</span>}
           <span className={`conn ${state.connected ? 'ok' : 'bad'}`}>
             {state.connected ? '● server' : '○ disconnected'}
           </span>
           <span className="whoami">
-            {auth} · <button className="linklike" onClick={logout}>sign out</button>
+            {typeof auth === "object" ? auth.username : ""} · <button className="linklike" onClick={logout}>sign out</button>
           </span>
         </div>
         <nav className="race-tabs">
@@ -213,7 +216,7 @@ export default function App() {
               <span className={`status-dot ${r.status}`} />
             </button>
           ))}
-          {!VIEWER && (
+          {!viewer && (
             <>
               <button className={view === 'events' ? 'active' : ''} onClick={() => setView('events')}>
                 ☰ Events
@@ -227,7 +230,7 @@ export default function App() {
         <button className="mini units-toggle" onClick={toggleUnits} title="Display units (does not change published output)">
           {displayUnits === 'miles' ? 'mi' : 'km'}
         </button>
-        {view === 'ops' && race && !VIEWER && (
+        {view === 'ops' && race && !viewer && (
           <RacePanel race={race} ask={ask} onAction={(a) => api.lifecycle(race.raceId, a).catch(oops('Lifecycle change failed'))} />
         )}
       </header>
@@ -248,10 +251,10 @@ export default function App() {
               <div className="race-section" key={r.raceId}>
                 <div className="race-section-head">
                   <span className="race-section-name">{r.name}</span>
-                  {!VIEWER && (
+                  {!viewer && (
                     <RacePanel race={r} ask={ask} onAction={(a) => api.lifecycle(r.raceId, a).catch(oops('Lifecycle change failed'))} />
                   )}
-                  {VIEWER && <span className={`race-status ${r.status}`}>{r.status.toUpperCase()}</span>}
+                  {viewer && <span className={`race-status ${r.status}`}>{r.status.toUpperCase()}</span>}
                 </div>
                 {racePanels(r)}
               </div>

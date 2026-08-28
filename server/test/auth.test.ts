@@ -36,7 +36,7 @@ describe('AuthService', () => {
   it('login → check → logout round trip', () => {
     const token = auth.login('cody', 'timing-rules-8', '10.0.0.1');
     expect(token).toBeTruthy();
-    expect(auth.check(token!)).toBe('cody');
+    expect(auth.check(token!)).toEqual({ username: 'cody', role: 'operator' });
     auth.logout(token!);
     expect(auth.check(token!)).toBeNull();
   });
@@ -62,7 +62,29 @@ describe('AuthService', () => {
   it('tokens survive an AuthService restart (server restart mid-race)', () => {
     const token = auth.login('cody', 'timing-rules-8', '10.0.0.1');
     const auth2 = new AuthService(store);
-    expect(auth2.check(token!)).toBe('cody');
+    expect(auth2.check(token!)).toEqual({ username: 'cody', role: 'operator' });
+  });
+
+  it('viewer PIN: disabled until set, grants viewer role, revoked on change', () => {
+    expect(auth.viewerPinEnabled()).toBe(false);
+    expect(auth.loginViewer('260426', '10.1.1.1')).toBeNull();
+
+    auth.setViewerPin('260426');
+    expect(auth.viewerPinEnabled()).toBe(true);
+    expect(auth.loginViewer('999999', '10.1.1.2')).toBeNull();
+    const token = auth.loginViewer('260426', '10.1.1.3');
+    expect(auth.check(token!)).toEqual({ username: 'viewer', role: 'viewer' });
+
+    // replacing the PIN signs existing viewers out; operators unaffected
+    const opToken = auth.login('cody', 'timing-rules-8', '10.0.0.1');
+    auth.setViewerPin('111111');
+    expect(auth.check(token!)).toBeNull();
+    expect(auth.check(opToken!)?.role).toBe('operator');
+
+    // clearing disables viewer login entirely
+    auth.setViewerPin(null);
+    expect(auth.viewerPinEnabled()).toBe(false);
+    expect(auth.loginViewer('111111', '10.1.1.4')).toBeNull();
   });
 
   it('removing a user revokes their tokens', () => {

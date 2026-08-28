@@ -534,6 +534,7 @@ export function SetupView({ ask, onSaved }: { ask: (req: ConfirmRequest) => void
               }
             }}
           />
+          <ViewerPinRow onMsg={setMsg} ask={ask} />
         </section>
 
         <section>
@@ -572,6 +573,81 @@ export function SetupView({ ask, onSaved }: { ask: (req: ConfirmRequest) => void
         </section>
       </div>
     </div>
+  );
+}
+
+function ViewerPinRow({
+  onMsg,
+  ask,
+}: {
+  onMsg: (m: { kind: 'ok' | 'err'; text: string }) => void;
+  ask: (req: ConfirmRequest) => void;
+}) {
+  const [enabled, setEnabled] = useState(false);
+  const [pin, setPin] = useState('');
+
+  useEffect(() => {
+    api.viewerEnabled().then(setEnabled).catch(() => {});
+  }, []);
+
+  const setNewPin = async () => {
+    try {
+      await api.setViewerPin(pin);
+      setEnabled(true);
+      setPin('');
+      onMsg({ kind: 'ok', text: 'Viewer PIN set — existing viewer sessions were signed out.' });
+    } catch (err) {
+      onMsg({ kind: 'err', text: (err as Error).message });
+    }
+  };
+
+  return (
+    <>
+      <h4>Viewer access</h4>
+      <p className="hint">
+        A shared PIN lets announcers, spotters, and displays watch (map, distances, health) with no
+        controls — the server refuses every change from a viewer session.
+        {enabled ? ' Currently ENABLED — share the console URL and the PIN.' : ' Currently disabled.'}
+      </p>
+      <div className="form-row">
+        <label>
+          {enabled ? 'New PIN (replaces current)' : 'PIN (4–12 digits)'}
+          <input
+            value={pin}
+            inputMode="numeric"
+            onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
+            placeholder="e.g. 260426"
+          />
+        </label>
+        <button className="mini self-end" disabled={pin.length < 4} onClick={setNewPin}>
+          {enabled ? 'Replace PIN' : 'Enable viewer access'}
+        </button>
+        {enabled && (
+          <button
+            className="mini danger self-end"
+            onClick={() =>
+              ask({
+                title: 'Disable viewer access?',
+                body: 'All viewer sessions are signed out immediately.',
+                confirmLabel: 'Disable',
+                danger: true,
+                onConfirm: async () => {
+                  try {
+                    await api.setViewerPin(null);
+                    setEnabled(false);
+                    onMsg({ kind: 'ok', text: 'Viewer access disabled.' });
+                  } catch (err) {
+                    onMsg({ kind: 'err', text: (err as Error).message });
+                  }
+                },
+              })
+            }
+          >
+            Disable
+          </button>
+        )}
+      </div>
+    </>
   );
 }
 

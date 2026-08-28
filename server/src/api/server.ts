@@ -74,6 +74,22 @@ export function startApi(holder: AppHolder, port: number): { httpServer: http.Se
     res.json({ ok: true, username });
   });
 
+  ex.post('/api/viewer-login', (req, res) => {
+    const { pin } = req.body ?? {};
+    const ip = (req.socket.remoteAddress ?? '?').replace('::ffff:', '');
+    if (!auth.viewerPinEnabled()) {
+      return void res.status(404).json({ ok: false, error: 'Viewer access is not enabled for this server' });
+    }
+    const token = typeof pin === 'string' ? auth.loginViewer(pin, ip) : null;
+    if (!token) return void res.status(401).json({ ok: false, error: 'invalid PIN' });
+    res.setHeader('Set-Cookie', auth.cookie(token));
+    res.json({ ok: true, username: 'viewer', role: 'viewer' });
+  });
+
+  ex.get('/api/viewer-enabled', (_req, res) => {
+    res.json({ enabled: auth.viewerPinEnabled() });
+  });
+
   ex.post('/api/logout', (req, res) => {
     auth.logout(auth.tokenFromRequest(req));
     res.setHeader('Set-Cookie', auth.clearCookie());
@@ -81,9 +97,9 @@ export function startApi(holder: AppHolder, port: number): { httpServer: http.Se
   });
 
   ex.get('/api/me', (req, res) => {
-    const user = auth.check(auth.tokenFromRequest(req));
-    if (!user) return void res.status(401).json({ ok: false });
-    res.json({ ok: true, username: user });
+    const ctx = auth.check(auth.tokenFromRequest(req));
+    if (!ctx) return void res.status(401).json({ ok: false });
+    res.json({ ok: true, username: ctx.username, role: ctx.role });
   });
 
   // --- everything below requires a logged-in operator ---
@@ -142,6 +158,23 @@ export function startApi(holder: AppHolder, port: number): { httpServer: http.Se
       const engine = app.engines.get(req.params.raceId as string);
       if (!engine) throw new Error('unknown race');
       engine.releaseClamp(req.params.imei as string, req.operator);
+    }),
+  );
+
+  // --- viewer PIN (operator-managed; middleware blocks viewers from non-GET) ---
+
+  ex.put(
+    '/api/viewer-pin',
+    act((req) => {
+      const { pin } = req.body ?? {};
+      if (pin === null) {
+        auth.setViewerPin(null);
+        return;
+      }
+      if (typeof pin !== 'string' || !/^\d{4,12}$/.test(pin)) {
+        throw new Error('PIN must be 4–12 digits');
+      }
+      auth.setViewerPin(pin);
     }),
   );
 

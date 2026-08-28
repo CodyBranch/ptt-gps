@@ -100,6 +100,11 @@ export class Store {
         expires_at_ms INTEGER NOT NULL
       );
     `);
+    // additive migration: role column for viewer-PIN tokens
+    const cols = this.db.prepare(`PRAGMA table_info(auth_tokens)`).all() as Array<{ name: string }>;
+    if (!cols.some((c) => c.name === 'role')) {
+      this.db.exec(`ALTER TABLE auth_tokens ADD COLUMN role TEXT NOT NULL DEFAULT 'operator'`);
+    }
   }
 
   private stmts = {
@@ -281,17 +286,25 @@ export class Store {
     }>;
   }
 
-  insertToken(tokenHash: string, username: string, expiresAtMs: number): void {
+  insertToken(tokenHash: string, username: string, expiresAtMs: number, role = 'operator'): void {
     this.db.prepare(`DELETE FROM auth_tokens WHERE expires_at_ms < ?`).run(Date.now());
     this.db
-      .prepare(`INSERT INTO auth_tokens (token_hash, username, created_at_ms, expires_at_ms) VALUES (?, ?, ?, ?)`)
-      .run(tokenHash, username, Date.now(), expiresAtMs);
+      .prepare(`INSERT INTO auth_tokens (token_hash, username, created_at_ms, expires_at_ms, role) VALUES (?, ?, ?, ?, ?)`)
+      .run(tokenHash, username, Date.now(), expiresAtMs, role);
   }
 
-  getToken(tokenHash: string): { username: string; expires_at_ms: number } | undefined {
-    return this.db.prepare(`SELECT username, expires_at_ms FROM auth_tokens WHERE token_hash = ?`).get(tokenHash) as
-      | { username: string; expires_at_ms: number }
-      | undefined;
+  getToken(tokenHash: string): { username: string; expires_at_ms: number; role: string } | undefined {
+    return this.db
+      .prepare(`SELECT username, expires_at_ms, role FROM auth_tokens WHERE token_hash = ?`)
+      .get(tokenHash) as { username: string; expires_at_ms: number; role: string } | undefined;
+  }
+
+  deleteTokensByRole(role: string): void {
+    this.db.prepare(`DELETE FROM auth_tokens WHERE role = ?`).run(role);
+  }
+
+  deleteSetting(key: string): void {
+    this.db.prepare(`DELETE FROM settings WHERE key = ?`).run(key);
   }
 
   touchToken(tokenHash: string, expiresAtMs: number): void {
