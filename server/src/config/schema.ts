@@ -73,6 +73,11 @@ export const EventSchema = z.object({
    * per-race units; the publisher converts. Scoreboards expect one unit per meet.
    */
   outputUnits: Units.default('miles'),
+  /**
+   * Expected tracker report cadence in seconds — drives the console's
+   * fresh/aging/stale coloring on packet age (fleet reports every 5–10 s).
+   */
+  reportIntervalS: z.number().positive().default(10),
   listeners: z
     .array(z.object({ name: z.string(), port: z.number().int() }))
     .default([{ name: 'queclink', port: 1000 }]),

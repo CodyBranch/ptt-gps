@@ -53,6 +53,7 @@ export interface EventConfigT {
   name: string;
   meetId: number;
   outputUnits: Units;
+  reportIntervalS: number;
   listeners: Array<{ name: string; port: number }>;
   firebase: unknown[];
   trackers: Array<{ imei: string; label: string; hasBattery: boolean }>;
@@ -132,12 +133,20 @@ export interface RaceSnap {
 }
 
 export interface Snapshot {
-  event: { id: string; name: string; meetId: number };
+  event: { id: string; name: string; meetId: number; reportIntervalS: number };
   races: RaceSnap[];
+  /** Last time any frame arrived per IMEI (comms health, race-independent). */
+  lastSeen: Record<string, number>;
+}
+
+export interface UserRow {
+  username: string;
+  created_at_ms: number;
 }
 
 export interface FixEvent {
   imei: string;
+  receivedAtMs: number;
   lat: number;
   lon: number;
   tUtcMs: number;

@@ -15,18 +15,23 @@ import type { RaceSnap, Snapshot, TrackerPub, Units } from './types';
 interface State {
   snapshot?: Snapshot;
   connected: boolean;
+  /** Live per-IMEI "last packet arrived" times, fed by every fix/telemetry event. */
+  lastSeen: Record<string, number>;
 }
 
 type Action =
   | { type: 'snapshot'; snapshot: Snapshot }
   | { type: 'race'; race: RaceSnap }
   | { type: 'tracker'; raceId: string; state: TrackerPub; slice: [number, number][]; health: TrackerPub['health'] }
+  | { type: 'seen'; imei: string; ms: number }
   | { type: 'connected'; connected: boolean };
 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
     case 'snapshot':
-      return { ...state, snapshot: action.snapshot };
+      return { ...state, snapshot: action.snapshot, lastSeen: { ...action.snapshot.lastSeen } };
+    case 'seen':
+      return { ...state, lastSeen: { ...state.lastSeen, [action.imei]: action.ms } };
     case 'race': {
       if (!state.snapshot) return state;
       const races = state.snapshot.races.map((r) => (r.raceId === action.race.raceId ? action.race : r));
@@ -49,7 +54,7 @@ function reducer(state: State, action: Action): State {
 }
 
 export default function App() {
-  const [state, dispatch] = useReducer(reducer, { connected: false });
+  const [state, dispatch] = useReducer(reducer, { connected: false, lastSeen: {} });
   const [auth, setAuth] = useState<'checking' | 'out' | string>('checking'); // string = username
   const [raceId, setRaceId] = useState<string>();
   const [selected, setSelected] = useState<MapSelection>();
@@ -103,6 +108,12 @@ export default function App() {
     socket.on('tracker', (p: { raceId: string; state: TrackerPub; slice: [number, number][]; health: TrackerPub['health'] }) =>
       dispatch({ type: 'tracker', raceId: p.raceId, state: p.state, slice: p.slice, health: p.health }),
     );
+    socket.on('fix', (f: { imei: string; receivedAtMs?: number }) => {
+      if (f.imei) dispatch({ type: 'seen', imei: f.imei, ms: f.receivedAtMs ?? Date.now() });
+    });
+    socket.on('telemetry', (t: { imei?: string; receivedAtMs?: number }) => {
+      if (t.imei) dispatch({ type: 'seen', imei: t.imei, ms: t.receivedAtMs ?? Date.now() });
+    });
     const t = setInterval(() => tick(), 1000); // refresh fix-age displays
     return () => {
       socket.close();
@@ -136,17 +147,22 @@ export default function App() {
   };
 
   /** The per-race operations block: roles + tracker table wired to one race. */
+  const intervalS = state.snapshot.event.reportIntervalS || 10;
   const racePanels = (r: RaceSnap) => (
     <>
       <RolesPanel
         race={r}
         displayUnits={displayUnits}
+        lastSeen={state.lastSeen}
+        intervalS={intervalS}
         ask={ask}
         onActivate={(roleKey, imei) => api.setActive(r.raceId, roleKey, imei).catch(alert)}
       />
       <TrackerTable
         race={r}
         displayUnits={displayUnits}
+        lastSeen={state.lastSeen}
+        intervalS={intervalS}
         selectedImei={selected?.raceId === r.raceId ? selected.imei : undefined}
         onSelect={(imei) => setSelected({ raceId: r.raceId, imei })}
         onWindow={(imei) => setWindowDialog({ raceId: r.raceId, imei })}
@@ -210,7 +226,7 @@ export default function App() {
           }}
         />
       ) : view === 'setup' ? (
-        <SetupView onSaved={() => setRaceId(undefined)} />
+        <SetupView ask={ask} onSaved={() => setRaceId(undefined)} />
       ) : view === 'all' ? (
         <div className="main">
           <aside className="all-races">

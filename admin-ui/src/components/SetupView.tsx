@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
-import type { CourseInfo, DeviceRow, EventConfigT, FleetRow } from '../types';
+import type { ConfirmRequest } from './Confirm';
+import type { CourseInfo, DeviceRow, EventConfigT, FleetRow, UserRow } from '../types';
 
 /**
  * Event setup.
@@ -9,11 +10,12 @@ import type { CourseInfo, DeviceRow, EventConfigT, FleetRow } from '../types';
  * fleet trackers are matched to it, races/courses) edit the event config and
  * apply on "Save & rebuild"; the server refuses while a race is armed or live.
  */
-export function SetupView({ onSaved }: { onSaved: () => void }) {
+export function SetupView({ ask, onSaved }: { ask: (req: ConfirmRequest) => void; onSaved: () => void }) {
   const [cfg, setCfg] = useState<EventConfigT>();
   const [courses, setCourses] = useState<CourseInfo[]>([]);
   const [fleet, setFleet] = useState<FleetRow[]>([]);
   const [devices, setDevices] = useState<DeviceRow[]>([]);
+  const [users, setUsers] = useState<UserRow[]>([]);
   const [dirty, setDirty] = useState(false);
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string }>();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -21,6 +23,7 @@ export function SetupView({ onSaved }: { onSaved: () => void }) {
   const reloadFleet = () => {
     api.fleet().then(setFleet).catch(console.error);
     api.devices().then(setDevices).catch(console.error);
+    api.users().then(setUsers).catch(console.error);
   };
   const reload = () => {
     api.getConfig().then((c) => {
@@ -225,6 +228,15 @@ export function SetupView({ onSaved }: { onSaved: () => void }) {
             </label>
           </div>
           <div className="form-row">
+            <label>
+              Report interval (s)
+              <input
+                value={cfg.reportIntervalS ?? 10}
+                inputMode="numeric"
+                title="Expected tracker report cadence — drives the age coloring"
+                onChange={(e) => edit((c) => (c.reportIntervalS = Number(e.target.value) || 10))}
+              />
+            </label>
             <label>
               Window back (min inc)
               <input
@@ -476,6 +488,55 @@ export function SetupView({ onSaved }: { onSaved: () => void }) {
         </section>
 
         <section>
+          <h3>Operator logins</h3>
+          <p className="hint">Accounts for this console. Everyone signed in can run races and edit setup.</p>
+          <table className="setup-table">
+            <tbody>
+              {users.map((u) => (
+                <tr key={u.username}>
+                  <td>{u.username}</td>
+                  <td className="dim">added {new Date(u.created_at_ms).toLocaleDateString()}</td>
+                  <td>
+                    <button
+                      className="mini danger"
+                      onClick={() =>
+                        ask({
+                          title: `Remove login "${u.username}"?`,
+                          body: 'Their sessions are signed out immediately.',
+                          confirmLabel: 'Remove',
+                          danger: true,
+                          onConfirm: async () => {
+                            try {
+                              await api.deleteUser(u.username);
+                              setUsers(await api.users());
+                            } catch (err) {
+                              setMsg({ kind: 'err', text: (err as Error).message });
+                            }
+                          },
+                        })
+                      }
+                    >
+                      ✕
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <NewUserRow
+            onAdd={async (username, password) => {
+              try {
+                await api.addUser(username, password);
+                setUsers(await api.users());
+                setMsg({ kind: 'ok', text: `Login "${username}" created.` });
+              } catch (err) {
+                setMsg({ kind: 'err', text: (err as Error).message });
+              }
+            }}
+          />
+        </section>
+
+        <section>
           <h3>Courses</h3>
           <table className="setup-table">
             <thead>
@@ -510,6 +571,41 @@ export function SetupView({ onSaved }: { onSaved: () => void }) {
           <p className="hint">Export from Google Earth as a single-path LineString. Length is measured on upload.</p>
         </section>
       </div>
+    </div>
+  );
+}
+
+function NewUserRow({ onAdd }: { onAdd: (username: string, password: string) => void }) {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const valid = /^[a-zA-Z0-9._-]{2,32}$/.test(username) && password.length >= 8 && password === confirm;
+  return (
+    <div className="form-row">
+      <label>
+        Username
+        <input value={username} onChange={(e) => setUsername(e.target.value.trim())} autoComplete="off" />
+      </label>
+      <label>
+        Password (min 8)
+        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
+      </label>
+      <label>
+        Confirm
+        <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" />
+      </label>
+      <button
+        className="mini self-end"
+        disabled={!valid}
+        onClick={() => {
+          onAdd(username, password);
+          setUsername('');
+          setPassword('');
+          setConfirm('');
+        }}
+      >
+        + Add login
+      </button>
     </div>
   );
 }

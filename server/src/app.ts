@@ -22,6 +22,12 @@ export class App {
   readonly sessions = new Map<string, number>();
   /** Session to attribute the publish being emitted right now (single-threaded). */
   private publishContextSession: number | null = null;
+  /**
+   * Last time ANY frame arrived per IMEI (fixes, valid or not, and telemetry).
+   * This is comms health — independent of race state and GPS lock — so the
+   * console's Age column works during pre-race checks too.
+   */
+  readonly lastSeen = new Map<string, number>();
   private out: AppEvents;
 
   constructor(cfg: EventConfig, store: Store, out: AppEvents) {
@@ -29,6 +35,12 @@ export class App {
     this.store = store;
     this.out = out;
     this.gate = new FixGate();
+
+    // Seed packet-age data from the device registry so a server restart shows
+    // real "last heard from" times instead of blanks.
+    for (const d of store.devices() as Array<{ imei: string; last_received_ms: number | null }>) {
+      if (d.last_received_ms) this.lastSeen.set(d.imei, d.last_received_ms);
+    }
 
     const recorder = (target: string, path: string, value: unknown) => {
       // publishContextSession is set synchronously by whichever race triggered
@@ -71,10 +83,12 @@ export class App {
   }
 
   onFix(fix: Fix): void {
+    this.lastSeen.set(fix.imei, fix.receivedAtMs);
     const gate = this.gate.accept(fix);
     this.store.recordFix(fix, gate.ok, gate.reason);
     this.out.emit('fix', {
       imei: fix.imei,
+      receivedAtMs: fix.receivedAtMs,
       lat: fix.lat,
       lon: fix.lon,
       tUtcMs: fix.tUtcMs,
@@ -91,8 +105,9 @@ export class App {
   }
 
   onTelemetry(t: Telemetry): void {
+    if (t.imei) this.lastSeen.set(t.imei, Date.now());
     this.store.recordTelemetry(t);
-    this.out.emit('telemetry', { imei: t.imei, type: t.type, tUtcMs: t.tUtcMs, source: t.source });
+    this.out.emit('telemetry', { imei: t.imei, type: t.type, tUtcMs: t.tUtcMs, source: t.source, receivedAtMs: Date.now() });
   }
 
   private handleTrackerUpdate(raceId: string, state: TrackerState): void {
@@ -202,8 +217,14 @@ export class App {
 
   snapshot() {
     return {
-      event: { id: this.cfg.id, name: this.cfg.name, meetId: this.cfg.meetId },
+      event: {
+        id: this.cfg.id,
+        name: this.cfg.name,
+        meetId: this.cfg.meetId,
+        reportIntervalS: this.cfg.reportIntervalS,
+      },
       races: this.cfg.races.map((r) => this.raceSnapshot(r.id)),
+      lastSeen: Object.fromEntries(this.lastSeen),
     };
   }
 }

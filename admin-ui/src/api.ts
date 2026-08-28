@@ -89,6 +89,28 @@ export const api = {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
   },
 
+  users: async () => {
+    const res = await fetch('/api/users');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  },
+
+  addUser: async (username: string, password: string) => {
+    const res = await fetch('/api/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+    const json = await res.json();
+    if (!res.ok || json.ok === false) throw new Error(json.error ?? `HTTP ${res.status}`);
+  },
+
+  deleteUser: async (username: string) => {
+    const res = await fetch(`/api/users/${encodeURIComponent(username)}`, { method: 'DELETE' });
+    const json = await res.json();
+    if (!res.ok || json.ok === false) throw new Error(json.error ?? `HTTP ${res.status}`);
+  },
+
   events: async () => {
     const res = await fetch('/api/events');
     if (!res.ok) throw new Error(`HTTP ${res.status}`);

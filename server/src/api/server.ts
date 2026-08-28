@@ -6,7 +6,7 @@ import express from 'express';
 import { Server as SocketIOServer } from 'socket.io';
 import type { App } from '../app.js';
 import { listEvents, createEvent, type ConfigManager } from '../config/manager.js';
-import { AuthService } from './auth.js';
+import { AuthService, hashPassword } from './auth.js';
 
 export interface AppHolder {
   app: App;
@@ -142,6 +142,37 @@ export function startApi(holder: AppHolder, port: number): { httpServer: http.Se
       const engine = app.engines.get(req.params.raceId as string);
       if (!engine) throw new Error('unknown race');
       engine.releaseClamp(req.params.imei as string, req.operator);
+    }),
+  );
+
+  // --- operator accounts ---
+
+  ex.get('/api/users', (_req, res) => {
+    res.json(app.store.listUsers());
+  });
+
+  ex.post(
+    '/api/users',
+    act((req) => {
+      const { username, password } = req.body ?? {};
+      if (!username || !/^[a-zA-Z0-9._-]{2,32}$/.test(username)) {
+        throw new Error('Username: 2–32 letters, digits, dot, dash, underscore');
+      }
+      if (typeof password !== 'string' || password.length < 8) {
+        throw new Error('Password must be at least 8 characters');
+      }
+      app.store.addUser(username, hashPassword(password));
+    }),
+  );
+
+  ex.delete(
+    '/api/users/:username',
+    act((req: express.Request & { operator?: string }) => {
+      const username = req.params.username as string;
+      if (username === req.operator) throw new Error('You cannot remove the account you are signed in with');
+      const remaining = app.store.listUsers().filter((u) => u.username !== username);
+      if (remaining.length === 0) throw new Error('Cannot remove the last user');
+      if (!app.store.deleteUser(username)) throw new Error('Unknown user');
     }),
   );
 
