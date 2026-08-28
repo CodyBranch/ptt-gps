@@ -1,12 +1,27 @@
+import fs from 'node:fs';
 import http from 'node:http';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { Server as SocketIOServer } from 'socket.io';
 import type { App } from '../app.js';
 
-/** REST for operator commands + socket.io for live streaming to the admin UI. */
+/**
+ * REST for operator commands + socket.io for live streaming to the admin UI.
+ * Serves the built admin UI (admin-ui/dist) when present, so operators reach
+ * the console at http://<server>:<port>/ with nothing else running.
+ */
 export function startApi(app: App, port: number): { httpServer: http.Server; io: SocketIOServer } {
   const ex = express();
   ex.use(express.json());
+
+  const uiDist = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../admin-ui/dist');
+  if (fs.existsSync(path.join(uiDist, 'index.html'))) {
+    ex.use(express.static(uiDist));
+    console.log(`[api] serving admin UI from ${uiDist}`);
+  } else {
+    console.log('[api] no admin-ui build found — run "npm run build -w admin-ui" to serve the console here');
+  }
 
   const httpServer = http.createServer(ex);
   const io = new SocketIOServer(httpServer, { cors: { origin: true } });
