@@ -8,6 +8,7 @@ export function TrackerTable({
   displayUnits,
   lastSeen,
   intervalS,
+  readonly,
   selectedImei,
   onSelect,
   onWindow,
@@ -16,6 +17,7 @@ export function TrackerTable({
   displayUnits: Units;
   lastSeen: Record<string, number>;
   intervalS: number;
+  readonly?: boolean;
   selectedImei?: string;
   onSelect: (imei: string) => void;
   onWindow: (imei: string) => void;
@@ -33,7 +35,7 @@ export function TrackerTable({
             <th>Batt</th>
             <th>Age</th>
             <th>Window</th>
-            <th></th>
+            {!readonly && <th></th>}
           </tr>
         </thead>
         <tbody>
@@ -65,17 +67,19 @@ export function TrackerTable({
                   {t.window.mode === 'clamped' && <span className="clamp-badge">HOLD</span>}
                   {d(t.window.min).toFixed(1)}–{d(t.window.max).toFixed(1)}
                 </td>
-                <td>
-                  <button
-                    className="mini"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onWindow(t.imei);
-                    }}
-                  >
-                    Window
-                  </button>
-                </td>
+                {!readonly && (
+                  <td>
+                    <button
+                      className="mini"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onWindow(t.imei);
+                      }}
+                    >
+                      Window
+                    </button>
+                  </td>
+                )}
               </tr>
             );
           })}

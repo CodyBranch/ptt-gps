@@ -5,6 +5,8 @@ export interface ConfirmRequest {
   body?: string;
   confirmLabel?: string;
   danger?: boolean;
+  /** Notification-only: single OK button, no cancel. */
+  alertOnly?: boolean;
   onConfirm: () => void;
 }
 
@@ -16,9 +18,11 @@ export function ConfirmDialog({ req, onClose }: { req: ConfirmRequest; onClose: 
         {req.body && <p className="dialog-sub">{req.body}</p>}
         <div className="dialog-actions">
           <span className="spacer" />
-          <button className="mini" onClick={onClose} autoFocus>
-            Cancel
-          </button>
+          {!req.alertOnly && (
+            <button className="mini" onClick={onClose} autoFocus>
+              Cancel
+            </button>
+          )}
           <button
             className={`mini primary ${req.danger ? 'danger-solid' : ''}`}
             onClick={() => {
@@ -26,7 +30,7 @@ export function ConfirmDialog({ req, onClose }: { req: ConfirmRequest; onClose: 
               req.onConfirm();
             }}
           >
-            {req.confirmLabel ?? 'Confirm'}
+            {req.confirmLabel ?? (req.alertOnly ? 'OK' : 'Confirm')}
           </button>
         </div>
       </div>

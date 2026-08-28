@@ -17,21 +17,30 @@ export function WindowDialog({
   const [start, setStart] = useState(tracker.window.min.toFixed(2));
   const [end, setEnd] = useState(tracker.window.max.toFixed(2));
   const [latch, setLatch] = useState(tracker.window.mode === 'clamped');
+  const [error, setError] = useState<string>();
+  const [outsideAck, setOutsideAck] = useState(false);
   const unit = race.units === 'miles' ? 'mi' : 'km';
+
+  const outsideZone = () => {
+    const s = Number(start);
+    const e = Number(end);
+    return (
+      Number.isFinite(s) && Number.isFinite(e) && tracker.distance !== undefined &&
+      (tracker.distance < s || tracker.distance > e)
+    );
+  };
 
   const submit = () => {
     const s = Number(start);
     const e = Number(end);
-    if (!Number.isFinite(s) || !Number.isFinite(e)) return alert('Enter numeric distances');
-    if (e <= s) return alert('End must be greater than start');
-    if (s < 0 || e > race.courseLength) return alert(`Must be within 0–${race.courseLength.toFixed(2)} ${unit}`);
-    if (
-      tracker.distance !== undefined &&
-      (tracker.distance < s || tracker.distance > e) &&
-      !window.confirm(
-        `Last snapped position (${tracker.distance.toFixed(2)} ${unit}) is outside this zone. Set anyway?`,
-      )
-    ) {
+    if (!Number.isFinite(s) || !Number.isFinite(e)) return setError('Enter numeric distances.');
+    if (e <= s) return setError('End must be greater than start.');
+    if (s < 0 || e > race.courseLength) return setError(`Must be within 0–${race.courseLength.toFixed(2)} ${unit}.`);
+    if (outsideZone() && !outsideAck) {
+      setError(
+        `Last snapped position (${tracker.distance!.toFixed(2)} ${unit}) is outside this zone — press again to set anyway.`,
+      );
+      setOutsideAck(true);
       return;
     }
     onSet(s, e, latch);
@@ -49,13 +58,30 @@ export function WindowDialog({
         <div className="dialog-row">
           <label>
             Start ({unit})
-            <input value={start} onChange={(e) => setStart(e.target.value)} inputMode="decimal" />
+            <input
+              value={start}
+              onChange={(e) => {
+                setStart(e.target.value);
+                setError(undefined);
+                setOutsideAck(false);
+              }}
+              inputMode="decimal"
+            />
           </label>
           <label>
             End ({unit})
-            <input value={end} onChange={(e) => setEnd(e.target.value)} inputMode="decimal" />
+            <input
+              value={end}
+              onChange={(e) => {
+                setEnd(e.target.value);
+                setError(undefined);
+                setOutsideAck(false);
+              }}
+              inputMode="decimal"
+            />
           </label>
         </div>
+        {error && <p className="dialog-error">{error}</p>}
         <label className="dialog-check">
           <input type="checkbox" checked={latch} onChange={(e) => setLatch(e.target.checked)} />
           Hold to zone (window cannot leave these bounds until released)

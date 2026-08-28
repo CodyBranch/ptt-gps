@@ -39,6 +39,7 @@ export function RolesPanel({
   displayUnits,
   lastSeen,
   intervalS,
+  readonly,
   ask,
   onActivate,
 }: {
@@ -46,6 +47,7 @@ export function RolesPanel({
   displayUnits: Units;
   lastSeen: Record<string, number>;
   intervalS: number;
+  readonly?: boolean;
   ask: (req: ConfirmRequest) => void;
   onActivate: (roleKey: string, imei: string) => void;
 }) {
@@ -75,22 +77,26 @@ export function RolesPanel({
               return (
                 <div key={imei} className={`role-tracker ${isActive ? 'is-active' : ''}`}>
                   <label>
-                    <input
-                      type="radio"
-                      name={`role-${race.raceId}-${role.key}`}
-                      checked={isActive}
-                      onChange={() =>
-                        ask({
-                          title: `Make ${t?.label ?? imei} the active ${role.label}?`,
-                          body:
-                            race.status === 'live'
-                              ? 'Published distances switch to this tracker immediately.'
-                              : undefined,
-                          confirmLabel: 'Switch',
-                          onConfirm: () => onActivate(role.key, imei),
-                        })
-                      }
-                    />
+                    {readonly ? (
+                      <span className={`active-dot ${isActive ? 'on' : ''}`} />
+                    ) : (
+                      <input
+                        type="radio"
+                        name={`role-${race.raceId}-${role.key}`}
+                        checked={isActive}
+                        onChange={() =>
+                          ask({
+                            title: `Make ${t?.label ?? imei} the active ${role.label}?`,
+                            body:
+                              race.status === 'live'
+                                ? 'Published distances switch to this tracker immediately.'
+                                : undefined,
+                            confirmLabel: 'Switch',
+                            onConfirm: () => onActivate(role.key, imei),
+                          })
+                        }
+                      />
+                    )}
                     <span className="t-label">{t?.label ?? imei}</span>
                   </label>
                   {t && <GpsChip tracker={t} />}

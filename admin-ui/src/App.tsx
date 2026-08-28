@@ -53,6 +53,10 @@ function reducer(state: State, action: Action): State {
   }
 }
 
+/** Viewer mode (?viewer): live map + panels with every control hidden — for
+ *  announcers, spotters, and wall displays. Works on desktop and mobile. */
+const VIEWER = new URLSearchParams(window.location.search).has('viewer');
+
 export default function App() {
   const [state, dispatch] = useReducer(reducer, { connected: false, lastSeen: {} });
   const [auth, setAuth] = useState<'checking' | 'out' | string>('checking'); // string = username
@@ -70,6 +74,9 @@ export default function App() {
   const [confirm, setConfirm] = useState<ConfirmRequest>();
   const [, tick] = useReducer((n: number) => n + 1, 0);
   const ask = (req: ConfirmRequest) => setConfirm(req);
+  /** Themed error modal — replaces native alert(). */
+  const oops = (title: string) => (err: unknown) =>
+    ask({ title, body: err instanceof Error ? err.message : String(err), alertOnly: true, onConfirm: () => {} });
 
   const toggleUnits = () => {
     const next: Units = displayUnits === 'miles' ? 'kilometers' : 'miles';
@@ -155,14 +162,16 @@ export default function App() {
         displayUnits={displayUnits}
         lastSeen={state.lastSeen}
         intervalS={intervalS}
+        readonly={VIEWER}
         ask={ask}
-        onActivate={(roleKey, imei) => api.setActive(r.raceId, roleKey, imei).catch(alert)}
+        onActivate={(roleKey, imei) => api.setActive(r.raceId, roleKey, imei).catch(oops('Failover failed'))}
       />
       <TrackerTable
         race={r}
         displayUnits={displayUnits}
         lastSeen={state.lastSeen}
         intervalS={intervalS}
+        readonly={VIEWER}
         selectedImei={selected?.raceId === r.raceId ? selected.imei : undefined}
         onSelect={(imei) => setSelected({ raceId: r.raceId, imei })}
         onWindow={(imei) => setWindowDialog({ raceId: r.raceId, imei })}
@@ -174,8 +183,9 @@ export default function App() {
     <div className="app">
       <header>
         <div className="brand">
-          <span className="brand-name">PTT GPS</span>
+          <img className="brand-logo" src="/img/PRIMETIME.png" alt="Primetime" />
           <span className="event-name">{state.snapshot.event.name}</span>
+          {VIEWER && <span className="viewer-badge">VIEW ONLY</span>}
           <span className={`conn ${state.connected ? 'ok' : 'bad'}`}>
             {state.connected ? '● server' : '○ disconnected'}
           </span>
@@ -203,18 +213,22 @@ export default function App() {
               <span className={`status-dot ${r.status}`} />
             </button>
           ))}
-          <button className={view === 'events' ? 'active' : ''} onClick={() => setView('events')}>
-            ☰ Events
-          </button>
-          <button className={view === 'setup' ? 'active' : ''} onClick={() => setView('setup')}>
-            ⚙ Setup
-          </button>
+          {!VIEWER && (
+            <>
+              <button className={view === 'events' ? 'active' : ''} onClick={() => setView('events')}>
+                ☰ Events
+              </button>
+              <button className={view === 'setup' ? 'active' : ''} onClick={() => setView('setup')}>
+                ⚙ Setup
+              </button>
+            </>
+          )}
         </nav>
         <button className="mini units-toggle" onClick={toggleUnits} title="Display units (does not change published output)">
           {displayUnits === 'miles' ? 'mi' : 'km'}
         </button>
-        {view === 'ops' && race && (
-          <RacePanel race={race} ask={ask} onAction={(a) => api.lifecycle(race.raceId, a).catch(alert)} />
+        {view === 'ops' && race && !VIEWER && (
+          <RacePanel race={race} ask={ask} onAction={(a) => api.lifecycle(race.raceId, a).catch(oops('Lifecycle change failed'))} />
         )}
       </header>
       {view === 'events' ? (
@@ -234,7 +248,10 @@ export default function App() {
               <div className="race-section" key={r.raceId}>
                 <div className="race-section-head">
                   <span className="race-section-name">{r.name}</span>
-                  <RacePanel race={r} ask={ask} onAction={(a) => api.lifecycle(r.raceId, a).catch(alert)} />
+                  {!VIEWER && (
+                    <RacePanel race={r} ask={ask} onAction={(a) => api.lifecycle(r.raceId, a).catch(oops('Lifecycle change failed'))} />
+                  )}
+                  {VIEWER && <span className={`race-status ${r.status}`}>{r.status.toUpperCase()}</span>}
                 </div>
                 {racePanels(r)}
               </div>
@@ -262,10 +279,10 @@ export default function App() {
           tracker={dialogTracker}
           onClose={() => setWindowDialog(undefined)}
           onSet={(start, end, latch) =>
-            api.setWindow(dialogRace.raceId, dialogTracker.imei, start, end, latch).then(() => setWindowDialog(undefined), alert)
+            api.setWindow(dialogRace.raceId, dialogTracker.imei, start, end, latch).then(() => setWindowDialog(undefined), oops('Window change failed'))
           }
           onRelease={() =>
-            api.releaseWindow(dialogRace.raceId, dialogTracker.imei).then(() => setWindowDialog(undefined), alert)
+            api.releaseWindow(dialogRace.raceId, dialogTracker.imei).then(() => setWindowDialog(undefined), oops('Release failed'))
           }
         />
       )}

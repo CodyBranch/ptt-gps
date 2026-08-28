@@ -31,8 +31,8 @@ export function Login({ onSuccess }: { onSuccess: (username: string) => void }) 
   return (
     <div className="login-wrap">
       <form className="login-card" onSubmit={submit}>
-        <div className="login-brand">PTT GPS</div>
-        <div className="login-sub">Race control console</div>
+        <img className="login-logo" src="/img/PRIMETIME.png" alt="Primetime Timing" />
+        <div className="login-sub">GPS race control console</div>
         <label>
           Username
           <input

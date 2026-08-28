@@ -1,16 +1,19 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* Primetime brand: navy #0C1437 and red #E70518 from the logo. */
 :root {
-  --bg: #14171c;
-  --panel: #1d2229;
-  --panel2: #242a33;
-  --border: #313a46;
-  --text: #e6ebf2;
-  --dim: #8b97a6;
-  --accent: #2f7ded;
+  --brand-navy: #0c1437;
+  --brand-red: #e70518;
+  --bg: #070b18;
+  --panel: #0d1530;
+  --panel2: #16204a;
+  --border: #263263;
+  --text: #e8ecf6;
+  --dim: #8d97b8;
+  --accent: #5b74e8;   /* lightened brand navy for informational highlights */
   --ok: #1fa860;
   --warn: #ffb02e;
-  --bad: #e8484d;
+  --bad: #e70518;      /* brand red doubles as the alert color */
 }
 
 html, body, #root { height: 100%; }
@@ -18,7 +21,23 @@ body {
   background: var(--bg);
   color: var(--text);
   font: 14px/1.45 "Segoe UI", system-ui, sans-serif;
+  overflow-x: hidden;
 }
+
+/* Themed scrollbars (no stock grey) */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--panel2) var(--bg);
+}
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: var(--bg); }
+*::-webkit-scrollbar-thumb {
+  background: var(--panel2);
+  border-radius: 5px;
+  border: 2px solid var(--bg);
+}
+*::-webkit-scrollbar-thumb:hover { background: var(--border); }
+*::-webkit-scrollbar-corner { background: var(--bg); }
 
 .loading { display: grid; place-items: center; height: 100%; color: var(--dim); font-size: 16px; }
 
@@ -29,19 +48,23 @@ header {
   padding: 8px 14px; background: var(--panel); border-bottom: 1px solid var(--border);
   flex-wrap: wrap;
 }
-.brand { display: flex; align-items: baseline; gap: 10px; }
-.brand-name { font-weight: 700; letter-spacing: 0.5px; color: var(--accent); }
+.brand { display: flex; align-items: center; gap: 12px; }
+.brand-logo { height: 22px; display: block; }
 .event-name { color: var(--text); font-weight: 600; }
+.viewer-badge {
+  background: var(--panel2); border: 1px solid var(--border); color: var(--dim);
+  font-size: 10px; font-weight: 800; letter-spacing: 1px; border-radius: 3px; padding: 2px 7px;
+}
 .conn { font-size: 12px; }
 .conn.ok { color: var(--ok); }
 .conn.bad { color: var(--bad); }
 
-.race-tabs { display: flex; gap: 6px; }
+.race-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
 .race-tabs button {
   background: var(--panel2); color: var(--text); border: 1px solid var(--border);
   padding: 5px 12px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 7px;
 }
-.race-tabs button.active { border-color: var(--accent); background: #24344d; }
+.race-tabs button.active { border-color: var(--brand-red); background: #241533; box-shadow: inset 0 -2px 0 var(--brand-red); }
 .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); }
 .status-dot.armed { background: var(--warn); }
 .status-dot.live { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
@@ -108,7 +131,7 @@ button.mini {
   background: var(--panel2); color: var(--text); border: 1px solid var(--border);
   border-radius: 5px; padding: 4px 10px; cursor: pointer; font-size: 12px;
 }
-button.mini.primary { background: var(--accent); border-color: var(--accent); font-weight: 600; }
+button.mini.primary { background: var(--brand-red); border-color: var(--brand-red); font-weight: 600; color: #fff; }
 
 .dialog-backdrop {
   position: fixed; inset: 0; background: rgba(0, 0, 0, 0.55); display: grid; place-items: center; z-index: 30;
@@ -126,6 +149,12 @@ button.mini.primary { background: var(--accent); border-color: var(--accent); fo
 .dialog-actions { display: flex; gap: 8px; align-items: center; }
 .dialog-actions .spacer { flex: 1; }
 .dialog-confirm { width: 340px; }
+.dialog-error { color: var(--warn); font-size: 12px; margin-bottom: 10px; }
+.active-dot {
+  width: 13px; height: 13px; border-radius: 50%; display: inline-block;
+  border: 2px solid var(--border);
+}
+.active-dot.on { background: var(--ok); border-color: var(--ok); }
 button.mini.primary.danger-solid { background: var(--bad); border-color: var(--bad); }
 
 .whoami { color: var(--dim); font-size: 12px; }
@@ -267,8 +296,8 @@ button.linklike {
   background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
   padding: 28px; width: 320px; display: flex; flex-direction: column; gap: 14px;
 }
-.login-brand { font-size: 22px; font-weight: 800; color: var(--accent); letter-spacing: 0.5px; }
-.login-sub { color: var(--dim); font-size: 13px; margin-top: -10px; }
+.login-logo { width: 100%; display: block; margin-bottom: 2px; }
+.login-sub { color: var(--dim); font-size: 13px; margin-top: -6px; }
 .login-card label { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--dim); }
 .login-card input {
   background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 6px;
@@ -276,7 +305,7 @@ button.linklike {
 }
 .login-error { color: var(--bad); font-size: 13px; }
 .login-btn {
-  background: var(--accent); color: #fff; border: none; border-radius: 6px; padding: 10px;
+  background: var(--brand-red); color: #fff; border: none; border-radius: 6px; padding: 10px;
   font-weight: 700; font-size: 14px; cursor: pointer;
 }
 .login-btn:disabled { opacity: 0.5; cursor: default; }
@@ -293,6 +322,31 @@ button.linklike {
   font-size: 12px; font-weight: 600;
 }
 .map-style-toggle button.on { background: var(--accent); color: #fff; }
+
+/* ---- Mobile: stack map over panels, single-column setup, wrapping header ---- */
+@media (max-width: 900px) {
+  header { gap: 8px; padding: 8px 10px; }
+  .brand { width: 100%; }
+  .brand-logo { height: 18px; }
+  .event-name { font-size: 13px; }
+  .whoami { margin-left: auto; }
+  .race-panel { margin-left: 0; width: 100%; }
+
+  .main { flex-direction: column; }
+  .map-wrap { order: 0; flex: none; height: 42vh; min-height: 260px; }
+  aside, .all-races {
+    order: 1; width: 100%; min-width: 0; flex: 1;
+    border-right: none; border-top: 1px solid var(--border);
+  }
+
+  .setup-grid { grid-template-columns: 1fr; padding: 10px; }
+  .events-list { grid-template-columns: 1fr; padding: 10px; }
+  .tracker-table { overflow-x: auto; } /* last resort on very narrow phones */
+  .tracker-table table { font-size: 12px; }
+  .tracker-table td, .tracker-table th { padding: 5px 4px; }
+  .batt-pct { display: none; } /* bar + color carry the info on phones */
+  .dialog, .dialog-confirm { width: calc(100vw - 32px); max-width: 400px; }
+}
 
 .map-marker { position: relative; }
 .map-marker-dot {
