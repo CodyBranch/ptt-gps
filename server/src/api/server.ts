@@ -6,6 +6,7 @@ import express from 'express';
 import { Server as SocketIOServer } from 'socket.io';
 import type { App } from '../app.js';
 import { listEvents, createEvent, type ConfigManager } from '../config/manager.js';
+import type { FirebaseHub } from '../outputs/hub.js';
 import { AuthService, hashPassword } from './auth.js';
 import { TunnelManager } from './tunnel.js';
 
@@ -15,6 +16,7 @@ export interface AppHolder {
   rebuild: (json: unknown) => void;
   readonly manager: ConfigManager;
   eventsDir: string;
+  hub: FirebaseHub;
   /** Switch the running server to another event file in eventsDir. */
   activateEvent: (file: string) => void;
 }
@@ -239,6 +241,59 @@ export function startApi(holder: AppHolder, port: number): { httpServer: http.Se
       app.setPublishing(!!req.body.enabled, (req as OpRequest).operator);
     }),
   );
+
+  // --- firebase connections: registry, status test, open data browser ---
+
+  ex.get('/api/firebase', (_req, res) => {
+    res.json(holder.hub.list());
+  });
+
+  ex.post(
+    '/api/firebase',
+    act((req) => {
+      const { name, databaseURL, serviceAccount } = req.body ?? {};
+      if (typeof name !== 'string' || typeof databaseURL !== 'string' || typeof serviceAccount !== 'object' || !serviceAccount) {
+        throw new Error('name, databaseURL, and serviceAccount JSON are required');
+      }
+      holder.hub.saveConnection(name, databaseURL, serviceAccount);
+    }),
+  );
+
+  ex.delete(
+    '/api/firebase/:name',
+    act((req) => {
+      const name = req.params.name as string;
+      const inUse = holder.manager.raw.firebase.some((t) => t.connection === name);
+      if (inUse) throw new Error(`Connection "${name}" is used by the active event — remove it from the event first`);
+      holder.hub.deleteConnection(name);
+    }),
+  );
+
+  ex.post('/api/firebase/:name/test', (req, res) => {
+    holder.hub
+      .test(req.params.name as string)
+      .then((result) => res.json(result))
+      .catch((err: Error) => res.json({ ok: false, error: err.message }));
+  });
+
+  ex.get('/api/firebase/:name/data', (req, res) => {
+    holder.hub
+      .read(req.params.name as string, String(req.query.path ?? ''))
+      .then((value) => res.json({ ok: true, value }))
+      .catch((err: Error) => res.status(400).json({ ok: false, error: err.message }));
+  });
+
+  ex.put('/api/firebase/:name/data', (req, res) => {
+    const { path: refPath, value, method } = req.body ?? {};
+    const m = method === 'update' || method === 'delete' ? method : 'set';
+    holder.hub
+      .write(req.params.name as string, String(refPath ?? ''), value, m)
+      .then(() => {
+        app.store.recordPublish(null, `manual:${req.params.name}`, String(refPath), m === 'delete' ? null : value);
+        res.json({ ok: true });
+      })
+      .catch((err: Error) => res.status(400).json({ ok: false, error: err.message }));
+  });
 
   // --- remote access (ngrok tunnel for the console) ---
 

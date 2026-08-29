@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import type { ConfirmRequest } from './Confirm';
-import type { CourseInfo, DeviceRow, EventConfigT, FleetRow, TunnelStatus, UserRow } from '../types';
+import type { CourseInfo, DeviceRow, EventConfigT, FirebaseConn, FleetRow, TunnelStatus, UserRow } from '../types';
 
 /**
  * Event setup.
@@ -16,6 +16,7 @@ export function SetupView({ ask, onSaved }: { ask: (req: ConfirmRequest) => void
   const [fleet, setFleet] = useState<FleetRow[]>([]);
   const [devices, setDevices] = useState<DeviceRow[]>([]);
   const [users, setUsers] = useState<UserRow[]>([]);
+  const [fbConns, setFbConns] = useState<FirebaseConn[]>([]);
   const [dirty, setDirty] = useState(false);
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string }>();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -24,6 +25,7 @@ export function SetupView({ ask, onSaved }: { ask: (req: ConfirmRequest) => void
     api.fleet().then(setFleet).catch(console.error);
     api.devices().then(setDevices).catch(console.error);
     api.users().then(setUsers).catch(console.error);
+    api.firebaseList().then(setFbConns).catch(console.error);
   };
   const reload = () => {
     api.getConfig().then((c) => {
@@ -262,6 +264,46 @@ export function SetupView({ ask, onSaved }: { ask: (req: ConfirmRequest) => void
               />
             </label>
           </div>
+          <h4>Firebase outputs for this event</h4>
+          {cfg.firebase.length === 0 && (
+            <p className="hint">None — the event runs with the debug publisher (nothing leaves the box).</p>
+          )}
+          {cfg.firebase.map((t, i) => (
+            <div className="form-row" key={i}>
+              <label>
+                Connection
+                <select value={t.connection} onChange={(e) => edit((c) => (c.firebase[i].connection = e.target.value))}>
+                  {!fbConns.some((x) => x.name === t.connection) && <option value={t.connection}>{t.connection} (missing!)</option>}
+                  {fbConns.map((x) => (
+                    <option key={x.name} value={x.name}>
+                      {x.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Flavor
+                <select
+                  value={t.flavor}
+                  onChange={(e) => edit((c) => (c.firebase[i].flavor = e.target.value as 'ptt' | 'krush'))}
+                >
+                  <option value="ptt">ptt (Scoreboard + Clock)</option>
+                  <option value="krush">krush (Clock + GPSMap)</option>
+                </select>
+              </label>
+              <button className="mini danger self-end" onClick={() => edit((c) => c.firebase.splice(i, 1))}>
+                ✕
+              </button>
+            </div>
+          ))}
+          <button
+            className="mini"
+            disabled={fbConns.length === 0}
+            title={fbConns.length === 0 ? 'Add a Firebase connection below first' : ''}
+            onClick={() => edit((c) => c.firebase.push({ connection: fbConns[0].name, flavor: 'ptt' }))}
+          >
+            + Add Firebase output
+          </button>
         </section>
 
         <section>
@@ -538,6 +580,11 @@ export function SetupView({ ask, onSaved }: { ask: (req: ConfirmRequest) => void
         </section>
 
         <section>
+          <h3>Firebase connections</h3>
+          <FirebasePanel conns={fbConns} onChanged={() => api.firebaseList().then(setFbConns)} onMsg={setMsg} ask={ask} />
+        </section>
+
+        <section>
           <h3>Remote access (ngrok)</h3>
           <RemoteAccessPanel onMsg={setMsg} ask={ask} />
         </section>
@@ -652,6 +699,215 @@ function ViewerPinRow({
           </button>
         )}
       </div>
+    </>
+  );
+}
+
+function FirebasePanel({
+  conns,
+  onChanged,
+  onMsg,
+  ask,
+}: {
+  conns: FirebaseConn[];
+  onChanged: () => void;
+  onMsg: (m: { kind: 'ok' | 'err'; text: string }) => void;
+  ask: (req: ConfirmRequest) => void;
+}) {
+  const [tests, setTests] = useState<Record<string, string>>({});
+  const [name, setName] = useState('');
+  const [url, setUrl] = useState('');
+  const credRef = useRef<HTMLInputElement>(null);
+  // data browser
+  const [browseConn, setBrowseConn] = useState('');
+  const [browsePath, setBrowsePath] = useState('');
+  const [browseValue, setBrowseValue] = useState('');
+  const [browseMethod, setBrowseMethod] = useState<'set' | 'update' | 'delete'>('update');
+  const [busy, setBusy] = useState(false);
+
+  const runTest = async (n: string) => {
+    setTests((t) => ({ ...t, [n]: 'testing…' }));
+    const r = await api.firebaseTest(n);
+    setTests((t) => ({ ...t, [n]: r.ok ? `✓ connected (${r.latencyMs} ms)` : `✗ ${r.error}` }));
+  };
+
+  const addConn = async (file: File) => {
+    try {
+      const sa = JSON.parse(await file.text());
+      await api.firebaseAdd(name, url, sa);
+      onMsg({ kind: 'ok', text: `Connection "${name}" saved — test it below.` });
+      setName('');
+      setUrl('');
+      onChanged();
+    } catch (err) {
+      onMsg({ kind: 'err', text: (err as Error).message });
+    }
+  };
+
+  const read = async () => {
+    setBusy(true);
+    try {
+      const value = await api.firebaseRead(browseConn, browsePath);
+      setBrowseValue(JSON.stringify(value, null, 2) ?? 'null');
+      onMsg({ kind: 'ok', text: `Read ${browsePath}` });
+    } catch (err) {
+      onMsg({ kind: 'err', text: (err as Error).message });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const write = () => {
+    let value: unknown = null;
+    if (browseMethod !== 'delete') {
+      try {
+        value = JSON.parse(browseValue);
+      } catch {
+        return onMsg({ kind: 'err', text: 'Value must be valid JSON (strings need quotes)' });
+      }
+    }
+    ask({
+      title: `${browseMethod.toUpperCase()} ${browsePath}?`,
+      body: `Writes directly to "${browseConn}" — scoreboards and maps reading this path see it immediately.`,
+      confirmLabel: browseMethod.toUpperCase(),
+      danger: true,
+      onConfirm: async () => {
+        setBusy(true);
+        try {
+          await api.firebaseWrite(browseConn, browsePath, value, browseMethod);
+          onMsg({ kind: 'ok', text: `${browseMethod} ${browsePath} done.` });
+        } catch (err) {
+          onMsg({ kind: 'err', text: (err as Error).message });
+        } finally {
+          setBusy(false);
+        }
+      },
+    });
+  };
+
+  return (
+    <>
+      <p className="hint">
+        Server-wide registry — connect any Firebase project by uploading its service-account JSON
+        (Firebase console → Project settings → Service accounts). Events pick from these connections.
+      </p>
+      <table className="setup-table">
+        <tbody>
+          {conns.map((c) => (
+            <tr key={c.name}>
+              <td>
+                <div className="t-label">{c.name}</div>
+                <div className="t-imei">{c.databaseURL}</div>
+              </td>
+              <td className="fb-test-result">{tests[c.name] ?? ''}</td>
+              <td>
+                <button className="mini" onClick={() => runTest(c.name)}>
+                  Test
+                </button>
+              </td>
+              <td>
+                <button
+                  className="mini danger"
+                  onClick={() =>
+                    ask({
+                      title: `Remove connection "${c.name}"?`,
+                      body: 'Its credential file is deleted from the server.',
+                      confirmLabel: 'Remove',
+                      danger: true,
+                      onConfirm: async () => {
+                        try {
+                          await api.firebaseDelete(c.name);
+                          onChanged();
+                        } catch (err) {
+                          onMsg({ kind: 'err', text: (err as Error).message });
+                        }
+                      },
+                    })
+                  }
+                >
+                  ✕
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <div className="form-row">
+        <label>
+          Name
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="ptt-franklin" />
+        </label>
+        <label>
+          Database URL
+          <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://ptt-franklin.firebaseio.com" />
+        </label>
+        <input
+          ref={credRef}
+          type="file"
+          accept=".json"
+          style={{ display: 'none' }}
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) addConn(f);
+            e.target.value = '';
+          }}
+        />
+        <button
+          className="mini primary self-end"
+          disabled={!name.trim() || !url.trim()}
+          onClick={() => credRef.current?.click()}
+        >
+          ⬆ Upload key & add
+        </button>
+      </div>
+
+      {conns.length > 0 && (
+        <>
+          <h4>Data browser</h4>
+          <div className="form-row">
+            <label>
+              Connection
+              <select value={browseConn} onChange={(e) => setBrowseConn(e.target.value)}>
+                <option value="">choose…</option>
+                {conns.map((c) => (
+                  <option key={c.name} value={c.name}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Path
+              <input value={browsePath} onChange={(e) => setBrowsePath(e.target.value)} placeholder="9999/Meta/Clock" />
+            </label>
+            <button className="mini self-end" disabled={busy || !browseConn || !browsePath} onClick={read}>
+              ⬇ Read
+            </button>
+          </div>
+          <textarea
+            className="fb-json"
+            rows={7}
+            value={browseValue}
+            onChange={(e) => setBrowseValue(e.target.value)}
+            placeholder='JSON — e.g. {"showDistance": true}'
+            spellCheck={false}
+          />
+          <div className="form-row">
+            <label>
+              Write mode
+              <select value={browseMethod} onChange={(e) => setBrowseMethod(e.target.value as typeof browseMethod)}>
+                <option value="update">update (merge keys)</option>
+                <option value="set">set (replace node)</option>
+                <option value="delete">delete (remove node)</option>
+              </select>
+            </label>
+            <button className="mini danger self-end" disabled={busy || !browseConn || !browsePath} onClick={write}>
+              ⬆ Write
+            </button>
+          </div>
+        </>
+      )}
     </>
   );
 }

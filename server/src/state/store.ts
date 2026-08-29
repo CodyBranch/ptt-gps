@@ -79,6 +79,13 @@ export class Store {
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS firebase_connections (
+        name TEXT PRIMARY KEY,
+        database_url TEXT NOT NULL,
+        project_id TEXT,
+        cred_file TEXT NOT NULL,
+        created_ms INTEGER NOT NULL
+      );
       CREATE TABLE IF NOT EXISTS fleet (
         imei TEXT PRIMARY KEY,
         label TEXT NOT NULL,
@@ -223,6 +230,33 @@ export class Store {
     this.db
       .prepare(`INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`)
       .run(key, value);
+  }
+
+  // --- firebase connections registry ---
+
+  upsertFirebaseConnection(c: { name: string; databaseURL: string; projectId?: string; credFile: string }): void {
+    this.db
+      .prepare(`INSERT INTO firebase_connections (name, database_url, project_id, cred_file, created_ms)
+                VALUES (@name, @databaseURL, @projectId, @credFile, @now)
+                ON CONFLICT(name) DO UPDATE SET
+                  database_url=@databaseURL, project_id=@projectId, cred_file=@credFile`)
+      .run({ name: c.name, databaseURL: c.databaseURL, projectId: c.projectId ?? null, credFile: c.credFile, now: Date.now() });
+  }
+
+  listFirebaseConnections(): Array<{ name: string; database_url: string; project_id: string | null; cred_file: string; created_ms: number }> {
+    return this.db.prepare(`SELECT * FROM firebase_connections ORDER BY name`).all() as Array<{
+      name: string; database_url: string; project_id: string | null; cred_file: string; created_ms: number;
+    }>;
+  }
+
+  getFirebaseConnection(name: string): { name: string; database_url: string; cred_file: string } | undefined {
+    return this.db.prepare(`SELECT name, database_url, cred_file FROM firebase_connections WHERE name = ?`).get(name) as
+      | { name: string; database_url: string; cred_file: string }
+      | undefined;
+  }
+
+  deleteFirebaseConnection(name: string): boolean {
+    return this.db.prepare(`DELETE FROM firebase_connections WHERE name = ?`).run(name).changes > 0;
   }
 
   // --- fleet registry (curated tracker inventory, event-independent) ---

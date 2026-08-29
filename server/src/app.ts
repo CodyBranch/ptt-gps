@@ -5,6 +5,7 @@ import { FixGate } from './ingest/hygiene.js';
 import type { Fix, Telemetry } from './ingest/types.js';
 import { DebugPublisher, type Publisher } from './outputs/publisher.js';
 import { FirebasePublisher } from './outputs/firebase.js';
+import type { FirebaseHub } from './outputs/hub.js';
 import { Store } from './state/store.js';
 
 export interface AppEvents {
@@ -35,7 +36,7 @@ export class App {
   readonly lastSeen = new Map<string, number>();
   private out: AppEvents;
 
-  constructor(cfg: EventConfig, store: Store, out: AppEvents) {
+  constructor(cfg: EventConfig, store: Store, out: AppEvents, hub?: FirebaseHub) {
     this.cfg = cfg;
     this.store = store;
     this.out = out;
@@ -55,14 +56,20 @@ export class App {
       this.store.recordPublish(this.publishContextSession, target, path, value);
     };
 
-    if (cfg.firebase.length === 0) {
+    if (cfg.firebase.length === 0 || !hub) {
       this.publishers.push(new DebugPublisher(recorder));
       console.log('[outputs] no firebase targets configured — running with debug publisher');
     } else {
       for (const target of cfg.firebase) {
-        this.publishers.push(new FirebasePublisher(target, recorder));
-        console.log(`[outputs] firebase target "${target.name}" (${target.flavor})`);
+        try {
+          this.publishers.push(new FirebasePublisher(target, hub, recorder));
+          console.log(`[outputs] firebase target "${target.connection}" (${target.flavor})`);
+        } catch (err) {
+          // A missing/broken connection must not take the server down mid-setup.
+          console.error(`[outputs] firebase target "${target.connection}" skipped:`, (err as Error).message);
+        }
       }
+      if (this.publishers.length === 0) this.publishers.push(new DebugPublisher(recorder));
     }
 
     for (const race of cfg.races) {

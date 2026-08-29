@@ -56,12 +56,10 @@ export const RaceSchema = z.object({
 });
 
 export const FirebaseTargetSchema = z.object({
-  name: z.string(),
+  /** Name of a connection from the server-wide Firebase registry (Setup). */
+  connection: z.string(),
   /** "ptt" = PTT-Scoreboard + Meta/Clock; "krush" = Meta/Clock + GPSMap. */
   flavor: z.enum(['ptt', 'krush']),
-  databaseURL: z.string().url(),
-  /** Env var holding the path to the service-account JSON (never in config). */
-  credentialEnv: z.string(),
 });
 
 export const EventSchema = z.object({

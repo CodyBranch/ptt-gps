@@ -99,6 +99,50 @@ export const api = {
     if (!res.ok || json.ok === false) throw new Error(json.error ?? `HTTP ${res.status}`);
   },
 
+  firebaseList: async () => {
+    const res = await fetch('/api/firebase');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  },
+
+  firebaseAdd: async (name: string, databaseURL: string, serviceAccount: unknown) => {
+    const res = await fetch('/api/firebase', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, databaseURL, serviceAccount }),
+    });
+    const json = await res.json();
+    if (!res.ok || json.ok === false) throw new Error(json.error ?? `HTTP ${res.status}`);
+  },
+
+  firebaseDelete: async (name: string) => {
+    const res = await fetch(`/api/firebase/${encodeURIComponent(name)}`, { method: 'DELETE' });
+    const json = await res.json();
+    if (!res.ok || json.ok === false) throw new Error(json.error ?? `HTTP ${res.status}`);
+  },
+
+  firebaseTest: async (name: string): Promise<{ ok: boolean; latencyMs?: number; error?: string }> => {
+    const res = await fetch(`/api/firebase/${encodeURIComponent(name)}/test`, { method: 'POST' });
+    return res.json();
+  },
+
+  firebaseRead: async (name: string, path: string): Promise<unknown> => {
+    const res = await fetch(`/api/firebase/${encodeURIComponent(name)}/data?path=${encodeURIComponent(path)}`);
+    const json = await res.json();
+    if (!res.ok || json.ok === false) throw new Error(json.error ?? `HTTP ${res.status}`);
+    return json.value;
+  },
+
+  firebaseWrite: async (name: string, path: string, value: unknown, method: 'set' | 'update' | 'delete') => {
+    const res = await fetch(`/api/firebase/${encodeURIComponent(name)}/data`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path, value, method }),
+    });
+    const json = await res.json();
+    if (!res.ok || json.ok === false) throw new Error(json.error ?? `HTTP ${res.status}`);
+  },
+
   tunnelStatus: async () => {
     const res = await fetch('/api/tunnel');
     if (!res.ok) throw new Error(`HTTP ${res.status}`);

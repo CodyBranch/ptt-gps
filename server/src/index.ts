@@ -3,6 +3,7 @@ import net from 'node:net';
 import path from 'node:path';
 import { ConfigManager, listEvents } from './config/manager.js';
 import { App } from './app.js';
+import { FirebaseHub } from './outputs/hub.js';
 import { Store } from './state/store.js';
 import { startApi, type AppHolder } from './api/server.js';
 import { startListener } from './ingest/source.js';
@@ -47,15 +48,19 @@ const out = { emit: (e: string, p: unknown) => emitFn(e, p) };
 let manager = new ConfigManager(path.join(eventsDir, eventFile));
 store.setSetting('active-event', eventFile);
 
+const dbPath = arg('db', 'data/ptt.db')!;
+const hub = new FirebaseHub(store, path.dirname(path.resolve(dbPath)));
+
 const holder: AppHolder = {
-  app: new App(manager.resolved(), store, out),
+  app: new App(manager.resolved(), store, out, hub),
   eventsDir,
+  hub,
   get manager() {
     return manager;
   },
   rebuild: (json: unknown) => {
     const resolved = manager.update(json);
-    holder.app = new App(resolved, store, out);
+    holder.app = new App(resolved, store, out, hub);
     syncListeners(resolved.listeners);
     console.log(`[config] event config updated — engines rebuilt (${resolved.races.length} race(s))`);
   },
@@ -63,7 +68,7 @@ const holder: AppHolder = {
     const nextManager = new ConfigManager(path.join(eventsDir, file));
     const resolved = nextManager.resolved();
     manager = nextManager;
-    holder.app = new App(resolved, store, out);
+    holder.app = new App(resolved, store, out, hub);
     store.setSetting('active-event', file);
     syncListeners(resolved.listeners);
     console.log(`[config] activated event "${resolved.name}" (${file})`);

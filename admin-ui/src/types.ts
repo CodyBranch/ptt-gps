@@ -55,7 +55,7 @@ export interface EventConfigT {
   outputUnits: Units;
   reportIntervalS: number;
   listeners: Array<{ name: string; port: number }>;
-  firebase: unknown[];
+  firebase: Array<{ connection: string; flavor: 'ptt' | 'krush' }>;
   trackers: Array<{ imei: string; label: string; hasBattery: boolean }>;
   roles: Array<{
     key: string;
@@ -139,6 +139,13 @@ export interface Snapshot {
   lastSeen: Record<string, number>;
   /** Master output switch — false = nothing is pushed to Firebase/outputs. */
   publishEnabled: boolean;
+}
+
+export interface FirebaseConn {
+  name: string;
+  databaseURL: string;
+  projectId: string | null;
+  createdMs: number;
 }
 
 export interface TunnelStatus {

@@ -1,8 +1,8 @@
-import fs from 'node:fs';
-import admin from 'firebase-admin';
+import type admin from 'firebase-admin';
 import type { FirebaseTarget } from '../config/schema.js';
 import type { RoleState, TrackerState } from '../engine/race-engine.js';
 import type { Fix } from '../ingest/types.js';
+import type { FirebaseHub } from './hub.js';
 import { slotSuffix, type Publisher, type PublishRecorder } from './publisher.js';
 
 /**
@@ -24,29 +24,10 @@ export class FirebasePublisher implements Publisher {
   private db: admin.database.Database;
   private flavor: 'ptt' | 'krush';
 
-  constructor(target: FirebaseTarget, private record: PublishRecorder) {
-    this.name = target.name;
+  constructor(target: FirebaseTarget, hub: FirebaseHub, private record: PublishRecorder) {
+    this.name = target.connection;
     this.flavor = target.flavor;
-    const credPath = process.env[target.credentialEnv];
-    if (!credPath || !fs.existsSync(credPath)) {
-      throw new Error(
-        `Firebase target "${target.name}": env ${target.credentialEnv} must point to a service-account JSON file`,
-      );
-    }
-    // Reuse the named app if it already exists — publishers are re-created when
-    // the event config is edited, but firebase-admin apps are process-global.
-    const appName = `target-${target.name}`;
-    const existing = admin.apps.find((a) => a?.name === appName);
-    const app =
-      existing ??
-      admin.initializeApp(
-        {
-          credential: admin.credential.cert(JSON.parse(fs.readFileSync(credPath, 'utf8'))),
-          databaseURL: target.databaseURL,
-        },
-        appName,
-      );
-    this.db = app.database();
+    this.db = hub.database(target.connection); // throws when the connection is unknown
   }
 
   private update(path: string, value: Record<string, unknown>): void {
