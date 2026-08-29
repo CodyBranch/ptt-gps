@@ -137,6 +137,8 @@ export interface Snapshot {
   races: RaceSnap[];
   /** Last time any frame arrived per IMEI (comms health, race-independent). */
   lastSeen: Record<string, number>;
+  /** Master output switch — false = nothing is pushed to Firebase/outputs. */
+  publishEnabled: boolean;
 }
 
 export interface UserRow {

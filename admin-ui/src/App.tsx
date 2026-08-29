@@ -24,6 +24,7 @@ type Action =
   | { type: 'race'; race: RaceSnap }
   | { type: 'tracker'; raceId: string; state: TrackerPub; slice: [number, number][]; health: TrackerPub['health'] }
   | { type: 'seen'; imei: string; ms: number }
+  | { type: 'publishing'; enabled: boolean }
   | { type: 'connected'; connected: boolean };
 
 function reducer(state: State, action: Action): State {
@@ -32,6 +33,10 @@ function reducer(state: State, action: Action): State {
       return { ...state, snapshot: action.snapshot, lastSeen: { ...action.snapshot.lastSeen } };
     case 'seen':
       return { ...state, lastSeen: { ...state.lastSeen, [action.imei]: action.ms } };
+    case 'publishing':
+      return state.snapshot
+        ? { ...state, snapshot: { ...state.snapshot, publishEnabled: action.enabled } }
+        : state;
     case 'race': {
       if (!state.snapshot) return state;
       const races = state.snapshot.races.map((r) => (r.raceId === action.race.raceId ? action.race : r));
@@ -120,6 +125,7 @@ export default function App() {
     socket.on('telemetry', (t: { imei?: string; receivedAtMs?: number }) => {
       if (t.imei) dispatch({ type: 'seen', imei: t.imei, ms: t.receivedAtMs ?? Date.now() });
     });
+    socket.on('publishing', (p: { enabled: boolean }) => dispatch({ type: 'publishing', enabled: p.enabled }));
     const t = setInterval(() => tick(), 1000); // refresh fix-age displays
     return () => {
       socket.close();
@@ -230,6 +236,27 @@ export default function App() {
         <button className="mini units-toggle" onClick={toggleUnits} title="Display units (does not change published output)">
           {displayUnits === 'miles' ? 'mi' : 'km'}
         </button>
+        {!viewer && (
+          <button
+            className={`publish-toggle ${state.snapshot.publishEnabled ? 'on' : 'off'}`}
+            title="Master switch for pushing data to Firebase and other outputs"
+            onClick={() => {
+              const next = !state.snapshot!.publishEnabled;
+              ask({
+                title: next ? 'Enable output publishing?' : 'Disable output publishing?',
+                body: next
+                  ? 'Distances resume flowing to Firebase (scoreboards, clocks, maps) with the next fixes.'
+                  : 'Nothing will be pushed to Firebase while disabled — scoreboards get a final showDistance=off and then silence. Races keep computing.',
+                confirmLabel: next ? 'Enable' : 'Disable',
+                danger: !next,
+                onConfirm: () => api.setPublishing(next).catch(oops('Publishing toggle failed')),
+              });
+            }}
+          >
+            {state.snapshot.publishEnabled ? '⬆ PUBLISHING' : '⛔ OUTPUTS OFF'}
+          </button>
+        )}
+        {viewer && !state.snapshot.publishEnabled && <span className="publish-toggle off">⛔ OUTPUTS OFF</span>}
         {view === 'ops' && race && !viewer && (
           <RacePanel race={race} ask={ask} onAction={(a) => api.lifecycle(race.raceId, a).catch(oops('Lifecycle change failed'))} />
         )}

@@ -232,6 +232,13 @@ export function startApi(holder: AppHolder, port: number): { httpServer: http.Se
     }),
   );
 
+  ex.post(
+    '/api/publishing',
+    act((req) => {
+      app.setPublishing(!!req.body.enabled, (req as OpRequest).operator);
+    }),
+  );
+
   // --- setup: event config + courses ---
 
   const guardIdle = () => {

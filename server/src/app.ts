@@ -23,6 +23,11 @@ export class App {
   /** Session to attribute the publish being emitted right now (single-threaded). */
   private publishContextSession: number | null = null;
   /**
+   * Master output switch: when off, nothing is pushed to any publisher
+   * (Firebase/debug) even while races are live. Persisted across restarts.
+   */
+  publishEnabled: boolean;
+  /**
    * Last time ANY frame arrived per IMEI (fixes, valid or not, and telemetry).
    * This is comms health — independent of race state and GPS lock — so the
    * console's Age column works during pre-race checks too.
@@ -35,6 +40,7 @@ export class App {
     this.store = store;
     this.out = out;
     this.gate = new FixGate();
+    this.publishEnabled = store.getSetting('publish-enabled') !== '0';
 
     // Seed packet-age data from the device registry so a server restart shows
     // real "last heard from" times instead of blanks.
@@ -63,7 +69,7 @@ export class App {
       const engine = new RaceEngine(cfg, race, {
         onTrackerUpdate: (raceId, state) => this.handleTrackerUpdate(raceId, state),
         onRoleDistance: (raceId, role, state, fix) => {
-          if (state.distance === undefined) return;
+          if (!this.publishEnabled || state.distance === undefined) return;
           this.publishContextSession = this.sessions.get(raceId) ?? null;
           const distOut = convertUnits(state.distance, race.units, cfg.outputUnits);
           for (const p of this.publishers) p.roleDistance(cfg.meetId, role, distOut, state, fix);
@@ -118,7 +124,7 @@ export class App {
       slice: engine.sliceFor(state.imei),
       health: this.gate.health(state.imei),
     });
-    if (engine.status === 'live' && state.lastFix) {
+    if (engine.status === 'live' && state.lastFix && this.publishEnabled) {
       this.publishContextSession = this.sessions.get(raceId) ?? null;
       const isLead = engine.roles.some((r) => r.activeImei === state.imei);
       const distOut =
@@ -169,7 +175,7 @@ export class App {
         this.sessions.set(raceId, sessionId);
         engine.setStatus('live', by);
         // showDistance is meet-wide: turn on with the first live race only.
-        if (firstLive) {
+        if (firstLive && this.publishEnabled) {
           this.publishContextSession = sessionId;
           for (const p of this.publishers) p.showDistance(this.cfg.meetId, true);
         }
@@ -183,7 +189,7 @@ export class App {
           this.sessions.delete(raceId);
         }
         // ...and off only when the last live race finishes.
-        if (this.sessions.size === 0) {
+        if (this.sessions.size === 0 && this.publishEnabled) {
           this.publishContextSession = sessionId ?? null;
           for (const p of this.publishers) p.showDistance(this.cfg.meetId, false);
         }
@@ -195,6 +201,30 @@ export class App {
     }
     this.out.emit('race', this.raceSnapshot(raceId));
     return engine.status;
+  }
+
+  /**
+   * Master output switch. Turning off sends a final showDistance=false so
+   * downstream consumers blank cleanly; turning on mid-race re-asserts
+   * showDistance=true and distances resume with the next fixes.
+   */
+  setPublishing(enabled: boolean, by?: string): void {
+    if (enabled === this.publishEnabled) return;
+    const anyLive = this.sessions.size > 0;
+    this.publishContextSession = this.sessions.values().next().value ?? null;
+    if (!enabled && anyLive) {
+      for (const p of this.publishers) p.showDistance(this.cfg.meetId, false);
+    }
+    this.publishEnabled = enabled;
+    if (enabled && anyLive) {
+      for (const p of this.publishers) p.showDistance(this.cfg.meetId, true);
+    }
+    this.store.setSetting('publish-enabled', enabled ? '1' : '0');
+    for (const sessionId of this.sessions.values()) {
+      this.store.addSessionEvent(sessionId, 'publishing', { enabled, by });
+    }
+    this.out.emit('publishing', { enabled, by, tMs: Date.now() });
+    console.log(`[outputs] publishing ${enabled ? 'ENABLED' : 'DISABLED'}${by ? ` by ${by}` : ''}`);
   }
 
   raceSnapshot(raceId: string) {
@@ -225,6 +255,7 @@ export class App {
       },
       races: this.cfg.races.map((r) => this.raceSnapshot(r.id)),
       lastSeen: Object.fromEntries(this.lastSeen),
+      publishEnabled: this.publishEnabled,
     };
   }
 }
