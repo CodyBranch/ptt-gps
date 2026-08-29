@@ -77,7 +77,30 @@ export const api = {
     return res.json();
   },
 
-  saveFleet: async (t: { imei: string; label: string; model?: string | null; hasBattery: boolean; notes?: string | null; retired: boolean }) => {
+  owners: async () => {
+    const res = await fetch('/api/owners');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  },
+
+  addOwner: async (name: string): Promise<{ id: number; name: string }> => {
+    const res = await fetch('/api/owners', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    });
+    const json = await res.json();
+    if (!res.ok || json.ok === false) throw new Error(json.error ?? `HTTP ${res.status}`);
+    return json.result;
+  },
+
+  deleteOwner: async (id: number) => {
+    const res = await fetch(`/api/owners/${id}`, { method: 'DELETE' });
+    const json = await res.json();
+    if (!res.ok || json.ok === false) throw new Error(json.error ?? `HTTP ${res.status}`);
+  },
+
+  saveFleet: async (t: { imei: string; label: string; model?: string | null; hasBattery: boolean; notes?: string | null; ownerId?: number | null; retired: boolean }) => {
     const res = await fetch('/api/fleet', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

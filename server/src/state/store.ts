@@ -118,6 +118,26 @@ export class Store {
     if (!userCols.some((c) => c.name === 'role')) {
       this.db.exec(`ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'admin'`);
     }
+    // additive migration: device owner on the fleet registry
+    const fleetCols = this.db.prepare(`PRAGMA table_info(fleet)`).all() as Array<{ name: string }>;
+    if (!fleetCols.some((c) => c.name === 'owner')) {
+      this.db.exec(`ALTER TABLE fleet ADD COLUMN owner TEXT`);
+    }
+    // Owners are a table (case-insensitive unique) so "PTT" / "Ptt" /
+    // "PrimeTime" can't drift apart; fleet links by owner_id.
+    this.db.exec(`CREATE TABLE IF NOT EXISTS owners (
+      id INTEGER PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE COLLATE NOCASE
+    )`);
+    if (!fleetCols.some((c) => c.name === 'owner_id')) {
+      this.db.exec(`ALTER TABLE fleet ADD COLUMN owner_id INTEGER`);
+      // migrate any free-text owners that existed briefly
+      const rows = this.db.prepare(`SELECT imei, owner FROM fleet WHERE owner IS NOT NULL AND owner != ''`).all() as Array<{ imei: string; owner: string }>;
+      for (const r of rows) {
+        const o = this.addOwner(r.owner);
+        this.db.prepare(`UPDATE fleet SET owner_id = ? WHERE imei = ?`).run(o.id, r.imei);
+      }
+    }
   }
 
   private stmts = {
@@ -265,32 +285,65 @@ export class Store {
     return this.db.prepare(`DELETE FROM firebase_connections WHERE name = ?`).run(name).changes > 0;
   }
 
+  // --- device owners (normalized) ---
+
+  listOwners(): Array<{ id: number; name: string }> {
+    return this.db.prepare(`SELECT id, name FROM owners ORDER BY name COLLATE NOCASE`).all() as Array<{ id: number; name: string }>;
+  }
+
+  /** Case-insensitive get-or-create, so near-duplicate spellings collapse. */
+  addOwner(name: string): { id: number; name: string } {
+    const clean = name.trim();
+    if (!clean) throw new Error('Owner name is required');
+    const existing = this.db.prepare(`SELECT id, name FROM owners WHERE name = ? COLLATE NOCASE`).get(clean) as
+      | { id: number; name: string }
+      | undefined;
+    if (existing) return existing;
+    const res = this.db.prepare(`INSERT INTO owners (name) VALUES (?)`).run(clean);
+    return { id: Number(res.lastInsertRowid), name: clean };
+  }
+
+  deleteOwner(id: number): void {
+    const inUse = (this.db.prepare(`SELECT COUNT(*) c FROM fleet WHERE owner_id = ?`).get(id) as { c: number }).c;
+    if (inUse > 0) throw new Error(`Owner is linked to ${inUse} device(s) — unlink them first`);
+    if (this.db.prepare(`DELETE FROM owners WHERE id = ?`).run(id).changes === 0) throw new Error('Unknown owner');
+  }
+
   // --- fleet registry (curated tracker inventory, event-independent) ---
 
-  upsertFleet(t: { imei: string; label: string; model?: string; hasBattery: boolean; notes?: string; retired: boolean }): void {
+  upsertFleet(t: { imei: string; label: string; model?: string; hasBattery: boolean; notes?: string; ownerId?: number | null; retired: boolean }): void {
     this.db
-      .prepare(`INSERT INTO fleet (imei, label, model, has_battery, notes, retired, updated_ms)
-                VALUES (@imei, @label, @model, @hasBattery, @notes, @retired, @now)
+      .prepare(`INSERT INTO fleet (imei, label, model, has_battery, notes, owner_id, retired, updated_ms)
+                VALUES (@imei, @label, @model, @hasBattery, @notes, @ownerId, @retired, @now)
                 ON CONFLICT(imei) DO UPDATE SET
                   label=@label, model=@model, has_battery=@hasBattery, notes=@notes,
-                  retired=@retired, updated_ms=@now`)
+                  owner_id=@ownerId, retired=@retired, updated_ms=@now`)
       .run({
         imei: t.imei,
         label: t.label,
         model: t.model ?? null,
         hasBattery: t.hasBattery ? 1 : 0,
         notes: t.notes ?? null,
+        ownerId: t.ownerId ?? null,
         retired: t.retired ? 1 : 0,
         now: Date.now(),
       });
   }
 
-  /** Fleet joined with live observations (last position/battery from the wire). */
+  /**
+   * Fleet joined with live observations — latest ping (time, battery, and
+   * position for locate/validate) comes from the wire regardless of whether
+   * the device is in any event.
+   */
   listFleet(): unknown[] {
     return this.db
       .prepare(`SELECT f.imei, f.label, f.model, f.has_battery AS hasBattery, f.notes, f.retired,
-                       d.battery AS seen_battery, d.last_received_ms, d.last_t_utc_ms, d.protocol
-                FROM fleet f LEFT JOIN devices d ON d.imei = f.imei
+                       f.owner_id AS ownerId, o.name AS owner,
+                       d.battery AS seen_battery, d.last_received_ms, d.last_t_utc_ms, d.protocol,
+                       d.last_lat, d.last_lon
+                FROM fleet f
+                LEFT JOIN owners o ON o.id = f.owner_id
+                LEFT JOIN devices d ON d.imei = f.imei
                 ORDER BY f.retired, f.label`)
       .all();
   }

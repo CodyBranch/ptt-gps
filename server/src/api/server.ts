@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { Server as SocketIOServer } from 'socket.io';
 import type { App } from '../app.js';
-import { listEvents, createEvent, type ConfigManager } from '../config/manager.js';
+import { listEvents, createEvent, eventRosters, type ConfigManager } from '../config/manager.js';
 import { loadCourse } from '../engine/course.js';
 import type { Forwarder } from '../ingest/forwarder.js';
 import type { FirebaseHub } from '../outputs/hub.js';
@@ -304,17 +304,54 @@ export function startApi(holder: AppHolder, port: number): { httpServer: http.Se
   // --- fleet registry ---
 
   ex.get('/api/fleet', (_req, res) => {
-    res.json(app.store.listFleet());
+    // Attach event membership: every event roster containing the device, with
+    // the currently-active event flagged. A device in 2+ events gets a warning
+    // in the UI.
+    const rosters = eventRosters(holder.eventsDir);
+    const activeId = holder.manager.raw.id;
+    const rows = (app.store.listFleet() as Array<Record<string, unknown>>).map((f) => ({
+      ...f,
+      events: rosters
+        .filter((r) => r.imeis.includes(f.imei as string))
+        .map((r) => ({ id: r.id, name: r.name, active: r.id === activeId })),
+    }));
+    res.json(rows);
   });
+
+  ex.get('/api/owners', (_req, res) => {
+    res.json(app.store.listOwners());
+  });
+
+  ex.post(
+    '/api/owners',
+    auth.adminOnly,
+    act((req) => app.store.addOwner(String(req.body?.name ?? ''))),
+  );
+
+  ex.delete(
+    '/api/owners/:id',
+    auth.adminOnly,
+    act((req) => {
+      app.store.deleteOwner(Number(req.params.id));
+    }),
+  );
 
   ex.post(
     '/api/fleet',
     auth.adminOnly,
     act((req) => {
-      const { imei, label, model, hasBattery, notes, retired } = req.body ?? {};
+      const { imei, label, model, hasBattery, notes, ownerId, retired } = req.body ?? {};
       if (!/^\d{15}$/.test(imei ?? '')) throw new Error('IMEI must be 15 digits');
       if (!label || typeof label !== 'string') throw new Error('Label is required');
-      app.store.upsertFleet({ imei, label, model, hasBattery: hasBattery !== false, notes, retired: !!retired });
+      app.store.upsertFleet({
+        imei,
+        label,
+        model,
+        hasBattery: hasBattery !== false,
+        notes,
+        ownerId: ownerId == null ? null : Number(ownerId),
+        retired: !!retired,
+      });
     }),
   );
 

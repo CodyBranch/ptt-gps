@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import type { ConfirmRequest } from './Confirm';
-import type { CourseInfo, DeviceRow, EventConfigT, FirebaseConn, FleetRow, TunnelStatus, UserRow } from '../types';
+import type { CourseInfo, DeviceRow, EventConfigT, FirebaseConn, FleetRow, Owner, TunnelStatus, UserRow } from '../types';
 
 /**
  * Event setup.
@@ -14,6 +14,8 @@ export function SetupView({ ask, onSaved }: { ask: (req: ConfirmRequest) => void
   const [cfg, setCfg] = useState<EventConfigT>();
   const [courses, setCourses] = useState<CourseInfo[]>([]);
   const [fleet, setFleet] = useState<FleetRow[]>([]);
+  const [owners, setOwners] = useState<Owner[]>([]);
+  const [newOwner, setNewOwner] = useState('');
   const [devices, setDevices] = useState<DeviceRow[]>([]);
   const [users, setUsers] = useState<UserRow[]>([]);
   const [fbConns, setFbConns] = useState<FirebaseConn[]>([]);
@@ -23,6 +25,7 @@ export function SetupView({ ask, onSaved }: { ask: (req: ConfirmRequest) => void
 
   const reloadFleet = () => {
     api.fleet().then(setFleet).catch(console.error);
+    api.owners().then(setOwners).catch(console.error);
     api.devices().then(setDevices).catch(console.error);
     api.users().then(setUsers).catch(console.error);
     api.firebaseList().then(setFbConns).catch(console.error);
@@ -78,6 +81,7 @@ export function SetupView({ ask, onSaved }: { ask: (req: ConfirmRequest) => void
         model: row.model,
         hasBattery: !!row.hasBattery,
         notes: row.notes,
+        ownerId: row.ownerId,
         retired: !!row.retired,
       });
       setMsg({ kind: 'ok', text: `Fleet tracker ${row.label || row.imei} saved.` });
@@ -122,7 +126,7 @@ export function SetupView({ ask, onSaved }: { ask: (req: ConfirmRequest) => void
           <p className="hint">The permanent inventory — shared by every event. Edits save immediately.</p>
           <table className="setup-table">
             <thead>
-              <tr><th>Label</th><th>IMEI</th><th>Model</th><th>Batt</th><th>Last seen</th><th></th><th></th></tr>
+              <tr><th>Label</th><th>IMEI</th><th>Model</th><th>Owner</th><th>Batt</th><th>Latest ping</th><th>Events</th><th></th><th></th></tr>
             </thead>
             <tbody>
               {fleet.map((f, i) => (
@@ -142,6 +146,22 @@ export function SetupView({ ask, onSaved }: { ask: (req: ConfirmRequest) => void
                       onChange={(e) => setFleet(fleet.map((x, j) => (j === i ? { ...x, model: e.target.value } : x)))}
                     />
                   </td>
+                  <td>
+                    <select
+                      className="w-owner"
+                      value={f.ownerId ?? ''}
+                      onChange={(e) =>
+                        setFleet(fleet.map((x, j) => (j === i ? { ...x, ownerId: e.target.value === '' ? null : Number(e.target.value) } : x)))
+                      }
+                    >
+                      <option value="">—</option>
+                      {owners.map((o) => (
+                        <option key={o.id} value={o.id}>
+                          {o.name}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
                   <td className="center">
                     <input
                       type="checkbox"
@@ -150,9 +170,36 @@ export function SetupView({ ask, onSaved }: { ask: (req: ConfirmRequest) => void
                       onChange={(e) => setFleet(fleet.map((x, j) => (j === i ? { ...x, hasBattery: e.target.checked ? 1 : 0 } : x)))}
                     />
                   </td>
-                  <td className="dim">
+                  <td className="dim ping-cell">
                     {fmtSeen(f.last_received_ms)}
                     {f.seen_battery != null ? ` · ${f.seen_battery}%` : ''}
+                    {f.last_lat != null && f.last_lon != null && (
+                      <a
+                        className="locate-link"
+                        href={`https://maps.google.com/maps?z=14&t=m&q=loc:${f.last_lat}+${f.last_lon}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        title={`Locate: ${f.last_lat}, ${f.last_lon}`}
+                      >
+                        📍
+                      </a>
+                    )}
+                  </td>
+                  <td className="events-cell">
+                    {f.events.length === 0 && <span className="dim">—</span>}
+                    {f.events.map((e) => (
+                      <span key={e.id} className={`event-badge ${e.active ? 'active' : ''}`} title={e.name}>
+                        {e.id}
+                      </span>
+                    ))}
+                    {f.events.length > 1 && (
+                      <span
+                        className="multi-event-warn"
+                        title={`In ${f.events.length} events: ${f.events.map((e) => e.name).join(', ')}`}
+                      >
+                        ⚠
+                      </span>
+                    )}
                   </td>
                   <td>
                     <button className="mini" onClick={() => saveFleetRow(f)}>Save</button>
@@ -170,7 +217,50 @@ export function SetupView({ ask, onSaved }: { ask: (req: ConfirmRequest) => void
               ))}
             </tbody>
           </table>
-          <NewFleetRow onAdd={(imei, label) => saveFleetRow({ imei, label, model: null, hasBattery: 1, notes: null, retired: 0, seen_battery: null, last_received_ms: null, last_t_utc_ms: null, protocol: null })} />
+
+          <h4>Owners</h4>
+          <div className="owner-chips">
+            {owners.map((o) => (
+              <span className="chip" key={o.id}>
+                {o.name}
+                <button
+                  title="Remove (only when no devices are linked)"
+                  onClick={async () => {
+                    try {
+                      await api.deleteOwner(o.id);
+                      setOwners(await api.owners());
+                    } catch (err) {
+                      setMsg({ kind: 'err', text: (err as Error).message });
+                    }
+                  }}
+                >
+                  ✕
+                </button>
+              </span>
+            ))}
+            <input
+              className="w-owner"
+              value={newOwner}
+              placeholder="New owner…"
+              onChange={(e) => setNewOwner(e.target.value)}
+            />
+            <button
+              className="mini"
+              disabled={!newOwner.trim()}
+              onClick={async () => {
+                try {
+                  await api.addOwner(newOwner);
+                  setNewOwner('');
+                  setOwners(await api.owners());
+                } catch (err) {
+                  setMsg({ kind: 'err', text: (err as Error).message });
+                }
+              }}
+            >
+              + Add
+            </button>
+          </div>
+          <NewFleetRow onAdd={(imei, label) => saveFleetRow({ imei, label, model: null, hasBattery: 1, notes: null, ownerId: null, owner: null, retired: 0, seen_battery: null, last_received_ms: null, last_t_utc_ms: null, protocol: null, last_lat: null, last_lon: null, events: [] })} />
 
           {devices.filter((dv) => !fleetImeis.has(dv.imei)).length > 0 && (
             <>
@@ -189,7 +279,7 @@ export function SetupView({ ask, onSaved }: { ask: (req: ConfirmRequest) => void
                           <button
                             className="mini"
                             onClick={() =>
-                              saveFleetRow({ imei: dv.imei, label: dv.imei, model: null, hasBattery: 1, notes: null, retired: 0, seen_battery: null, last_received_ms: null, last_t_utc_ms: null, protocol: null })
+                              saveFleetRow({ imei: dv.imei, label: dv.imei, model: null, hasBattery: 1, notes: null, ownerId: null, owner: null, retired: 0, seen_battery: null, last_received_ms: null, last_t_utc_ms: null, protocol: null, last_lat: null, last_lon: null, events: [] })
                             }
                           >
                             + To fleet
@@ -393,11 +483,14 @@ export function SetupView({ ask, onSaved }: { ask: (req: ConfirmRequest) => void
                   <option value="">+ match tracker…</option>
                   {fleet
                     .filter((f) => !f.retired && !role.trackers.includes(f.imei))
-                    .map((f) => (
-                      <option key={f.imei} value={f.imei}>
-                        {f.label}{rosterImeis.has(f.imei) ? '' : ' (fleet)'}
-                      </option>
-                    ))}
+                    .map((f) => {
+                      const other = f.events.some((e) => e.id !== cfg.id);
+                      return (
+                        <option key={f.imei} value={f.imei}>
+                          {f.label}{rosterImeis.has(f.imei) ? '' : ' (fleet)'}{other ? ' — ⚠ in another event' : ''}
+                        </option>
+                      );
+                    })}
                 </select>
               </div>
             </div>
@@ -456,11 +549,14 @@ export function SetupView({ ask, onSaved }: { ask: (req: ConfirmRequest) => void
             <option value="">+ Add from fleet…</option>
             {fleet
               .filter((f) => !f.retired && !rosterImeis.has(f.imei))
-              .map((f) => (
-                <option key={f.imei} value={f.imei}>
-                  {f.label} ({f.imei})
-                </option>
-              ))}
+              .map((f) => {
+                const other = f.events.some((e) => e.id !== cfg.id);
+                return (
+                  <option key={f.imei} value={f.imei}>
+                    {f.label} ({f.imei}){other ? ' — ⚠ in another event' : ''}
+                  </option>
+                );
+              })}
           </select>
         </section>
 

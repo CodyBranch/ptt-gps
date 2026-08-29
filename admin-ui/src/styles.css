@@ -238,6 +238,7 @@ button.mini.primary.danger-solid { background: var(--bad); border-color: var(--b
 }
 .setup input.w-imei { width: 150px; font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
 .setup input.w-num { width: 64px; }
+.setup input.w-owner { width: 84px; }
 .setup-table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
 .setup-table th {
   text-align: left; color: var(--dim); font-size: 11px; text-transform: uppercase; padding: 4px 6px;
@@ -299,6 +300,18 @@ a.export-link:hover { border-color: var(--dim); }
 .tunnel-url { color: var(--accent); font-size: 13px; word-break: break-all; }
 .tunnel-err { color: var(--bad); font-size: 12px; }
 .retired-row td { opacity: 0.45; }
+.ping-cell { white-space: nowrap; font-size: 12px; }
+.locate-link { margin-left: 6px; text-decoration: none; font-size: 13px; }
+.events-cell { white-space: nowrap; }
+.event-badge {
+  display: inline-block; background: var(--panel2); border: 1px solid var(--border);
+  border-radius: 3px; font-size: 10px; font-weight: 700; padding: 1px 5px; margin-right: 4px;
+  color: var(--dim); max-width: 110px; overflow: hidden; text-overflow: ellipsis; vertical-align: middle;
+}
+.event-badge.active { color: var(--ok); border-color: var(--ok); }
+.multi-event-warn { color: var(--warn); font-weight: 800; cursor: help; }
+.owner-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.owner-chips .w-owner { width: 110px; }
 .course-dist { white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--accent); font-weight: 600; }
 
 /* All-races view */

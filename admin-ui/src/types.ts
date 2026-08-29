@@ -86,17 +86,27 @@ export interface CourseInfo {
   lengthKm: number;
 }
 
+export interface Owner {
+  id: number;
+  name: string;
+}
+
 export interface FleetRow {
   imei: string;
   label: string;
   model: string | null;
   hasBattery: number;
   notes: string | null;
+  ownerId: number | null;
+  owner: string | null;
   retired: number;
   seen_battery: number | null;
   last_received_ms: number | null;
   last_t_utc_ms: number | null;
   protocol: string | null;
+  last_lat: number | null;
+  last_lon: number | null;
+  events: Array<{ id: string; name: string; active: boolean }>;
 }
 
 export interface DeviceRow {

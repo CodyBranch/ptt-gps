@@ -43,6 +43,26 @@ export function listEvents(dir: string): EventListing[] {
   return out.sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/** Which events reference which tracker IMEIs (for the fleet page). */
+export function eventRosters(dir: string): Array<{ id: string; name: string; file: string; imeis: string[] }> {
+  const out: Array<{ id: string; name: string; file: string; imeis: string[] }> = [];
+  for (const f of fs.readdirSync(dir)) {
+    if (!f.endsWith('.json')) continue;
+    try {
+      const json = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
+      out.push({
+        id: String(json.id ?? f.replace(/\.json$/, '')),
+        name: String(json.name ?? f),
+        file: f,
+        imeis: Array.isArray(json.trackers) ? json.trackers.map((t: { imei?: unknown }) => String(t?.imei ?? '')) : [],
+      });
+    } catch {
+      /* invalid files are reported by listEvents */
+    }
+  }
+  return out;
+}
+
 /**
  * Create a new event config file — blank, or copied from an existing event
  * (the copy-last-year workflow: everything carries over, you update meet ID,
