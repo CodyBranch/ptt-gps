@@ -100,6 +100,8 @@ export const api = {
   addUser: (username: string, password: string, role: 'admin' | 'staff' = 'staff') =>
     post('/api/users', { username, password, role }),
   deleteUser: (username: string) => send(`/api/users/${encodeURIComponent(username)}`, 'DELETE'),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    post('/api/me/password', { currentPassword, newPassword }),
   viewerEnabled: async (): Promise<boolean> => {
     try {
       return !!(await getJson('/api/viewer-enabled')).enabled;

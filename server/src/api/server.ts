@@ -12,6 +12,7 @@ import type { FixGate } from '../ingest/hygiene.js';
 import type { FirebaseHub } from '../outputs/hub.js';
 import type { Store } from '../state/store.js';
 import { resolveRace } from '../config/schema.js';
+import * as turf from '@turf/turf';
 import { SimEngine, type SimTrackerCfg } from '../sim/engine.js';
 import { AuthService, hashPassword, type Role } from './auth.js';
 import { TunnelManager } from './tunnel.js';
@@ -200,6 +201,19 @@ export function startApi(ctx: ServerContext, port: number): { httpServer: http.S
     return m;
   };
 
+  // Self-service password change (any signed-in operator; viewers have no password)
+  ex.post(
+    '/api/me/password',
+    act((req: OpRequest) => {
+      if (req.role === 'viewer') throw new Error('Viewer sessions have no password');
+      const { currentPassword, newPassword } = req.body ?? {};
+      if (typeof currentPassword !== 'string' || typeof newPassword !== 'string') {
+        throw new Error('currentPassword and newPassword are required');
+      }
+      auth.changePassword(req.operator!, currentPassword, newPassword, auth.tokenFromRequest(req)!);
+    }),
+  );
+
   ex.get('/api/state', (req, res) => {
     const scope = (req as OpRequest & { eventScope?: string }).eventScope;
     res.json(scope !== undefined ? ctx.snapshotFor(scope) : ctx.snapshotAll());
@@ -215,7 +229,24 @@ export function startApi(ctx: ServerContext, port: number): { httpServer: http.S
     try {
       const engine = eventApp(req).engines.get(req.params.raceId as string);
       if (!engine) return void res.status(404).json({ error: 'unknown race' });
-      res.json({ line: engine.course.line, length: engine.course.length, units: engine.course.units });
+      const { course, race } = engine;
+      // Course markers: start/finish + auto distance posts + custom entries,
+      // positioned on the line server-side so clients just draw them.
+      const markers: Array<{ at: number; label: string; kind: string; lat: number; lon: number }> = [];
+      const place = (at: number, label: string, kind: string) => {
+        const p = turf.along(course.line, Math.min(Math.max(at, 0), course.length), { units: course.units });
+        markers.push({ at, label, kind, lon: p.geometry.coordinates[0], lat: p.geometry.coordinates[1] });
+      };
+      place(0, 'START', 'start');
+      place(course.length, 'FINISH', 'finish');
+      if (race.autoMarkers) {
+        const unit = course.units === 'miles' ? 'mi' : 'km';
+        for (let d = 1; d < course.length; d++) place(d, `${d} ${unit}`, 'unit');
+      }
+      for (const m of race.markers ?? []) {
+        if (m.at <= course.length) place(m.at, m.label, 'custom');
+      }
+      res.json({ line: course.line, length: course.length, units: course.units, markers });
     } catch (err) {
       res.status(404).json({ error: (err as Error).message });
     }

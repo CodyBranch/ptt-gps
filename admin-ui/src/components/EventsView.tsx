@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import type { ConfirmRequest } from './Confirm';
-import type { EventListing } from '../types';
+import type { CourseInfo, EventListing } from '../types';
 
 /**
  * Event library. Several events can be active (running) at once. Sorted:
@@ -20,8 +20,11 @@ export function EventsView({
   onOpenSetup: (eventId: string) => void;
 }) {
   const [events, setEvents] = useState<EventListing[]>([]);
+  const [courses, setCourses] = useState<CourseInfo[]>([]);
   const [showCompleted, setShowCompleted] = useState(false);
+  const [showCourses, setShowCourses] = useState(false);
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string }>();
+  const fileRef = useRef<HTMLInputElement>(null);
   // create form
   const [name, setName] = useState('');
   const [meetId, setMeetId] = useState('');
@@ -29,11 +32,13 @@ export function EventsView({
   const [endDate, setEndDate] = useState('');
   const [copyFrom, setCopyFrom] = useState('');
 
-  const reload = () =>
+  const reload = () => {
     api
       .events()
       .then((r) => setEvents(r.events))
       .catch(console.error);
+    api.courses().then(setCourses).catch(console.error);
+  };
   useEffect(() => {
     reload();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -220,6 +225,58 @@ export function EventsView({
             + Create event
           </button>
           <p className="hint">Copying carries over the roster, roles, races, courses, and Firebase outputs.</p>
+
+          <div className="event-card-head course-lib-head">
+            <span className="event-card-name">Course library</span>
+            <button className="mini" onClick={() => setShowCourses(!showCourses)}>
+              {showCourses ? '▾' : '▸'} {courses.length}
+            </button>
+          </div>
+          {showCourses && (
+            <table className="setup-table">
+              <tbody>
+                {courses.map((k) => (
+                  <tr key={k.file}>
+                    <td className="mono">{k.file.replace('courses/', '')}</td>
+                    <td className="num">
+                      {k.lengthMi.toFixed(2)} mi / {k.lengthKm.toFixed(2)} km
+                    </td>
+                  </tr>
+                ))}
+                {courses.length === 0 && (
+                  <tr>
+                    <td className="hint">No courses uploaded yet.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          )}
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".kml"
+            style={{ display: 'none' }}
+            onChange={async (e) => {
+              const f = e.target.files?.[0];
+              e.target.value = '';
+              if (!f) return;
+              try {
+                const text = await f.text();
+                const res = await api.uploadCourse(f.name.replace(/\.kml$/i, ''), text);
+                setMsg({ kind: 'ok', text: `Course ${res.file}: ${res.lengthMi.toFixed(2)} mi, ${res.points} points` });
+                setShowCourses(true);
+                reload();
+              } catch (err) {
+                setMsg({ kind: 'err', text: `Course upload failed: ${(err as Error).message}` });
+              }
+            }}
+          />
+          <button className="mini" onClick={() => fileRef.current?.click()}>
+            ⬆ Upload KML course
+          </button>
+          <p className="hint">
+            Courses are shared by all events — upload here first, then pick them in each event's race setup.
+          </p>
         </div>
       </div>
     </div>

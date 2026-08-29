@@ -475,6 +475,11 @@ export class Store {
     this.db.prepare(`DELETE FROM auth_tokens WHERE role = ?`).run(role);
   }
 
+  /** Revoke a user's other sessions (password change keeps the current one). */
+  deleteTokensForUserExcept(username: string, exceptTokenHash: string): void {
+    this.db.prepare(`DELETE FROM auth_tokens WHERE username = ? AND token_hash != ?`).run(username, exceptTokenHash);
+  }
+
   deleteSetting(key: string): void {
     this.db.prepare(`DELETE FROM settings WHERE key = ?`).run(key);
   }

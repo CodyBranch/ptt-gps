@@ -121,7 +121,7 @@ export interface EventConfigT {
     mapEvent?: string;
   }>;
   snapDefaults: { minInc: number; maxInc: number; initialMax: number; maxOffCourse: number; fwdTolerance: number };
-  races: Array<{ id: string; name: string; course: string; units: Units }>;
+  races: Array<{ id: string; name: string; course: string; units: Units; autoMarkers?: boolean; markers?: Array<{ at: number; label: string }> }>;
 }
 
 export interface EventListing {

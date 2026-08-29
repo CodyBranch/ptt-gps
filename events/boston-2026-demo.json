@@ -2,6 +2,8 @@
   "id": "boston-2026-demo",
   "name": "Boston Marathon 2026 (demo)",
   "meetId": 9999,
+  "startDate": "2026-04-20",
+  "endDate": "2026-04-20",
   "outputUnits": "miles",
   "reportIntervalS": 10,
   "listeners": [
@@ -117,15 +119,22 @@
       "id": "marathon",
       "name": "Marathon",
       "course": "courses/boston-marathon.kml",
-      "units": "miles"
+      "units": "miles",
+      "autoMarkers": true,
+      "markers": [
+        {
+          "at": 13.1,
+          "label": "Halfway"
+        }
+      ]
     },
     {
       "id": "wheelchair",
       "name": "Wheelchair",
       "course": "courses/boston-marathon.kml",
-      "units": "miles"
+      "units": "miles",
+      "autoMarkers": true,
+      "markers": []
     }
-  ],
-  "startDate": "2026-04-20",
-  "endDate": "2026-04-20"
+  ]
 }

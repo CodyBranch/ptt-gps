@@ -200,6 +200,20 @@ export class AuthService {
   }
 
   /**
+   * Self-service password change: requires the current password; keeps the
+   * session doing the change, revokes the user's other sessions.
+   */
+  changePassword(username: string, currentPassword: string, newPassword: string, currentToken: string): void {
+    const user = this.store.getUser(username);
+    if (!user || !verifyPassword(currentPassword, user.password_hash)) {
+      throw new Error('Current password is incorrect');
+    }
+    if (newPassword.length < 8) throw new Error('New password must be at least 8 characters');
+    this.store.addUser(username, hashPassword(newPassword), user.role === 'admin' ? 'admin' : 'staff');
+    this.store.deleteTokensForUserExcept(username, sha256(currentToken));
+  }
+
+  /**
    * Auth context for a valid token, extending its life when past halfway.
    * User roles are resolved live from the users table, so a level change
    * applies to existing sessions immediately.

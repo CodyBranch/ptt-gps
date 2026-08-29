@@ -1,12 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useReducer, useState } from 'react';
 import { api } from '../api';
+import { MiniMap } from './MapView';
 import type { DeviceAssignment, DeviceIssue, DeviceRow, FleetRow, Owner } from '../types';
 
 /**
  * Fleet page: the permanent tracker inventory — shared by every event.
- * Latest ping (with locate link) shows for every device whether or not it is
- * in any event; the Events column shows memberships with the active ones
- * highlighted and a warning when a device is in more than one event.
+ * Rows are read-only; View opens live location/health, Edit opens the edit
+ * modal, and Add a device is a modal too. Latest ping shows for every device
+ * whether or not it is in any event.
  */
 export function FleetView({ readonly }: { readonly: boolean }) {
   const [fleet, setFleet] = useState<FleetRow[]>([]);
@@ -14,6 +15,8 @@ export function FleetView({ readonly }: { readonly: boolean }) {
   const [devices, setDevices] = useState<DeviceRow[]>([]);
   const [newOwner, setNewOwner] = useState('');
   const [historyImei, setHistoryImei] = useState<string>();
+  const [detailImei, setDetailImei] = useState<string>();
+  const [editImei, setEditImei] = useState<string>(); // '' = new device
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string }>();
 
   const reload = () => {
@@ -23,27 +26,19 @@ export function FleetView({ readonly }: { readonly: boolean }) {
   };
   useEffect(reload, []);
 
-  const saveFleetRow = async (row: FleetRow) => {
-    try {
-      await api.saveFleet({
-        imei: row.imei,
-        label: row.label,
-        model: row.model,
-        hasBattery: !!row.hasBattery,
-        notes: row.notes,
-        ownerId: row.ownerId,
-        retired: !!row.retired,
-      });
-      setMsg({ kind: 'ok', text: `Fleet tracker ${row.label || row.imei} saved.` });
-      reload();
-    } catch (err) {
-      setMsg({ kind: 'err', text: (err as Error).message });
-    }
-  };
+  // live refresh while the detail dialog is open (position/battery/ping follow)
+  useEffect(() => {
+    if (detailImei === undefined) return;
+    const t = setInterval(() => api.fleet().then(setFleet).catch(console.error), 5000);
+    return () => clearInterval(t);
+  }, [detailImei]);
 
   const fleetImeis = new Set(fleet.map((f) => f.imei));
   const fleetByImei = new Map(fleet.map((f) => [f.imei, f]));
   const fmtSeen = (ms: number | null) => (ms ? new Date(ms).toLocaleString() : 'never');
+
+  const detail = detailImei !== undefined ? fleetByImei.get(detailImei) : undefined;
+  const editing = editImei !== undefined && editImei !== '' ? fleetByImei.get(editImei) : undefined;
 
   return (
     <div className="setup">
@@ -51,80 +46,34 @@ export function FleetView({ readonly }: { readonly: boolean }) {
         <span className="setup-title">Tracker fleet</span>
         {msg && <span className={`setup-msg ${msg.kind}`}>{msg.text}</span>}
         <span className="spacer" />
+        {!readonly && (
+          <button className="mini primary" onClick={() => setEditImei('')}>
+            + Add device
+          </button>
+        )}
       </div>
       <div className="setup-grid one-col">
         <section>
-          <table className="setup-table">
+          <table className="setup-table fleet-table">
             <thead>
-              <tr><th>Label</th><th>IMEI</th><th>Model</th><th>Owner</th><th>Batt</th><th>Latest ping</th><th>Events</th><th></th></tr>
+              <tr><th>Device</th><th>Model</th><th>Owner</th><th>Battery</th><th>Latest ping</th><th>Events</th><th></th></tr>
             </thead>
             <tbody>
-              {fleet.map((f, i) => (
-                <tr key={f.imei} className={f.retired ? 'retired-row' : ''}>
+              {fleet.map((f) => (
+                <tr key={f.imei} className={f.retired ? 'retired-row' : ''} onClick={() => setDetailImei(f.imei)}>
                   <td>
-                    <input
-                      disabled={readonly}
-                      value={f.label}
-                      onChange={(e) => setFleet(fleet.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))}
-                    />
+                    <div className="t-label">
+                      {f.label}
+                      {f.retired ? <span className="dim"> (retired)</span> : ''}
+                    </div>
+                    <div className="t-imei">{f.imei}</div>
                   </td>
-                  <td className="mono">{f.imei}</td>
+                  <td className="dim">{f.model ?? '—'}</td>
+                  <td className="dim">{f.owner ?? '—'}</td>
                   <td>
-                    <input
-                      className="w-num"
-                      disabled={readonly}
-                      value={f.model ?? ''}
-                      placeholder="GL300"
-                      onChange={(e) => setFleet(fleet.map((x, j) => (j === i ? { ...x, model: e.target.value } : x)))}
-                    />
+                    <FleetBattery row={f} />
                   </td>
-                  <td>
-                    <select
-                      className="w-owner"
-                      disabled={readonly}
-                      value={f.ownerId ?? ''}
-                      onChange={(e) =>
-                        setFleet(
-                          fleet.map((x, j) =>
-                            j === i ? { ...x, ownerId: e.target.value === '' ? null : Number(e.target.value) } : x,
-                          ),
-                        )
-                      }
-                    >
-                      <option value="">—</option>
-                      {owners.map((o) => (
-                        <option key={o.id} value={o.id}>
-                          {o.name}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="center">
-                    <input
-                      type="checkbox"
-                      disabled={readonly}
-                      checked={!!f.hasBattery}
-                      title="Uncheck for vehicle-powered units"
-                      onChange={(e) =>
-                        setFleet(fleet.map((x, j) => (j === i ? { ...x, hasBattery: e.target.checked ? 1 : 0 } : x)))
-                      }
-                    />
-                  </td>
-                  <td className="dim ping-cell">
-                    {fmtSeen(f.last_received_ms)}
-                    {f.seen_battery != null ? ` · ${f.seen_battery}%` : ''}
-                    {f.last_lat != null && f.last_lon != null && (
-                      <a
-                        className="locate-link"
-                        href={`https://maps.google.com/maps?z=14&t=m&q=loc:${f.last_lat}+${f.last_lon}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        title={`Locate: ${f.last_lat}, ${f.last_lon}`}
-                      >
-                        📍
-                      </a>
-                    )}
-                  </td>
+                  <td className="dim ping-cell">{fmtSeen(f.last_received_ms)}</td>
                   <td className="events-cell">
                     {f.events.length === 0 && <span className="dim">—</span>}
                     {f.events.map((e) => (
@@ -133,15 +82,15 @@ export function FleetView({ readonly }: { readonly: boolean }) {
                       </span>
                     ))}
                     {f.events.length > 1 && (
-                      <span
-                        className="multi-event-warn"
-                        title={`In ${f.events.length} events: ${f.events.map((e) => e.name).join(', ')}`}
-                      >
+                      <span className="multi-event-warn" title={`In ${f.events.length} events: ${f.events.map((e) => e.name).join(', ')}`}>
                         ⚠
                       </span>
                     )}
                   </td>
-                  <td className="fleet-actions">
+                  <td className="fleet-actions" onClick={(e) => e.stopPropagation()}>
+                    <button className="mini" title="Live location & details" onClick={() => setDetailImei(f.imei)}>
+                      👁 View
+                    </button>
                     <button
                       className={`mini ${f.openIssues > 0 ? 'has-issues' : ''}`}
                       title={f.openIssues > 0 ? `${f.openIssues} open issue(s)` : 'History & issue log'}
@@ -150,18 +99,9 @@ export function FleetView({ readonly }: { readonly: boolean }) {
                       {f.openIssues > 0 ? `🔧${f.openIssues}` : '🕘'}
                     </button>
                     {!readonly && (
-                      <>
-                        <button className="mini" onClick={() => saveFleetRow(f)}>
-                          Save
-                        </button>
-                        <button
-                          className="mini"
-                          title={f.retired ? 'Return to service' : 'Retire (kept in history, hidden from pickers)'}
-                          onClick={() => saveFleetRow({ ...f, retired: f.retired ? 0 : 1 })}
-                        >
-                          {f.retired ? 'Unretire' : 'Retire'}
-                        </button>
-                      </>
+                      <button className="mini" onClick={() => setEditImei(f.imei)}>
+                        ✎ Edit
+                      </button>
                     )}
                   </td>
                 </tr>
@@ -171,8 +111,6 @@ export function FleetView({ readonly }: { readonly: boolean }) {
 
           {!readonly && (
             <>
-              <NewFleetRow owners={owners} existing={fleetImeis} onSaved={reload} onMsg={setMsg} />
-
               <h4>Owners</h4>
               <div className="owner-chips">
                 {owners.map((o) => (
@@ -249,6 +187,38 @@ export function FleetView({ readonly }: { readonly: boolean }) {
           )}
         </section>
       </div>
+
+      {detail && (
+        <DeviceDetailDialog
+          row={detail}
+          readonly={readonly}
+          onClose={() => setDetailImei(undefined)}
+          onEdit={() => {
+            setDetailImei(undefined);
+            setEditImei(detail.imei);
+          }}
+          onHistory={() => {
+            setDetailImei(undefined);
+            setHistoryImei(detail.imei);
+          }}
+        />
+      )}
+
+      {editImei !== undefined && (
+        <DeviceEditDialog
+          existing={editing}
+          owners={owners}
+          takenImeis={fleetImeis}
+          onClose={() => setEditImei(undefined)}
+          onSaved={(label) => {
+            setEditImei(undefined);
+            setMsg({ kind: 'ok', text: `Device ${label} saved.` });
+            reload();
+          }}
+          onError={(text) => setMsg({ kind: 'err', text })}
+        />
+      )}
+
       {historyImei && (
         <DeviceHistoryDialog
           imei={historyImei}
@@ -262,129 +232,243 @@ export function FleetView({ readonly }: { readonly: boolean }) {
   );
 }
 
-interface NewDevice {
-  imei: string;
-  label: string;
-  model: string | null;
-  ownerId: number | null;
-  hasBattery: number;
-  notes: string | null;
+/** Battery bar for a fleet row (uses the last battery seen on the wire). */
+function FleetBattery({ row }: { row: FleetRow }) {
+  if (!row.hasBattery) return <span className="batt-ext" title="Vehicle powered">EXT</span>;
+  const pct = row.seen_battery;
+  if (pct == null) return <span className="dim">—</span>;
+  const cls = pct < 20 ? 'low' : pct < 60 ? 'mid' : 'high';
+  return (
+    <span className={`batt ${cls}`} title={`${pct}% at last ping`}>
+      <span className="batt-shell">
+        <span className="batt-fill" style={{ width: `${Math.min(100, Math.max(0, pct))}%` }} />
+      </span>
+      <span className="batt-pct">{Math.round(pct)}%</span>
+    </span>
+  );
 }
 
-function NewFleetRow({
-  owners,
-  existing,
-  onSaved,
-  onMsg,
+/** Live device view: location map, coordinates, battery, ping age. */
+function DeviceDetailDialog({
+  row,
+  readonly,
+  onClose,
+  onEdit,
+  onHistory,
 }: {
-  owners: Owner[];
-  existing: Set<string>;
-  onSaved: () => void;
-  onMsg: (m: { kind: 'ok' | 'err'; text: string }) => void;
+  row: FleetRow;
+  readonly: boolean;
+  onClose: () => void;
+  onEdit: () => void;
+  onHistory: () => void;
 }) {
-  const [imei, setImei] = useState('');
-  const [label, setLabel] = useState('');
-  const [model, setModel] = useState('');
-  const [ownerId, setOwnerId] = useState('');
-  const [hasBattery, setHasBattery] = useState(true);
-  const [notes, setNotes] = useState('');
+  const [, tick] = useReducer((n: number) => n + 1, 0);
+  useEffect(() => {
+    const t = setInterval(() => tick(), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const ageS = row.last_received_ms ? Math.max(0, Math.round((Date.now() - row.last_received_ms) / 1000)) : undefined;
+  const fmtAge =
+    ageS === undefined ? 'never heard from' : ageS < 60 ? `${ageS}s ago` : ageS < 3600 ? `${Math.floor(ageS / 60)}m ${ageS % 60}s ago` : `${Math.floor(ageS / 3600)}h+ ago`;
+  const hasPos = row.last_lat != null && row.last_lon != null;
+
+  return (
+    <div className="dialog-backdrop" onClick={onClose}>
+      <div className="dialog dialog-device" onClick={(e) => e.stopPropagation()}>
+        <h3>
+          {row.label} <span className="mono dim">{row.imei}</span>
+          {row.retired ? <span className="clamp-badge">RETIRED</span> : null}
+        </h3>
+
+        <div className="window-stats">
+          <div className="window-stat">
+            <span className="window-stat-label">Model</span>
+            <span className="window-stat-value">{row.model ?? '—'}</span>
+          </div>
+          <div className="window-stat">
+            <span className="window-stat-label">Owner</span>
+            <span className="window-stat-value">{row.owner ?? '—'}</span>
+          </div>
+          <div className="window-stat">
+            <span className="window-stat-label">Battery</span>
+            <span className="window-stat-value">
+              <FleetBattery row={row} />
+            </span>
+          </div>
+          <div className="window-stat">
+            <span className="window-stat-label">Last ping</span>
+            <span className={`window-stat-value ${ageS !== undefined && ageS < 60 ? 'fwd-ok' : ''}`}>{fmtAge}</span>
+          </div>
+        </div>
+
+        {hasPos ? (
+          <>
+            <MiniMap lat={row.last_lat!} lon={row.last_lon!} />
+            <div className="device-coords">
+              <span className="mono">
+                {row.last_lat!.toFixed(6)}, {row.last_lon!.toFixed(6)}
+              </span>
+              <button
+                className="mini"
+                onClick={() => navigator.clipboard?.writeText(`${row.last_lat}, ${row.last_lon}`).catch(() => {})}
+              >
+                Copy
+              </button>
+              <a
+                className="mini export-link"
+                href={`https://maps.google.com/maps?z=15&t=m&q=loc:${row.last_lat}+${row.last_lon}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Google Maps ↗
+              </a>
+            </div>
+            <p className="hint">Position and battery refresh automatically while this is open.</p>
+          </>
+        ) : (
+          <p className="hint">No position reported yet — the map appears after the device's first ping.</p>
+        )}
+
+        {row.notes && <p className="device-notes">📝 {row.notes}</p>}
+
+        <div className="dialog-actions">
+          <button className="mini" onClick={onHistory}>
+            🕘 History{row.openIssues > 0 ? ` · 🔧${row.openIssues}` : ''}
+          </button>
+          {!readonly && (
+            <button className="mini" onClick={onEdit}>
+              ✎ Edit
+            </button>
+          )}
+          <span className="spacer" />
+          <button className="mini" onClick={onClose}>
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Add / edit a fleet device. */
+function DeviceEditDialog({
+  existing,
+  owners,
+  takenImeis,
+  onClose,
+  onSaved,
+  onError,
+}: {
+  existing?: FleetRow;
+  owners: Owner[];
+  takenImeis: Set<string>;
+  onClose: () => void;
+  onSaved: (label: string) => void;
+  onError: (text: string) => void;
+}) {
+  const isNew = !existing;
+  const [imei, setImei] = useState(existing?.imei ?? '');
+  const [label, setLabel] = useState(existing?.label ?? '');
+  const [model, setModel] = useState(existing?.model ?? '');
+  const [ownerId, setOwnerId] = useState(existing?.ownerId != null ? String(existing.ownerId) : '');
+  const [hasBattery, setHasBattery] = useState(existing ? !!existing.hasBattery : true);
+  const [notes, setNotes] = useState(existing?.notes ?? '');
+  const [retired, setRetired] = useState(existing ? !!existing.retired : false);
 
   const imeiOk = /^\d{15}$/.test(imei);
-  const duplicate = imeiOk && existing.has(imei);
+  const duplicate = isNew && imeiOk && takenImeis.has(imei);
   const valid = imeiOk && !duplicate && label.trim().length > 0;
 
-  const add = async (d: NewDevice) => {
+  const save = async () => {
     try {
       await api.saveFleet({
-        imei: d.imei,
-        label: d.label,
-        model: d.model,
-        hasBattery: !!d.hasBattery,
-        notes: d.notes,
-        ownerId: d.ownerId,
-        retired: false,
+        imei,
+        label: label.trim(),
+        model: model || null,
+        hasBattery,
+        notes: notes.trim() || null,
+        ownerId: ownerId === '' ? null : Number(ownerId),
+        retired,
       });
-      onMsg({ kind: 'ok', text: `Device ${d.label} added to the fleet.` });
-      onSaved();
+      onSaved(label.trim());
     } catch (err) {
-      onMsg({ kind: 'err', text: (err as Error).message });
+      onError((err as Error).message);
     }
   };
 
   return (
-    <div className="new-device-form">
-      <h4>Add a device</h4>
-      <div className="form-row">
-        <label>
-          IMEI (15 digits)
-          <input
-            className="w-imei"
-            value={imei}
-            onChange={(e) => setImei(e.target.value.replace(/\D/g, ''))}
-            placeholder="015181000128000"
-          />
-        </label>
-        <label>
-          Label
-          <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="GL300 #7" />
-        </label>
-        <label>
-          Model
-          <select value={model} onChange={(e) => setModel(e.target.value)}>
-            <option value="">—</option>
-            <option value="GL300">GL300</option>
-            <option value="GL320">GL320</option>
-            <option value="GL30">GL30</option>
-            <option value="GV500CNA">GV500CNA</option>
-            <option value="other">other</option>
-          </select>
-        </label>
-        <label>
-          Owner
-          <select value={ownerId} onChange={(e) => setOwnerId(e.target.value)}>
-            <option value="">—</option>
-            {owners.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-      <div className="form-row">
-        <label>
-          Notes
-          <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. purchased 2026, spare antenna" />
-        </label>
-        <label className="check-inline">
+    <div className="dialog-backdrop" onClick={onClose}>
+      <div className="dialog dialog-device" onClick={(e) => e.stopPropagation()}>
+        <h3>{isNew ? 'Add a device' : `Edit ${existing!.label}`}</h3>
+        <div className="dialog-row">
+          <label>
+            IMEI (15 digits)
+            <input
+              value={imei}
+              disabled={!isNew}
+              onChange={(e) => setImei(e.target.value.replace(/\D/g, ''))}
+              placeholder="015181000128000"
+              autoFocus={isNew}
+            />
+          </label>
+          <label>
+            Label (general name)
+            <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="GL300 #7" autoFocus={!isNew} />
+          </label>
+        </div>
+        <div className="dialog-row">
+          <label>
+            Model
+            <select value={model} onChange={(e) => setModel(e.target.value)}>
+              <option value="">—</option>
+              <option value="GL300">GL300</option>
+              <option value="GL320">GL320</option>
+              <option value="GL30">GL30</option>
+              <option value="GV500CNA">GV500CNA</option>
+              <option value="other">other</option>
+            </select>
+          </label>
+          <label>
+            Owner
+            <select value={ownerId} onChange={(e) => setOwnerId(e.target.value)}>
+              <option value="">—</option>
+              {owners.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <label className="dialog-check">
           <input type="checkbox" checked={hasBattery} onChange={(e) => setHasBattery(e.target.checked)} />
-          Battery powered (uncheck for in-car units)
+          Battery powered (uncheck for in-car units like the GV500)
         </label>
-        <button
-          className="mini primary self-end"
-          disabled={!valid}
-          onClick={() => {
-            add({
-              imei,
-              label: label.trim(),
-              model: model || null,
-              ownerId: ownerId === '' ? null : Number(ownerId),
-              hasBattery: hasBattery ? 1 : 0,
-              notes: notes.trim() || null,
-            });
-            setImei('');
-            setLabel('');
-            setModel('');
-            setOwnerId('');
-            setHasBattery(true);
-            setNotes('');
-          }}
-        >
-          + Add device
-        </button>
+        <div className="dialog-row">
+          <label>
+            Notes
+            <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. purchased 2026, spare antenna" />
+          </label>
+        </div>
+        {!isNew && (
+          <label className="dialog-check">
+            <input type="checkbox" checked={retired} onChange={(e) => setRetired(e.target.checked)} />
+            Retired (kept in history, hidden from event pickers)
+          </label>
+        )}
+        {duplicate && <p className="dialog-error">That IMEI is already in the fleet.</p>}
+        {imei !== '' && !imeiOk && <p className="hint">IMEI must be exactly 15 digits ({imei.length} so far).</p>}
+        <div className="dialog-actions">
+          <span className="spacer" />
+          <button className="mini" onClick={onClose}>
+            Cancel
+          </button>
+          <button className="mini primary" disabled={!valid} onClick={save}>
+            {isNew ? '+ Add device' : 'Save'}
+          </button>
+        </div>
       </div>
-      {duplicate && <p className="dialog-error">That IMEI is already in the fleet.</p>}
-      {imei !== '' && !imeiOk && <p className="hint">IMEI must be exactly 15 digits ({imei.length} so far).</p>}
     </div>
   );
 }

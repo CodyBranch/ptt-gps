@@ -4,6 +4,14 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import type { RaceSnap, TrackerPub } from '../types';
 
+export interface CourseMarker {
+  at: number;
+  label: string;
+  kind: 'start' | 'finish' | 'unit' | 'custom';
+  lat: number;
+  lon: number;
+}
+
 // Public (pk.) Mapbox token — same account/token the legacy admin pages use.
 // Override with VITE_MAPBOX_TOKEN at build time if the token is ever rotated.
 mapboxgl.accessToken =
@@ -24,12 +32,35 @@ export interface MapSelection {
   imei: string;
 }
 
+/** Small single-marker live map for the device detail dialog. */
+export function MiniMap({ lat, lon }: { lat: number; lon: number }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<mapboxgl.Map>(null);
+  const markerRef = useRef<mapboxgl.Marker>(null);
+
+  useEffect(() => {
+    const map = new mapboxgl.Map({ container: ref.current!, style: STYLES.streets, center: [lon, lat], zoom: 14 });
+    const marker = new mapboxgl.Marker({ color: '#e70518' }).setLngLat([lon, lat]).addTo(map);
+    mapRef.current = map;
+    markerRef.current = marker;
+    return () => map.remove();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    markerRef.current?.setLngLat([lon, lat]);
+    mapRef.current?.easeTo({ center: [lon, lat], duration: 500 });
+  }, [lat, lon]);
+
+  return <div className="mini-map" ref={ref} />;
+}
+
 /** One map for one or many races: a course line per race, markers deduped by IMEI. */
 export function MapView({ races, selected }: { races: RaceSnap[]; selected?: MapSelection }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map>(null);
   const markersRef = useRef(new Map<string, mapboxgl.Marker>());
-  const coursesRef = useRef(new Map<string, GeoJSON.Feature>());
+  const coursesRef = useRef(new Map<string, { line: GeoJSON.Feature; markers: CourseMarker[] }>());
   const loadedKeyRef = useRef<string>(null);
   const [styleKey, setStyleKey] = useState<StyleKey>('streets');
 
@@ -40,12 +71,12 @@ export function MapView({ races, selected }: { races: RaceSnap[]; selected?: Map
     // clear all our layers, then re-add in order
     const style = map.getStyle();
     for (const layer of style?.layers ?? []) {
-      if (layer.id.startsWith('course-') || layer.id === 'window-slice') {
+      if (layer.id.startsWith('course-') || layer.id.startsWith('markers-') || layer.id === 'window-slice') {
         if (map.getLayer(layer.id)) map.removeLayer(layer.id);
       }
     }
     for (const srcId of Object.keys(style?.sources ?? {})) {
-      if (srcId.startsWith('course-') || srcId === 'window-slice') {
+      if (srcId.startsWith('course-') || srcId.startsWith('markers-') || srcId === 'window-slice') {
         if (map.getSource(srcId)) map.removeSource(srcId);
       }
     }
@@ -56,7 +87,7 @@ export function MapView({ races, selected }: { races: RaceSnap[]; selected?: Map
       const course = coursesRef.current.get(race.raceId);
       if (!course) continue;
       const id = `course-${race.raceId}`;
-      map.addSource(id, { type: 'geojson', data: course });
+      map.addSource(id, { type: 'geojson', data: course.line });
       map.addLayer({
         id,
         type: 'line',
@@ -67,7 +98,48 @@ export function MapView({ races, selected }: { races: RaceSnap[]; selected?: Map
           'line-opacity': 0.75,
         },
       });
-      for (const c of (course as GeoJSON.Feature<GeoJSON.LineString>).geometry.coordinates) {
+      // Course markers: start/finish flags, mile/km posts, custom points.
+      const mid = `markers-${race.raceId}`;
+      map.addSource(mid, {
+        type: 'geojson',
+        data: {
+          type: 'FeatureCollection',
+          features: course.markers.map((m) => ({
+            type: 'Feature',
+            properties: { label: m.label, kind: m.kind },
+            geometry: { type: 'Point', coordinates: [m.lon, m.lat] },
+          })),
+        },
+      });
+      map.addLayer({
+        id: `${mid}-dot`,
+        type: 'circle',
+        source: mid,
+        paint: {
+          'circle-radius': ['match', ['get', 'kind'], 'start', 6, 'finish', 6, 'custom', 5, 3.5],
+          'circle-color': ['match', ['get', 'kind'], 'start', '#1fa860', 'finish', '#e70518', 'custom', '#ffb02e', '#5b74e8'],
+          'circle-stroke-width': 1.5,
+          'circle-stroke-color': '#ffffff',
+        },
+      });
+      map.addLayer({
+        id: `${mid}-label`,
+        type: 'symbol',
+        source: mid,
+        layout: {
+          'text-field': ['get', 'label'],
+          'text-size': ['match', ['get', 'kind'], 'unit', 10, 12],
+          'text-offset': [0, 1.1],
+          'text-anchor': 'top',
+          'text-allow-overlap': false,
+        },
+        paint: {
+          'text-color': '#1a2340',
+          'text-halo-color': '#ffffff',
+          'text-halo-width': 1.6,
+        },
+      });
+      for (const c of (course.line as GeoJSON.Feature<GeoJSON.LineString>).geometry.coordinates) {
         bounds.extend(c as [number, number]);
       }
       raceIdx++;
@@ -107,8 +179,11 @@ export function MapView({ races, selected }: { races: RaceSnap[]; selected?: Map
     Promise.all(
       races.map(async (r) => {
         if (!coursesRef.current.has(r.raceId)) {
-          const course = await api.course(r.eventId, r.raceId);
-          coursesRef.current.set(r.raceId, course.line);
+          const course = (await api.course(r.eventId, r.raceId)) as {
+            line: GeoJSON.Feature;
+            markers?: CourseMarker[];
+          };
+          coursesRef.current.set(r.raceId, { line: course.line, markers: course.markers ?? [] });
         }
       }),
     )

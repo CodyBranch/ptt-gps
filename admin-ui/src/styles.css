@@ -191,6 +191,13 @@ button.mini.primary { background: var(--brand-red); border-color: var(--brand-re
 .dialog-actions .spacer { flex: 1; }
 .dialog-confirm { width: 340px; }
 .dialog-window { width: 420px; }
+.dialog-device { width: 460px; max-width: calc(100vw - 32px); }
+.mini-map { height: 260px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); margin-bottom: 8px; }
+.device-coords { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; font-size: 13px; }
+.device-notes { color: var(--dim); font-size: 13px; margin: 6px 0 10px; }
+.fleet-table tbody tr { cursor: pointer; }
+.fleet-table tbody tr:hover td { background: var(--panel2); }
+.sidebar-links { display: flex; gap: 12px; }
 .dialog-window h3 { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
 .dialog-subject { color: var(--accent); }
 .window-stats {
@@ -598,4 +605,46 @@ button.linklike {
   position: absolute; left: 18px; top: -3px; white-space: nowrap; font-size: 11px; font-weight: 700;
   color: #111; background: rgba(255, 255, 255, 0.92); border-radius: 4px; padding: 1px 6px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+/* --- course markers editor (EventSetup races) --- */
+.markers-row > td {
+  background: var(--panel2);
+  padding: 10px 14px;
+}
+.markers-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.markers-auto {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.markers-custom {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.marker-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.marker-row .marker-at {
+  width: 90px;
+}
+.marker-row .marker-label {
+  flex: 1;
+  max-width: 320px;
+}
+.course-lib-head {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }

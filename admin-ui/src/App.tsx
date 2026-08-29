@@ -102,6 +102,7 @@ export default function App() {
   });
   const [confirm, setConfirm] = useState<ConfirmRequest>();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [pwDialog, setPwDialog] = useState(false);
   const [, tick] = useReducer((n: number) => n + 1, 0);
   const ask = (req: ConfirmRequest) => setConfirm(req);
   const go = (p: Page) => {
@@ -347,9 +348,16 @@ export default function App() {
             <span className="sidebar-username">{auth.username}</span>
             <span className={`role-badge ${auth.role}`}>{auth.role}</span>
           </div>
-          <button className="linklike" onClick={logout}>
-            sign out
-          </button>
+          <div className="sidebar-links">
+            {!viewer && (
+              <button className="linklike" onClick={() => setPwDialog(true)}>
+                change password
+              </button>
+            )}
+            <button className="linklike" onClick={logout}>
+              sign out
+            </button>
+          </div>
         </div>
       </aside>
 
@@ -439,6 +447,14 @@ export default function App() {
       )}
       </div>
 
+      {pwDialog && (
+        <PasswordDialog
+          onClose={() => setPwDialog(false)}
+          onDone={() =>
+            ask({ title: 'Password changed', body: 'Your other sessions were signed out.', alertOnly: true, onConfirm: () => {} })
+          }
+        />
+      )}
       {confirm && <ConfirmDialog req={confirm} onClose={() => setConfirm(undefined)} />}
       {dialogRace && dialogTracker && (
         <WindowDialog
@@ -457,6 +473,65 @@ export default function App() {
           }
         />
       )}
+    </div>
+  );
+}
+
+function PasswordDialog({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const [current, setCurrent] = useState('');
+  const [next, setNext] = useState('');
+  const [confirmPw, setConfirmPw] = useState('');
+  const [err, setErr] = useState<string>();
+  const [busy, setBusy] = useState(false);
+  const valid = current.length > 0 && next.length >= 8 && next === confirmPw;
+
+  const submit = async () => {
+    setBusy(true);
+    setErr(undefined);
+    try {
+      await api.changePassword(current, next);
+      onClose();
+      onDone();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="dialog-backdrop" onClick={onClose}>
+      <div className="dialog dialog-confirm" onClick={(e) => e.stopPropagation()}>
+        <h3>Change password</h3>
+        <div className="dialog-row">
+          <label>
+            Current password
+            <input type="password" value={current} onChange={(e) => setCurrent(e.target.value)} autoComplete="current-password" autoFocus />
+          </label>
+        </div>
+        <div className="dialog-row">
+          <label>
+            New password (min 8)
+            <input type="password" value={next} onChange={(e) => setNext(e.target.value)} autoComplete="new-password" />
+          </label>
+          <label>
+            Confirm
+            <input type="password" value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} autoComplete="new-password" />
+          </label>
+        </div>
+        {next.length > 0 && next.length < 8 && <p className="hint">At least 8 characters.</p>}
+        {confirmPw.length > 0 && next !== confirmPw && <p className="hint">Passwords do not match yet.</p>}
+        {err && <p className="dialog-error">{err}</p>}
+        <div className="dialog-actions">
+          <span className="spacer" />
+          <button className="mini" onClick={onClose}>
+            Cancel
+          </button>
+          <button className="mini primary" disabled={!valid || busy} onClick={submit}>
+            {busy ? 'Saving…' : 'Change password'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
