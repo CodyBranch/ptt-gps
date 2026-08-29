@@ -250,6 +250,24 @@ button.self-end { align-self: flex-end; }
 }
 .chip button:hover { color: var(--text); }
 .hint { color: var(--dim); font-size: 12px; margin: 4px 0 10px; }
+/* Simulation */
+.sim-safe { color: var(--ok); font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+.sim-warn { color: var(--warn); font-size: 13px; font-weight: 700; margin-bottom: 8px; }
+.sim-progress-cell { min-width: 180px; }
+.sim-bar {
+  height: 8px; background: var(--bg); border: 1px solid var(--border); border-radius: 4px;
+  overflow: hidden; margin-bottom: 3px;
+}
+.sim-bar-fill { height: 100%; background: var(--accent); transition: width 0.5s linear; }
+.sim-bar-label { font-size: 11px; color: var(--dim); font-variant-numeric: tabular-nums; }
+.sim-clock { color: var(--dim); font-size: 13px; align-self: flex-end; font-variant-numeric: tabular-nums; }
+a.export-link {
+  display: inline-flex; align-items: center; background: var(--panel2); color: var(--text);
+  border: 1px solid var(--border); border-radius: 5px; padding: 4px 10px; font-size: 12px;
+  text-decoration: none; align-self: flex-end;
+}
+a.export-link:hover { border-color: var(--dim); }
+
 .fb-test-result { font-size: 12px; color: var(--dim); max-width: 220px; word-break: break-word; }
 .fb-json {
   width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text);

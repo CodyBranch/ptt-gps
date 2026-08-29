@@ -6,7 +6,10 @@ import express from 'express';
 import { Server as SocketIOServer } from 'socket.io';
 import type { App } from '../app.js';
 import { listEvents, createEvent, type ConfigManager } from '../config/manager.js';
+import { loadCourse } from '../engine/course.js';
 import type { FirebaseHub } from '../outputs/hub.js';
+import { resolveRace } from '../config/schema.js';
+import { SimEngine, type SimTrackerCfg } from '../sim/engine.js';
 import { AuthService, hashPassword } from './auth.js';
 import { TunnelManager } from './tunnel.js';
 
@@ -283,6 +286,88 @@ export function startApi(holder: AppHolder, port: number): { httpServer: http.Se
       app.setPublishing(!!req.body.enabled, (req as OpRequest).operator);
     }),
   );
+
+  // --- simulation: export package + run the sim engine against our own listener ---
+
+  let sim: SimEngine | null = null;
+
+  ex.get('/api/export', auth.adminOnly, (_req, res) => {
+    const raw = holder.manager.raw;
+    const resolved = holder.manager.resolved();
+    const courses: Record<string, [number, number][]> = {};
+    for (let i = 0; i < resolved.races.length; i++) {
+      const rawFile = raw.races[i].course;
+      if (!courses[rawFile]) {
+        courses[rawFile] = loadCourse(resolved.races[i].course, 'miles').line.geometry.coordinates as [number, number][];
+      }
+    }
+    res.setHeader('Content-Disposition', `attachment; filename="${raw.id}-sim.json"`);
+    res.json({ kind: 'ptt-sim-package', exportedAt: new Date().toISOString(), config: raw, courses });
+  });
+
+  ex.get('/api/sim', auth.adminOnly, (_req, res) => {
+    res.json(sim ? sim.status() : { running: false, trackers: [] });
+  });
+
+  ex.post('/api/sim/start', auth.adminOnly, (req, res) => {
+    try {
+      if (sim?.running) throw new Error('A simulation is already running — stop it first');
+      const { raceId, timescale, intervalS, jitterM, paces } = req.body ?? {};
+      const engine = app.engines.get(String(raceId));
+      if (!engine) throw new Error('unknown race');
+      const race = engine.race;
+      const { trackers, roles } = resolveRace(holder.manager.resolved(), race);
+      const paceMap: Record<string, number> = typeof paces === 'object' && paces ? paces : {};
+      const defaultPace = 12;
+      const sims: SimTrackerCfg[] = [];
+      let roleIdx = 0;
+      for (const role of roles) {
+        role.trackers.forEach((imei, i) => {
+          if (sims.some((s) => s.imei === imei)) return;
+          const t = trackers.find((x) => x.imei === imei)!;
+          sims.push({
+            imei,
+            label: t.label,
+            paceMph: Number(paceMap[imei]) > 0 ? Number(paceMap[imei]) : defaultPace * (1 - roleIdx * 0.03),
+            startOffsetMi: -i * 0.02,
+          });
+        });
+        roleIdx++;
+      }
+      const port = holder.manager.resolved().listeners[0]?.port ?? 1000;
+      sim = new SimEngine(
+        {
+          host: '127.0.0.1',
+          port,
+          courseCoords: engine.course.line.geometry.coordinates as [number, number][],
+          trackers: sims,
+          intervalS: Math.max(1, Number(intervalS) || holder.manager.raw.reportIntervalS || 10),
+          timescale: Math.min(240, Math.max(1, Number(timescale) || 10)),
+          jitterM: Math.min(100, Math.max(0, Number(jitterM ?? 8))),
+        },
+        {
+          onProgress: (p) => io.emit('sim', p),
+          onEnd: (reason) => {
+            io.emit('sim', { ...(sim?.status() ?? {}), running: false, endReason: reason });
+          },
+        },
+      );
+      sim
+        .start()
+        .then(() => res.json({ ok: true, result: sim!.status() }))
+        .catch((err: Error) => {
+          sim = null;
+          res.status(400).json({ ok: false, error: `Cannot reach listener on 127.0.0.1:${port}: ${err.message}` });
+        });
+    } catch (err) {
+      res.status(400).json({ ok: false, error: (err as Error).message });
+    }
+  });
+
+  ex.post('/api/sim/stop', auth.adminOnly, (_req, res) => {
+    sim?.stop('stopped by operator');
+    res.json({ ok: true });
+  });
 
   // --- firebase connections: registry, status test, open data browser ---
 

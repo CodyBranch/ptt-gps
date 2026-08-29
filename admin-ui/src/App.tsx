@@ -8,6 +8,7 @@ import { MapView, type MapSelection } from './components/MapView';
 import { RacePanel } from './components/RacePanel';
 import { RolesPanel } from './components/RolesPanel';
 import { SetupView } from './components/SetupView';
+import { SimPanel, type SimProgress } from './components/SimPanel';
 import { TrackerTable } from './components/TrackerTable';
 import { WindowDialog } from './components/WindowDialog';
 import type { RaceSnap, Snapshot, TrackerPub, Units } from './types';
@@ -69,7 +70,8 @@ export default function App() {
   const [raceId, setRaceId] = useState<string>();
   const [selected, setSelected] = useState<MapSelection>();
   const [windowDialog, setWindowDialog] = useState<MapSelection>();
-  const [view, setView] = useState<'ops' | 'all' | 'setup' | 'events'>('ops');
+  const [view, setView] = useState<'ops' | 'all' | 'setup' | 'events' | 'sim'>('ops');
+  const [simProgress, setSimProgress] = useState<SimProgress>();
   const [displayUnits, setDisplayUnits] = useState<Units>(() => {
     try {
       return (localStorage.getItem('ptt-display-units') as Units) || 'miles';
@@ -128,6 +130,7 @@ export default function App() {
       if (t.imei) dispatch({ type: 'seen', imei: t.imei, ms: t.receivedAtMs ?? Date.now() });
     });
     socket.on('publishing', (p: { enabled: boolean }) => dispatch({ type: 'publishing', enabled: p.enabled }));
+    socket.on('sim', (p: SimProgress) => setSimProgress(p));
     const t = setInterval(() => tick(), 1000); // refresh fix-age displays
     return () => {
       socket.close();
@@ -237,6 +240,10 @@ export default function App() {
               <button className={view === 'setup' ? 'active' : ''} onClick={() => setView('setup')}>
                 ⚙ Setup
               </button>
+              <button className={view === 'sim' ? 'active' : ''} onClick={() => setView('sim')}>
+                🧪 Sim
+                {simProgress?.running && <span className="status-dot live" />}
+              </button>
             </>
           )}
         </nav>
@@ -278,6 +285,24 @@ export default function App() {
         />
       ) : view === 'setup' ? (
         <SetupView ask={ask} onSaved={() => setRaceId(undefined)} />
+      ) : view === 'sim' ? (
+        <div className="setup">
+          <div className="setup-bar">
+            <span className="setup-title">Race simulation</span>
+          </div>
+          <div className="setup-grid">
+            <section>
+              <SimPanel
+                snapshot={state.snapshot}
+                progress={simProgress}
+                ask={ask}
+                onMsg={(m) =>
+                  ask({ title: m.kind === 'err' ? 'Simulation error' : 'Simulation', body: m.text, alertOnly: true, onConfirm: () => {} })
+                }
+              />
+            </section>
+          </div>
+        </div>
       ) : view === 'all' ? (
         <div className="main">
           <aside className="all-races">
