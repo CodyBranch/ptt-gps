@@ -17,6 +17,8 @@ export interface EventListing {
   file: string;
   races: number;
   trackers: number;
+  startDate?: string;
+  endDate?: string;
   error?: string;
 }
 
@@ -35,12 +37,47 @@ export function listEvents(dir: string): EventListing[] {
         file: f,
         races: Array.isArray(json.races) ? json.races.length : 0,
         trackers: Array.isArray(json.trackers) ? json.trackers.length : 0,
+        startDate: typeof json.startDate === 'string' ? json.startDate : undefined,
+        endDate: typeof json.endDate === 'string' ? json.endDate : undefined,
       });
     } catch (err) {
       out.push({ id: f, name: f, meetId: 0, file: f, races: 0, trackers: 0, error: (err as Error).message });
     }
   }
   return out.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Course files live in <eventsDir>/courses and are shared by all events. */
+export function listCoursesIn(eventsDir: string): Array<{ file: string; points: number; lengthMi: number; lengthKm: number }> {
+  const coursesDir = path.join(eventsDir, 'courses');
+  fs.mkdirSync(coursesDir, { recursive: true });
+  const out = [];
+  for (const f of fs.readdirSync(coursesDir)) {
+    if (!/\.(kml|geojson|json)$/i.test(f)) continue;
+    try {
+      const text = fs.readFileSync(path.join(coursesDir, f), 'utf8');
+      const mi = parseCourse(text, f.toLowerCase().endsWith('.kml'), 'miles');
+      out.push({
+        file: `courses/${f}`,
+        points: mi.line.geometry.coordinates.length,
+        lengthMi: mi.length,
+        lengthKm: mi.length / 0.621371,
+      });
+    } catch {
+      out.push({ file: `courses/${f}`, points: 0, lengthMi: 0, lengthKm: 0 });
+    }
+  }
+  return out;
+}
+
+export function saveCourseIn(eventsDir: string, name: string, kmlText: string): { file: string; lengthMi: number; points: number } {
+  const safe = name.toLowerCase().replace(/\.kml$/, '').replace(/[^a-z0-9-_]+/g, '-');
+  if (!safe) throw new Error('Invalid course name');
+  const course = parseCourse(kmlText, true, 'miles'); // throws when there is no LineString
+  const coursesDir = path.join(eventsDir, 'courses');
+  fs.mkdirSync(coursesDir, { recursive: true });
+  fs.writeFileSync(path.join(coursesDir, `${safe}.kml`), kmlText);
+  return { file: `courses/${safe}.kml`, lengthMi: course.length, points: course.line.geometry.coordinates.length };
 }
 
 /** Which events reference which tracker IMEIs (for the fleet page). */

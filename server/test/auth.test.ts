@@ -72,19 +72,44 @@ describe('AuthService', () => {
     auth.setViewerPin('260426');
     expect(auth.viewerPinEnabled()).toBe(true);
     expect(auth.loginViewer('999999', '10.1.1.2')).toBeNull();
-    const token = auth.loginViewer('260426', '10.1.1.3');
-    expect(auth.check(token!)).toEqual({ username: 'viewer', role: 'viewer' });
+    const res = auth.loginViewer('260426', '10.1.1.3');
+    expect(res?.eventScope).toBeUndefined(); // global PIN = all events
+    expect(auth.check(res!.token)).toEqual({ username: 'viewer', role: 'viewer', eventScope: undefined });
 
     // replacing the PIN signs existing viewers out; operators unaffected
     const opToken = auth.login('cody', 'timing-rules-8', '10.0.0.1');
     auth.setViewerPin('111111');
-    expect(auth.check(token!)).toBeNull();
+    expect(auth.check(res!.token)).toBeNull();
     expect(auth.check(opToken!)?.role).toBe('staff');
 
     // clearing disables viewer login entirely
     auth.setViewerPin(null);
     expect(auth.viewerPinEnabled()).toBe(false);
     expect(auth.loginViewer('111111', '10.1.1.4')).toBeNull();
+  });
+
+  it('event-scoped viewer PINs: scope, no duplication with global or other events', () => {
+    auth.setViewerPin('260426'); // global
+    auth.setViewerPin('111111', 'boston-2026');
+
+    // event PIN duplicating the global PIN is refused
+    expect(() => auth.setViewerPin('260426', 'other-event')).toThrow(/already the global/);
+    // another event duplicating an existing event PIN is refused
+    expect(() => auth.setViewerPin('111111', 'other-event')).toThrow(/already used by event/);
+    // global PIN duplicating an event PIN is refused
+    expect(() => auth.setViewerPin('111111')).toThrow(/already used by event/);
+
+    const scoped = auth.loginViewer('111111', '10.2.2.2');
+    expect(scoped?.eventScope).toBe('boston-2026');
+    expect(auth.check(scoped!.token)).toEqual({ username: 'viewer', role: 'viewer', eventScope: 'boston-2026' });
+
+    const global = auth.loginViewer('260426', '10.2.2.3');
+    expect(global?.eventScope).toBeUndefined();
+
+    // removing the event PIN keeps global working
+    auth.setViewerPin(null, 'boston-2026');
+    expect(auth.loginViewer('111111', '10.2.2.4')).toBeNull();
+    expect(auth.loginViewer('260426', '10.2.2.5')).toBeTruthy();
   });
 
   it('removing a user revokes their tokens', () => {

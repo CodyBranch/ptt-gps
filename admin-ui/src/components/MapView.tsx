@@ -107,7 +107,7 @@ export function MapView({ races, selected }: { races: RaceSnap[]; selected?: Map
     Promise.all(
       races.map(async (r) => {
         if (!coursesRef.current.has(r.raceId)) {
-          const course = await api.course(r.raceId);
+          const course = await api.course(r.eventId, r.raceId);
           coursesRef.current.set(r.raceId, course.line);
         }
       }),

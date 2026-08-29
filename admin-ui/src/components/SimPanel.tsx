@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
 import type { ConfirmRequest } from './Confirm';
-import type { RaceSnap, Snapshot } from '../types';
+import type { EventSnap, RaceSnap, Snapshot } from '../types';
 
 export interface SimProgress {
   running: boolean;
@@ -31,16 +31,18 @@ export function SimPanel({
   ask: (req: ConfirmRequest) => void;
   onMsg: (m: { kind: 'ok' | 'err'; text: string }) => void;
 }) {
-  const [raceId, setRaceId] = useState(snapshot.races[0]?.raceId ?? '');
+  const [eventId, setEventId] = useState(snapshot.events[0]?.event.id ?? '');
+  const ev: EventSnap | undefined = snapshot.events.find((e) => e.event.id === eventId) ?? snapshot.events[0];
+  const [raceId, setRaceId] = useState(ev?.races[0]?.raceId ?? '');
   const [timescale, setTimescale] = useState('10');
-  const [intervalS, setIntervalS] = useState(String(snapshot.event.reportIntervalS || 10));
+  const [intervalS, setIntervalS] = useState(String(ev?.event.reportIntervalS || 10));
   const [jitterM, setJitterM] = useState('8');
   const [extraTargets, setExtraTargets] = useState('');
   const [paces, setPaces] = useState<Record<string, string>>({});
   const [status, setStatus] = useState<SimProgress>();
 
   const live = progress ?? status;
-  const race: RaceSnap | undefined = snapshot.races.find((r) => r.raceId === raceId) ?? snapshot.races[0];
+  const race: RaceSnap | undefined = ev?.races.find((r) => r.raceId === raceId) ?? ev?.races[0];
 
   useEffect(() => {
     api.simStatus().then(setStatus).catch(console.error);
@@ -55,6 +57,7 @@ export function SimPanel({
           if (n > 0) paceMap[imei] = n;
         }
         await api.simStart({
+          eventId: ev!.event.id,
           raceId: race!.raceId,
           timescale: Number(timescale) || 10,
           intervalS: Number(intervalS) || 10,
@@ -91,7 +94,7 @@ export function SimPanel({
     }
   };
 
-  if (!race) return <p className="hint">No races configured — add one in Setup first.</p>;
+  if (!ev || !race) return <p className="hint">No active event with races — activate an event and add races first.</p>;
 
   return (
     <div className="sim-panel">
@@ -109,9 +112,19 @@ export function SimPanel({
 
       <div className="form-row">
         <label>
+          Event
+          <select value={ev.event.id} onChange={(e) => setEventId(e.target.value)} disabled={live?.running}>
+            {snapshot.events.map((x) => (
+              <option key={x.event.id} value={x.event.id}>
+                {x.event.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
           Race
           <select value={race.raceId} onChange={(e) => setRaceId(e.target.value)} disabled={live?.running}>
-            {snapshot.races.map((r) => (
+            {ev.races.map((r) => (
               <option key={r.raceId} value={r.raceId}>
                 {r.name}
               </option>
@@ -219,7 +232,7 @@ export function SimPanel({
       </div>
       {live?.endReason && !live.running && <p className="hint">Last run ended: {live.endReason}</p>}
       <p className="hint">
-        Remote use: <span className="mono">npm run sim -w server -- --package {snapshot.event.id}-sim.json --race{' '}
+        Remote use: <span className="mono">npm run sim -w server -- --package {ev.event.id}-sim.json --race{' '}
         {race.raceId} --host &lt;server-ip&gt; [--timescale 30]</span>
       </p>
     </div>

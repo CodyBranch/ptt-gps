@@ -8,51 +8,59 @@ async function post(url: string, body?: unknown): Promise<void> {
   if (!res.ok || json.ok === false) throw new Error(json.error ?? `HTTP ${res.status}`);
 }
 
+async function getJson(url: string) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+async function send(url: string, method: string, body?: unknown) {
+  const res = await fetch(url, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok || json.ok === false) throw new Error(json.error ?? `HTTP ${res.status}`);
+  return json.result ?? json;
+}
+
 export const api = {
-  lifecycle: (raceId: string, action: 'arm' | 'start' | 'finish' | 'reset') =>
-    post(`/api/races/${raceId}/lifecycle`, { action }),
+  // --- race operations (event-scoped) ---
+  lifecycle: (eventId: string, raceId: string, action: 'arm' | 'start' | 'finish' | 'reset') =>
+    post(`/api/events/${eventId}/races/${raceId}/lifecycle`, { action }),
 
-  setActive: (raceId: string, roleKey: string, imei: string) =>
-    post(`/api/races/${raceId}/roles/${roleKey}/active`, { imei }),
+  setActive: (eventId: string, raceId: string, roleKey: string, imei: string) =>
+    post(`/api/events/${eventId}/races/${raceId}/roles/${roleKey}/active`, { imei }),
 
-  setSource: (raceId: string, roleKey: string, source: 'gps' | 'splits') =>
-    post(`/api/races/${raceId}/roles/${roleKey}/source`, { source }),
+  setSource: (eventId: string, raceId: string, roleKey: string, source: 'gps' | 'splits') =>
+    post(`/api/events/${eventId}/races/${raceId}/roles/${roleKey}/source`, { source }),
 
-  setWindow: (raceId: string, imei: string, start: number, end: number, latch: boolean) =>
-    post(`/api/races/${raceId}/trackers/${imei}/window`, { start, end, latch }),
+  setWindow: (eventId: string, raceId: string, imei: string, start: number, end: number, latch: boolean) =>
+    post(`/api/events/${eventId}/races/${raceId}/trackers/${imei}/window`, { start, end, latch }),
 
-  releaseWindow: async (raceId: string, imei: string) => {
-    const res = await fetch(`/api/races/${raceId}/trackers/${imei}/window`, { method: 'DELETE' });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  },
+  releaseWindow: (eventId: string, raceId: string, imei: string) =>
+    send(`/api/events/${eventId}/races/${raceId}/trackers/${imei}/window`, 'DELETE'),
 
-  course: async (raceId: string): Promise<{ line: GeoJSON.Feature; length: number; units: string }> => {
-    const res = await fetch(`/api/races/${raceId}/course`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return res.json();
-  },
+  course: (eventId: string, raceId: string): Promise<{ line: GeoJSON.Feature; length: number; units: string }> =>
+    getJson(`/api/events/${eventId}/races/${raceId}/course`),
 
-  getConfig: async () => {
-    const res = await fetch('/api/config');
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return res.json();
-  },
+  setPublishing: (enabled: boolean) => post('/api/publishing', { enabled }),
 
-  putConfig: async (config: unknown) => {
-    const res = await fetch('/api/config', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(config),
-    });
-    const json = await res.json();
-    if (!res.ok || json.ok === false) throw new Error(json.error ?? `HTTP ${res.status}`);
-  },
+  // --- events ---
+  events: (): Promise<{ loaded: string[]; events: import('./types').EventListing[] }> => getJson('/api/events'),
 
-  courses: async () => {
-    const res = await fetch('/api/courses');
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return res.json();
-  },
+  createEvent: (opts: { id: string; name: string; meetId: number; startDate?: string; endDate?: string; copyFromFile?: string }) =>
+    send('/api/events', 'POST', opts) as Promise<{ file: string }>,
+
+  loadEvent: (file: string) => post(`/api/events/${encodeURIComponent(file)}/load`),
+  unloadEvent: (eventId: string) => post(`/api/events/${encodeURIComponent(eventId)}/unload`),
+
+  getConfig: (eventId: string) => getJson(`/api/events/${eventId}/config`),
+  putConfig: (eventId: string, config: unknown) => send(`/api/events/${eventId}/config`, 'PUT', config),
+
+  // --- courses (shared) ---
+  courses: () => getJson('/api/courses'),
 
   uploadCourse: async (name: string, kmlText: string) => {
     const res = await fetch(`/api/courses/${encodeURIComponent(name)}`, {
@@ -65,260 +73,89 @@ export const api = {
     return json.result as { file: string; lengthMi: number; points: number };
   },
 
-  devices: async () => {
-    const res = await fetch('/api/devices');
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return res.json();
-  },
+  // --- fleet + owners + history ---
+  fleet: () => getJson('/api/fleet'),
+  devices: () => getJson('/api/devices'),
+  owners: () => getJson('/api/owners'),
+  addOwner: (name: string) => send('/api/owners', 'POST', { name }) as Promise<{ id: number; name: string }>,
+  deleteOwner: (id: number) => send(`/api/owners/${id}`, 'DELETE'),
 
-  fleet: async () => {
-    const res = await fetch('/api/fleet');
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return res.json();
-  },
+  saveFleet: (t: {
+    imei: string;
+    label: string;
+    model?: string | null;
+    hasBattery: boolean;
+    notes?: string | null;
+    ownerId?: number | null;
+    retired: boolean;
+  }) => post('/api/fleet', t),
 
-  owners: async () => {
-    const res = await fetch('/api/owners');
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return res.json();
-  },
+  fleetHistory: (imei: string) => getJson(`/api/fleet/${imei}/history`),
+  addIssue: (imei: string, text: string, severity: 'note' | 'issue' | 'fault') =>
+    post(`/api/fleet/${imei}/issues`, { text, severity }),
+  resolveIssue: (id: number) => post(`/api/fleet/issues/${id}/resolve`),
 
-  addOwner: async (name: string): Promise<{ id: number; name: string }> => {
-    const res = await fetch('/api/owners', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name }),
-    });
-    const json = await res.json();
-    if (!res.ok || json.ok === false) throw new Error(json.error ?? `HTTP ${res.status}`);
-    return json.result;
+  // --- users / viewer PIN ---
+  users: () => getJson('/api/users'),
+  addUser: (username: string, password: string, role: 'admin' | 'staff' = 'staff') =>
+    post('/api/users', { username, password, role }),
+  deleteUser: (username: string) => send(`/api/users/${encodeURIComponent(username)}`, 'DELETE'),
+  viewerEnabled: async (): Promise<boolean> => {
+    try {
+      return !!(await getJson('/api/viewer-enabled')).enabled;
+    } catch {
+      return false;
+    }
   },
-
-  deleteOwner: async (id: number) => {
-    const res = await fetch(`/api/owners/${id}`, { method: 'DELETE' });
-    const json = await res.json();
-    if (!res.ok || json.ok === false) throw new Error(json.error ?? `HTTP ${res.status}`);
+  setViewerPin: (pin: string | null) => send('/api/viewer-pin', 'PUT', { pin }),
+  eventViewerPinEnabled: async (eventId: string): Promise<boolean> => {
+    try {
+      return !!(await getJson(`/api/events/${eventId}/viewer-pin`)).enabled;
+    } catch {
+      return false;
+    }
   },
+  setEventViewerPin: (eventId: string, pin: string | null) => send(`/api/events/${eventId}/viewer-pin`, 'PUT', { pin }),
 
-  saveFleet: async (t: { imei: string; label: string; model?: string | null; hasBattery: boolean; notes?: string | null; ownerId?: number | null; retired: boolean }) => {
-    const res = await fetch('/api/fleet', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(t),
-    });
-    const json = await res.json();
-    if (!res.ok || json.ok === false) throw new Error(json.error ?? `HTTP ${res.status}`);
-  },
-
-  fleetHistory: async (imei: string) => {
-    const res = await fetch(`/api/fleet/${imei}/history`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return res.json();
-  },
-
-  addIssue: async (imei: string, text: string, severity: 'note' | 'issue' | 'fault') => {
-    const res = await fetch(`/api/fleet/${imei}/issues`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, severity }),
-    });
-    const json = await res.json();
-    if (!res.ok || json.ok === false) throw new Error(json.error ?? `HTTP ${res.status}`);
-  },
-
-  resolveIssue: async (id: number) => {
-    const res = await fetch(`/api/fleet/issues/${id}/resolve`, { method: 'POST' });
-    const json = await res.json();
-    if (!res.ok || json.ok === false) throw new Error(json.error ?? `HTTP ${res.status}`);
-  },
-
-  deleteFleet: async (imei: string) => {
-    const res = await fetch(`/api/fleet/${imei}`, { method: 'DELETE' });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  },
-
-  setPublishing: async (enabled: boolean) => {
-    const res = await fetch('/api/publishing', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ enabled }),
-    });
-    const json = await res.json();
-    if (!res.ok || json.ok === false) throw new Error(json.error ?? `HTTP ${res.status}`);
-  },
-
-  ingestToken: async (): Promise<string | null> => {
-    const res = await fetch('/api/ingest-token');
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return (await res.json()).token;
-  },
-
-  regenerateIngestToken: async (): Promise<string> => {
-    const res = await fetch('/api/ingest-token', { method: 'POST' });
-    const json = await res.json();
-    if (!res.ok || json.ok === false) throw new Error(json.error ?? `HTTP ${res.status}`);
-    return json.token;
-  },
-
-  simStatus: async () => {
-    const res = await fetch('/api/sim');
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return res.json();
-  },
-
-  forwards: async () => {
-    const res = await fetch('/api/forwards');
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return res.json();
-  },
-
-  setForwards: async (targets: Array<{ host: string; port: number; enabled: boolean }>) => {
-    const res = await fetch('/api/forwards', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ targets }),
-    });
-    const json = await res.json();
-    if (!res.ok || json.ok === false) throw new Error(json.error ?? `HTTP ${res.status}`);
-    return json.result;
-  },
-
-  simStart: async (opts: { raceId: string; timescale: number; intervalS: number; jitterM: number; paces: Record<string, number>; extraTargets?: string }) => {
-    const res = await fetch('/api/sim/start', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(opts),
-    });
-    const json = await res.json();
-    if (!res.ok || json.ok === false) throw new Error(json.error ?? `HTTP ${res.status}`);
-  },
-
-  simStop: async () => {
-    const res = await fetch('/api/sim/stop', { method: 'POST' });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  },
-
-  firebaseList: async () => {
-    const res = await fetch('/api/firebase');
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return res.json();
-  },
-
-  firebaseAdd: async (name: string, databaseURL: string, serviceAccount: unknown) => {
-    const res = await fetch('/api/firebase', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, databaseURL, serviceAccount }),
-    });
-    const json = await res.json();
-    if (!res.ok || json.ok === false) throw new Error(json.error ?? `HTTP ${res.status}`);
-  },
-
-  firebaseDelete: async (name: string) => {
-    const res = await fetch(`/api/firebase/${encodeURIComponent(name)}`, { method: 'DELETE' });
-    const json = await res.json();
-    if (!res.ok || json.ok === false) throw new Error(json.error ?? `HTTP ${res.status}`);
-  },
-
+  // --- firebase ---
+  firebaseList: () => getJson('/api/firebase'),
+  firebaseAdd: (name: string, databaseURL: string, serviceAccount: unknown) =>
+    post('/api/firebase', { name, databaseURL, serviceAccount }),
+  firebaseDelete: (name: string) => send(`/api/firebase/${encodeURIComponent(name)}`, 'DELETE'),
   firebaseTest: async (name: string): Promise<{ ok: boolean; latencyMs?: number; error?: string }> => {
     const res = await fetch(`/api/firebase/${encodeURIComponent(name)}/test`, { method: 'POST' });
     return res.json();
   },
-
   firebaseRead: async (name: string, path: string): Promise<unknown> => {
-    const res = await fetch(`/api/firebase/${encodeURIComponent(name)}/data?path=${encodeURIComponent(path)}`);
-    const json = await res.json();
-    if (!res.ok || json.ok === false) throw new Error(json.error ?? `HTTP ${res.status}`);
+    const json = await getJson(`/api/firebase/${encodeURIComponent(name)}/data?path=${encodeURIComponent(path)}`);
+    if (json.ok === false) throw new Error(json.error);
     return json.value;
   },
+  firebaseWrite: (name: string, path: string, value: unknown, method: 'set' | 'update' | 'delete') =>
+    send(`/api/firebase/${encodeURIComponent(name)}/data`, 'PUT', { path, value, method }),
 
-  firebaseWrite: async (name: string, path: string, value: unknown, method: 'set' | 'update' | 'delete') => {
-    const res = await fetch(`/api/firebase/${encodeURIComponent(name)}/data`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path, value, method }),
-    });
-    const json = await res.json();
-    if (!res.ok || json.ok === false) throw new Error(json.error ?? `HTTP ${res.status}`);
-  },
+  // --- forwards / split feed / tunnel / sim ---
+  forwards: () => getJson('/api/forwards'),
+  setForwards: (targets: Array<{ host: string; port: number; enabled: boolean }>) =>
+    send('/api/forwards', 'PUT', { targets }),
 
-  tunnelStatus: async () => {
-    const res = await fetch('/api/tunnel');
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return res.json();
-  },
+  ingestToken: async (): Promise<string | null> => (await getJson('/api/ingest-token')).token,
+  regenerateIngestToken: async (): Promise<string> => (await send('/api/ingest-token', 'POST')).token,
 
-  tunnelApply: async (opts: { enabled?: boolean; domain?: string; authtoken?: string }) => {
-    const res = await fetch('/api/tunnel', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(opts),
-    });
-    const json = await res.json();
-    if (!res.ok || json.ok === false) throw new Error(json.error ?? `HTTP ${res.status}`);
-    return json.result;
-  },
+  tunnelStatus: () => getJson('/api/tunnel'),
+  tunnelApply: (opts: { enabled?: boolean; domain?: string; authtoken?: string }) => send('/api/tunnel', 'PUT', opts),
 
-  viewerEnabled: async (): Promise<boolean> => {
-    const res = await fetch('/api/viewer-enabled');
-    if (!res.ok) return false;
-    return !!(await res.json()).enabled;
-  },
-
-  setViewerPin: async (pin: string | null) => {
-    const res = await fetch('/api/viewer-pin', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pin }),
-    });
-    const json = await res.json();
-    if (!res.ok || json.ok === false) throw new Error(json.error ?? `HTTP ${res.status}`);
-  },
-
-  users: async () => {
-    const res = await fetch('/api/users');
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return res.json();
-  },
-
-  addUser: async (username: string, password: string, role: 'admin' | 'staff' = 'staff') => {
-    const res = await fetch('/api/users', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password, role }),
-    });
-    const json = await res.json();
-    if (!res.ok || json.ok === false) throw new Error(json.error ?? `HTTP ${res.status}`);
-  },
-
-  deleteUser: async (username: string) => {
-    const res = await fetch(`/api/users/${encodeURIComponent(username)}`, { method: 'DELETE' });
-    const json = await res.json();
-    if (!res.ok || json.ok === false) throw new Error(json.error ?? `HTTP ${res.status}`);
-  },
-
-  events: async () => {
-    const res = await fetch('/api/events');
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return res.json();
-  },
-
-  createEvent: async (opts: { id: string; name: string; meetId: number; copyFromFile?: string }) => {
-    const res = await fetch('/api/events', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(opts),
-    });
-    const json = await res.json();
-    if (!res.ok || json.ok === false) throw new Error(json.error ?? `HTTP ${res.status}`);
-    return json.result as { file: string };
-  },
-
-  activateEvent: async (file: string) => {
-    const res = await fetch(`/api/events/${encodeURIComponent(file)}/activate`, { method: 'POST' });
-    const json = await res.json();
-    if (!res.ok || json.ok === false) throw new Error(json.error ?? `HTTP ${res.status}`);
-  },
+  simStatus: () => getJson('/api/sim'),
+  simStart: (opts: {
+    eventId: string;
+    raceId: string;
+    timescale: number;
+    intervalS: number;
+    jitterM: number;
+    paces: Record<string, number>;
+    extraTargets?: string;
+  }) => post('/api/sim/start', opts),
+  simStop: () => post('/api/sim/stop'),
 };
 
 const MI_PER_KM = 0.621371;

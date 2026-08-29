@@ -125,5 +125,7 @@
       "course": "courses/boston-marathon.kml",
       "units": "miles"
     }
-  ]
+  ],
+  "startDate": "2026-04-20",
+  "endDate": "2026-04-20"
 }

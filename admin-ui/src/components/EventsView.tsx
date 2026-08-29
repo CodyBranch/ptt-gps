@@ -4,53 +4,97 @@ import type { ConfirmRequest } from './Confirm';
 import type { EventListing } from '../types';
 
 /**
- * Event library: every event config on the server. One event is active
- * (its races and listeners are the ones running); switching is guarded
- * server-side while a race is armed or live. New events start blank or as a
- * copy of a previous event — the copy-last-year workflow.
+ * Event library. Several events can be active (running) at once. Sorted:
+ * active first, then nearest upcoming by start date, then undated; completed
+ * events (end date in the past) are hidden behind a toggle.
  */
 export function EventsView({
+  loaded,
   ask,
-  onActivated,
+  onChanged,
+  onOpenSetup,
 }: {
+  loaded: string[];
   ask: (req: ConfirmRequest) => void;
-  onActivated: () => void;
+  onChanged: () => void;
+  onOpenSetup: (eventId: string) => void;
 }) {
   const [events, setEvents] = useState<EventListing[]>([]);
-  const [activeId, setActiveId] = useState<string>();
+  const [showCompleted, setShowCompleted] = useState(false);
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string }>();
+  // create form
   const [name, setName] = useState('');
   const [meetId, setMeetId] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [copyFrom, setCopyFrom] = useState('');
 
-  const reload = () => {
+  const reload = () =>
     api
       .events()
-      .then((r: { active: string; events: EventListing[] }) => {
-        setEvents(r.events);
-        setActiveId(r.active);
-      })
+      .then((r) => setEvents(r.events))
       .catch(console.error);
-  };
-  useEffect(reload, []);
+  useEffect(() => {
+    reload();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const activate = (e: EventListing) => {
+  const today = new Date().toISOString().slice(0, 10);
+  const loadedSet = new Set(loaded);
+  const isCompleted = (e: EventListing) => !!e.endDate && e.endDate < today && !loadedSet.has(e.id);
+
+  const sortKey = (e: EventListing): [number, string] => {
+    if (loadedSet.has(e.id)) return [0, e.startDate ?? '9999'];
+    if (!isCompleted(e)) return [1, e.startDate ?? '9999-99-99'];
+    return [2, e.endDate ?? ''];
+  };
+  const sorted = [...events]
+    .filter((e) => !e.error)
+    .sort((a, b) => {
+      const [ga, ka] = sortKey(a);
+      const [gb, kb] = sortKey(b);
+      if (ga !== gb) return ga - gb;
+      // completed: most recent first; others: soonest first
+      return ga === 2 ? kb.localeCompare(ka) : ka.localeCompare(kb);
+    });
+  const visible = sorted.filter((e) => !isCompleted(e));
+  const completed = sorted.filter(isCompleted);
+  const broken = events.filter((e) => e.error);
+
+  const activate = (e: EventListing) =>
     ask({
       title: `Activate "${e.name}"?`,
-      body: 'The console and tracker listeners switch to this event. Not allowed while a race is armed or live.',
+      body: 'Starts its engines and tracker listeners alongside any other active events.',
       confirmLabel: 'Activate',
       onConfirm: async () => {
         try {
-          await api.activateEvent(e.file);
-          setMsg({ kind: 'ok', text: `"${e.name}" is now active.` });
-          onActivated();
+          await api.loadEvent(e.file);
+          setMsg({ kind: 'ok', text: `"${e.name}" is running.` });
+          onChanged();
           reload();
         } catch (err) {
           setMsg({ kind: 'err', text: (err as Error).message });
         }
       },
     });
-  };
+
+  const deactivate = (e: EventListing) =>
+    ask({
+      title: `Deactivate "${e.name}"?`,
+      body: 'Stops its engines. Not allowed while one of its races is armed or live.',
+      confirmLabel: 'Deactivate',
+      danger: true,
+      onConfirm: async () => {
+        try {
+          await api.unloadEvent(e.id);
+          setMsg({ kind: 'ok', text: `"${e.name}" stopped.` });
+          onChanged();
+          reload();
+        } catch (err) {
+          setMsg({ kind: 'err', text: (err as Error).message });
+        }
+      },
+    });
 
   const create = async () => {
     try {
@@ -58,16 +102,58 @@ export function EventsView({
         id: name,
         name: name.trim(),
         meetId: Number(meetId) || 0,
+        startDate: startDate || undefined,
+        endDate: endDate || startDate || undefined,
         copyFromFile: copyFrom || undefined,
       });
       setMsg({ kind: 'ok', text: `Created ${res.file} — activate it, then finish setup.` });
       setName('');
       setMeetId('');
+      setStartDate('');
+      setEndDate('');
       setCopyFrom('');
       reload();
     } catch (err) {
       setMsg({ kind: 'err', text: (err as Error).message });
     }
+  };
+
+  const dateRange = (e: EventListing) => {
+    if (!e.startDate && !e.endDate) return 'no dates set';
+    if (e.startDate && e.endDate && e.startDate !== e.endDate) return `${e.startDate} → ${e.endDate}`;
+    return e.startDate ?? e.endDate ?? '';
+  };
+
+  const card = (e: EventListing) => {
+    const active = loadedSet.has(e.id);
+    return (
+      <div key={e.file} className={`event-card ${active ? 'active' : ''}`}>
+        <div className="event-card-head">
+          <span className="event-card-name">{e.name}</span>
+          {active && <span className="active-badge">ACTIVE</span>}
+        </div>
+        <div className="event-card-meta">
+          {dateRange(e)} · meet {e.meetId} · {e.races} race{e.races === 1 ? '' : 's'} · {e.trackers} tracker
+          {e.trackers === 1 ? '' : 's'}
+        </div>
+        <div className="event-card-actions">
+          {active ? (
+            <>
+              <button className="mini" onClick={() => onOpenSetup(e.id)}>
+                ⚙ Setup
+              </button>
+              <button className="mini danger" onClick={() => deactivate(e)}>
+                Deactivate
+              </button>
+            </>
+          ) : (
+            <button className="mini primary" onClick={() => activate(e)}>
+              Activate
+            </button>
+          )}
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -78,28 +164,26 @@ export function EventsView({
         <span className="spacer" />
       </div>
 
-      <div className="events-list">
-        {events.map((e) => (
-          <div key={e.file} className={`event-card ${e.id === activeId ? 'active' : ''} ${e.error ? 'broken' : ''}`}>
-            <div className="event-card-head">
-              <span className="event-card-name">{e.name}</span>
-              {e.id === activeId && <span className="active-badge">ACTIVE</span>}
+      <div className="events-layout">
+        <div className="events-column">
+          {visible.map(card)}
+          {broken.map((e) => (
+            <div key={e.file} className="event-card broken">
+              <div className="event-card-head">
+                <span className="event-card-name">{e.file}</span>
+              </div>
+              <div className="event-card-err">{e.error}</div>
             </div>
-            <div className="event-card-meta">
-              meet {e.meetId} · {e.races} race{e.races === 1 ? '' : 's'} · {e.trackers} tracker
-              {e.trackers === 1 ? '' : 's'}
-            </div>
-            <div className="event-card-file mono">{e.file}</div>
-            {e.error && <div className="event-card-err">{e.error}</div>}
-            {e.id !== activeId && !e.error && (
-              <button className="mini primary" onClick={() => activate(e)}>
-                Activate
-              </button>
-            )}
-          </div>
-        ))}
+          ))}
+          {completed.length > 0 && (
+            <button className="mini completed-toggle" onClick={() => setShowCompleted(!showCompleted)}>
+              {showCompleted ? '▾' : '▸'} Completed events ({completed.length})
+            </button>
+          )}
+          {showCompleted && completed.map(card)}
+        </div>
 
-        <div className="event-card new">
+        <div className="event-card new event-create">
           <div className="event-card-head">
             <span className="event-card-name">New event</span>
           </div>
@@ -107,26 +191,35 @@ export function EventsView({
             Name
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Boston Marathon 2027" />
           </label>
-          <label>
-            Meet ID
-            <input value={meetId} inputMode="numeric" onChange={(e) => setMeetId(e.target.value)} />
-          </label>
+          <div className="form-row">
+            <label>
+              Meet ID
+              <input value={meetId} inputMode="numeric" onChange={(e) => setMeetId(e.target.value)} />
+            </label>
+            <label>
+              Start date
+              <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+            </label>
+            <label>
+              End date
+              <input type="date" value={endDate} min={startDate || undefined} onChange={(e) => setEndDate(e.target.value)} />
+            </label>
+          </div>
           <label>
             Start from
             <select value={copyFrom} onChange={(e) => setCopyFrom(e.target.value)}>
               <option value="">Blank event</option>
-              {events
-                .filter((e) => !e.error)
-                .map((e) => (
-                  <option key={e.file} value={e.file}>
-                    Copy of {e.name}
-                  </option>
-                ))}
+              {sorted.map((e) => (
+                <option key={e.file} value={e.file}>
+                  Copy of {e.name}
+                </option>
+              ))}
             </select>
           </label>
           <button className="mini primary" disabled={!name.trim()} onClick={create}>
             + Create event
           </button>
+          <p className="hint">Copying carries over the roster, roles, races, courses, and Firebase outputs.</p>
         </div>
       </div>
     </div>

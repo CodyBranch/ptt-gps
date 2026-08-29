@@ -66,6 +66,9 @@ export const EventSchema = z.object({
   id: z.string(),
   name: z.string(),
   meetId: z.number().int(),
+  /** Event dates (YYYY-MM-DD) — drive sorting and completed/hidden state. */
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   /**
    * Units for published distances (Firebase etc.). Courses keep their own
    * per-race units; the publisher converts. Scoreboards expect one unit per meet.

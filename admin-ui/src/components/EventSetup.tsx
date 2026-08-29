@@ -1,0 +1,538 @@
+import { useEffect, useRef, useState } from 'react';
+import { api } from '../api';
+import type { ConfirmRequest } from './Confirm';
+import type { CourseInfo, EventConfigT, FirebaseConn, FleetRow } from '../types';
+
+/**
+ * Setup for one active event: details & dates, Firebase outputs, what we're
+ * tracking (roles matched to fleet trackers), the event roster, races and
+ * courses. Saves rebuild that event's engines; refused while a race is armed
+ * or live.
+ */
+export function EventSetup({
+  eventId,
+  ask,
+  onSaved,
+}: {
+  eventId: string;
+  ask: (req: ConfirmRequest) => void;
+  onSaved: () => void;
+}) {
+  const [cfg, setCfg] = useState<EventConfigT>();
+  const [courses, setCourses] = useState<CourseInfo[]>([]);
+  const [fleet, setFleet] = useState<FleetRow[]>([]);
+  const [fbConns, setFbConns] = useState<FirebaseConn[]>([]);
+  const [dirty, setDirty] = useState(false);
+  const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string }>();
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const reload = () => {
+    api
+      .getConfig(eventId)
+      .then((c) => {
+        setCfg(c);
+        setDirty(false);
+      })
+      .catch((err) => setMsg({ kind: 'err', text: (err as Error).message }));
+    api.courses().then(setCourses).catch(console.error);
+    api.fleet().then(setFleet).catch(console.error);
+    api.firebaseList().then(setFbConns).catch(console.error);
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(reload, [eventId]);
+
+  if (!cfg) return <div className="loading">Loading setup…</div>;
+
+  const edit = (fn: (c: EventConfigT) => void) => {
+    const next = structuredClone(cfg);
+    fn(next);
+    setCfg(next);
+    setDirty(true);
+    setMsg(undefined);
+  };
+
+  const save = async () => {
+    try {
+      await api.putConfig(eventId, cfg);
+      setDirty(false);
+      setMsg({ kind: 'ok', text: 'Saved — engines rebuilt.' });
+      onSaved();
+      reload();
+    } catch (err) {
+      setMsg({ kind: 'err', text: (err as Error).message });
+    }
+  };
+
+  const uploadCourse = async (file: File) => {
+    try {
+      const text = await file.text();
+      const res = await api.uploadCourse(file.name.replace(/\.kml$/i, ''), text);
+      setMsg({ kind: 'ok', text: `Course ${res.file}: ${res.lengthMi.toFixed(2)} mi, ${res.points} points` });
+      setCourses(await api.courses());
+    } catch (err) {
+      setMsg({ kind: 'err', text: `Course upload failed: ${(err as Error).message}` });
+    }
+  };
+
+  const rosterImeis = new Set(cfg.trackers.map((t) => t.imei));
+  const fleetByImei = new Map(fleet.map((f) => [f.imei, f]));
+
+  const addToRoster = (c: EventConfigT, imei: string) => {
+    if (c.trackers.some((t) => t.imei === imei)) return;
+    const f = fleetByImei.get(imei);
+    c.trackers.push({ imei, label: f?.label ?? imei, hasBattery: f ? !!f.hasBattery : true });
+  };
+
+  const courseFor = (file: string) => courses.find((k) => k.file === file);
+
+  return (
+    <div className="setup">
+      <div className="setup-bar">
+        <span className="setup-title">Setup — {cfg.name}</span>
+        {msg && <span className={`setup-msg ${msg.kind}`}>{msg.text}</span>}
+        <span className="spacer" />
+        <button className="mini" onClick={reload} disabled={!dirty}>
+          Discard changes
+        </button>
+        <button className="mini primary" onClick={save} disabled={!dirty}>
+          Save & rebuild
+        </button>
+      </div>
+
+      <div className="setup-grid">
+        <section>
+          <h3>Event details</h3>
+          <div className="form-row">
+            <label>
+              Name
+              <input value={cfg.name} onChange={(e) => edit((c) => (c.name = e.target.value))} />
+            </label>
+            <label>
+              Meet ID
+              <input value={cfg.meetId} inputMode="numeric" onChange={(e) => edit((c) => (c.meetId = Number(e.target.value) || 0))} />
+            </label>
+          </div>
+          <div className="form-row">
+            <label>
+              Start date
+              <input
+                type="date"
+                value={cfg.startDate ?? ''}
+                onChange={(e) => edit((c) => (c.startDate = e.target.value || undefined))}
+              />
+            </label>
+            <label>
+              End date
+              <input
+                type="date"
+                value={cfg.endDate ?? ''}
+                onChange={(e) => edit((c) => (c.endDate = e.target.value || undefined))}
+              />
+            </label>
+            <label>
+              Output units
+              <select value={cfg.outputUnits} onChange={(e) => edit((c) => (c.outputUnits = e.target.value as EventConfigT['outputUnits']))}>
+                <option value="miles">miles</option>
+                <option value="kilometers">kilometers</option>
+              </select>
+            </label>
+          </div>
+          <div className="form-row">
+            <label>
+              Report interval (s)
+              <input
+                value={cfg.reportIntervalS ?? 10}
+                inputMode="numeric"
+                onChange={(e) => edit((c) => (c.reportIntervalS = Number(e.target.value) || 10))}
+              />
+            </label>
+            <label>
+              Window back
+              <input
+                value={cfg.snapDefaults.minInc}
+                inputMode="decimal"
+                onChange={(e) => edit((c) => (c.snapDefaults.minInc = Number(e.target.value) || 0.2))}
+              />
+            </label>
+            <label>
+              Window ahead
+              <input
+                value={cfg.snapDefaults.maxInc}
+                inputMode="decimal"
+                onChange={(e) => edit((c) => (c.snapDefaults.maxInc = Number(e.target.value) || 1))}
+              />
+            </label>
+            <label>
+              Initial window
+              <input
+                value={cfg.snapDefaults.initialMax}
+                inputMode="decimal"
+                onChange={(e) => edit((c) => (c.snapDefaults.initialMax = Number(e.target.value) || 0.5))}
+              />
+            </label>
+          </div>
+
+          <EventPinRow eventId={eventId} ask={ask} onMsg={setMsg} />
+
+          <h4>Firebase outputs</h4>
+          {cfg.firebase.length === 0 && (
+            <p className="hint">None — this event runs with the debug publisher (nothing leaves the box).</p>
+          )}
+          {cfg.firebase.map((t, i) => (
+            <div className="form-row" key={i}>
+              <label>
+                Connection
+                <select value={t.connection} onChange={(e) => edit((c) => (c.firebase[i].connection = e.target.value))}>
+                  {!fbConns.some((x) => x.name === t.connection) && <option value={t.connection}>{t.connection} (missing!)</option>}
+                  {fbConns.map((x) => (
+                    <option key={x.name} value={x.name}>
+                      {x.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Flavor
+                <select value={t.flavor} onChange={(e) => edit((c) => (c.firebase[i].flavor = e.target.value as 'ptt' | 'krush'))}>
+                  <option value="ptt">ptt (Scoreboard + Clock)</option>
+                  <option value="krush">krush (Clock + GPSMap)</option>
+                </select>
+              </label>
+              <button className="mini danger self-end" onClick={() => edit((c) => c.firebase.splice(i, 1))}>
+                ✕
+              </button>
+            </div>
+          ))}
+          <button
+            className="mini"
+            disabled={fbConns.length === 0}
+            title={fbConns.length === 0 ? 'Add a Firebase connection on the System page first' : ''}
+            onClick={() => edit((c) => c.firebase.push({ connection: fbConns[0].name, flavor: 'ptt' }))}
+          >
+            + Add Firebase output
+          </button>
+        </section>
+
+        <section>
+          <h3>What we're tracking</h3>
+          <p className="hint">
+            Define the roles, then match each to fleet trackers — ★ first is the primary, the rest are
+            failover backups in order.
+          </p>
+          {cfg.roles.map((role, ri) => (
+            <div className="role-edit" key={ri}>
+              <div className="form-row">
+                <label>
+                  Key
+                  <input value={role.key} onChange={(e) => edit((c) => (c.roles[ri].key = e.target.value))} />
+                </label>
+                <label>
+                  Label
+                  <input value={role.label} onChange={(e) => edit((c) => (c.roles[ri].label = e.target.value))} />
+                </label>
+                <label>
+                  Map cmd
+                  <input
+                    className="w-num"
+                    value={role.cmd ?? ''}
+                    onChange={(e) => edit((c) => (c.roles[ri].cmd = e.target.value === '' ? undefined : Number(e.target.value)))}
+                  />
+                </label>
+                <label>
+                  Clock slot
+                  <input
+                    className="w-num"
+                    value={role.clockSlot ?? ''}
+                    onChange={(e) =>
+                      edit((c) => (c.roles[ri].clockSlot = e.target.value === '' ? undefined : Number(e.target.value)))
+                    }
+                  />
+                </label>
+                <label>
+                  Map event
+                  <input value={role.mapEvent ?? ''} onChange={(e) => edit((c) => (c.roles[ri].mapEvent = e.target.value || undefined))} />
+                </label>
+                <button className="mini danger self-end" onClick={() => edit((c) => c.roles.splice(ri, 1))}>
+                  ✕
+                </button>
+              </div>
+              <div className="role-trackers-edit">
+                {role.trackers.map((imei, ti) => {
+                  const t = cfg.trackers.find((x) => x.imei === imei);
+                  return (
+                    <span className="chip" key={imei}>
+                      {ti === 0 ? '★ ' : ''}
+                      {t?.label ?? imei}
+                      {ti > 0 && (
+                        <button
+                          title="Move up (first = primary)"
+                          onClick={() =>
+                            edit((c) => {
+                              const arr = c.roles[ri].trackers;
+                              [arr[ti - 1], arr[ti]] = [arr[ti], arr[ti - 1]];
+                            })
+                          }
+                        >
+                          ↑
+                        </button>
+                      )}
+                      <button onClick={() => edit((c) => c.roles[ri].trackers.splice(ti, 1))}>✕</button>
+                    </span>
+                  );
+                })}
+                <select
+                  value=""
+                  onChange={(e) => {
+                    const imei = e.target.value;
+                    if (imei) {
+                      edit((c) => {
+                        addToRoster(c, imei);
+                        c.roles[ri].trackers.push(imei);
+                      });
+                    }
+                  }}
+                >
+                  <option value="">+ match tracker…</option>
+                  {fleet
+                    .filter((f) => !f.retired && !role.trackers.includes(f.imei))
+                    .map((f) => {
+                      const other = f.events.some((e) => e.id !== cfg.id);
+                      return (
+                        <option key={f.imei} value={f.imei}>
+                          {f.label}
+                          {rosterImeis.has(f.imei) ? '' : ' (fleet)'}
+                          {other ? ' — ⚠ in another event' : ''}
+                        </option>
+                      );
+                    })}
+                </select>
+              </div>
+            </div>
+          ))}
+          <button className="mini" onClick={() => edit((c) => c.roles.push({ key: '', label: '', trackers: [] }))}>
+            + Add role
+          </button>
+
+          <h4>Event roster</h4>
+          <p className="hint">Fleet trackers matched to this event; labels here are per-event.</p>
+          <table className="setup-table">
+            <tbody>
+              {cfg.trackers.map((t, i) => {
+                const f = fleetByImei.get(t.imei);
+                return (
+                  <tr key={t.imei || i}>
+                    <td>
+                      <span>{f?.label ?? '—'}</span> <span className="mono dim">{t.imei}</span>
+                    </td>
+                    <td>
+                      <input value={t.label} onChange={(e) => edit((c) => (c.trackers[i].label = e.target.value))} />
+                    </td>
+                    <td>
+                      <button
+                        className="mini danger"
+                        onClick={() =>
+                          edit((c) => {
+                            const imei = c.trackers[i].imei;
+                            c.trackers.splice(i, 1);
+                            for (const r of c.roles) r.trackers = r.trackers.filter((x) => x !== imei);
+                          })
+                        }
+                      >
+                        ✕
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <select
+            value=""
+            onChange={(e) => {
+              if (e.target.value) edit((c) => addToRoster(c, e.target.value));
+            }}
+          >
+            <option value="">+ Add from fleet…</option>
+            {fleet
+              .filter((f) => !f.retired && !rosterImeis.has(f.imei))
+              .map((f) => {
+                const other = f.events.some((e) => e.id !== cfg.id);
+                return (
+                  <option key={f.imei} value={f.imei}>
+                    {f.label} ({f.imei}){other ? ' — ⚠ in another event' : ''}
+                  </option>
+                );
+              })}
+          </select>
+        </section>
+
+        <section>
+          <h3>Races</h3>
+          <table className="setup-table">
+            <thead>
+              <tr><th>ID</th><th>Name</th><th>Course</th><th>Distance</th><th>Units</th><th></th></tr>
+            </thead>
+            <tbody>
+              {cfg.races.map((race, i) => {
+                const k = courseFor(race.course);
+                return (
+                  <tr key={i}>
+                    <td>
+                      <input value={race.id} onChange={(e) => edit((c) => (c.races[i].id = e.target.value))} />
+                    </td>
+                    <td>
+                      <input value={race.name} onChange={(e) => edit((c) => (c.races[i].name = e.target.value))} />
+                    </td>
+                    <td>
+                      <select value={race.course} onChange={(e) => edit((c) => (c.races[i].course = e.target.value))}>
+                        {!courses.some((x) => x.file === race.course) && <option value={race.course}>{race.course}</option>}
+                        {courses.map((x) => (
+                          <option key={x.file} value={x.file}>
+                            {x.file.replace('courses/', '')}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="num course-dist">
+                      {k ? (race.units === 'miles' ? `${k.lengthMi.toFixed(2)} mi` : `${k.lengthKm.toFixed(2)} km`) : '—'}
+                    </td>
+                    <td>
+                      <select value={race.units} onChange={(e) => edit((c) => (c.races[i].units = e.target.value as 'miles' | 'kilometers'))}>
+                        <option value="miles">miles</option>
+                        <option value="kilometers">kilometers</option>
+                      </select>
+                    </td>
+                    <td>
+                      <button
+                        className="mini danger"
+                        onClick={() =>
+                          ask({
+                            title: `Remove race "${race.name || race.id}"?`,
+                            confirmLabel: 'Remove',
+                            danger: true,
+                            onConfirm: () => edit((c) => c.races.splice(i, 1)),
+                          })
+                        }
+                      >
+                        ✕
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <button
+            className="mini"
+            onClick={() => edit((c) => c.races.push({ id: '', name: '', course: courses[0]?.file ?? '', units: 'miles' }))}
+          >
+            + Add race
+          </button>
+
+          <h4>Courses (shared by all events)</h4>
+          <table className="setup-table">
+            <tbody>
+              {courses.map((k) => (
+                <tr key={k.file}>
+                  <td className="mono">{k.file}</td>
+                  <td>
+                    {k.lengthMi.toFixed(2)} mi / {k.lengthKm.toFixed(2)} km
+                  </td>
+                  <td>{k.points} pts</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".kml"
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) uploadCourse(f);
+              e.target.value = '';
+            }}
+          />
+          <button className="mini" onClick={() => fileRef.current?.click()}>
+            ⬆ Upload KML course
+          </button>
+          <p className="hint">Export from Google Earth as a single-path LineString. Length is measured on upload.</p>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function EventPinRow({
+  eventId,
+  ask,
+  onMsg,
+}: {
+  eventId: string;
+  ask: (req: ConfirmRequest) => void;
+  onMsg: (m: { kind: 'ok' | 'err'; text: string }) => void;
+}) {
+  const [enabled, setEnabled] = useState(false);
+  const [pin, setPin] = useState('');
+
+  useEffect(() => {
+    api.eventViewerPinEnabled(eventId).then(setEnabled).catch(() => {});
+  }, [eventId]);
+
+  return (
+    <>
+      <h4>Viewer PIN for this event</h4>
+      <p className="hint">
+        Grants view-only access to <b>this event only</b>. The global PIN (System page) already covers
+        every event — don't duplicate it here.{enabled ? ' Currently ENABLED.' : ' Currently not set.'}
+      </p>
+      <div className="form-row">
+        <label>
+          {enabled ? 'New PIN (replaces current)' : 'PIN (4–12 digits)'}
+          <input value={pin} inputMode="numeric" onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))} />
+        </label>
+        <button
+          className="mini self-end"
+          disabled={pin.length < 4}
+          onClick={async () => {
+            try {
+              await api.setEventViewerPin(eventId, pin);
+              setEnabled(true);
+              setPin('');
+              onMsg({ kind: 'ok', text: 'Event viewer PIN set — all viewer sessions were signed out.' });
+            } catch (err) {
+              onMsg({ kind: 'err', text: (err as Error).message });
+            }
+          }}
+        >
+          {enabled ? 'Replace' : 'Set PIN'}
+        </button>
+        {enabled && (
+          <button
+            className="mini danger self-end"
+            onClick={() =>
+              ask({
+                title: 'Remove this event’s viewer PIN?',
+                body: 'Viewers using it are signed out. The global PIN keeps working.',
+                confirmLabel: 'Remove',
+                danger: true,
+                onConfirm: async () => {
+                  try {
+                    await api.setEventViewerPin(eventId, null);
+                    setEnabled(false);
+                    onMsg({ kind: 'ok', text: 'Event viewer PIN removed.' });
+                  } catch (err) {
+                    onMsg({ kind: 'err', text: (err as Error).message });
+                  }
+                },
+              })
+            }
+          >
+            Remove
+          </button>
+        )}
+      </div>
+    </>
+  );
+}

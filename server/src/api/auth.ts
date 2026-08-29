@@ -59,6 +59,8 @@ export type Role = 'admin' | 'staff' | 'viewer';
 export interface AuthContext {
   username: string;
   role: Role;
+  /** Viewer PIN scope: undefined = global (all events), else that event only. */
+  eventScope?: string;
 }
 
 const VIEWER_PIN_KEY = 'viewer-pin-hash';
@@ -96,16 +98,32 @@ export class AuthService {
     return token;
   }
 
+  private eventPinKey(eventId: string): string {
+    return `${VIEWER_PIN_KEY}:${eventId}`;
+  }
+
   /**
-   * PIN entry for view-only access — shared with announcers/spotters/displays.
-   * Rate-limited with the same per-IP lockout as password login.
+   * PIN entry for view-only access. The global PIN sees every active event;
+   * a per-event PIN is scoped to that event only. Rate-limited with the same
+   * per-IP lockout as password login.
    */
-  loginViewer(pin: string, ip: string): string | null {
+  loginViewer(pin: string, ip: string): { token: string; eventScope?: string } | null {
     const a = this.attempts.get(ip);
     if (a && a.lockedUntil > Date.now()) return null;
-    const stored = this.store.getSetting(VIEWER_PIN_KEY);
-    const ok = stored !== undefined && verifyPassword(pin, stored);
-    if (!ok) {
+
+    let scope: string | undefined | false = false;
+    const global = this.store.getSetting(VIEWER_PIN_KEY);
+    if (global !== undefined && verifyPassword(pin, global)) {
+      scope = undefined; // global access
+    } else {
+      for (const row of this.store.listSettingsByPrefix(`${VIEWER_PIN_KEY}:`)) {
+        if (verifyPassword(pin, row.value)) {
+          scope = row.key.slice(VIEWER_PIN_KEY.length + 1);
+          break;
+        }
+      }
+    }
+    if (scope === false) {
       const next: Attempts = { fails: (a?.fails ?? 0) + 1, lockedUntil: 0 };
       if (next.fails >= 5) {
         next.lockedUntil = Date.now() + 30_000;
@@ -116,12 +134,19 @@ export class AuthService {
     }
     this.attempts.delete(ip);
     const token = crypto.randomBytes(32).toString('hex');
-    this.store.insertToken(sha256(token), 'viewer', Date.now() + TOKEN_TTL_MS, 'viewer');
-    return token;
+    // Scope rides in the token's username: 'viewer' or 'viewer:<eventId>'.
+    this.store.insertToken(sha256(token), scope ? `viewer:${scope}` : 'viewer', Date.now() + TOKEN_TTL_MS, 'viewer');
+    return { token, eventScope: scope };
   }
 
-  viewerPinEnabled(): boolean {
+  viewerPinEnabled(eventId?: string): boolean {
+    if (eventId !== undefined) return this.store.getSetting(this.eventPinKey(eventId)) !== undefined;
     return this.store.getSetting(VIEWER_PIN_KEY) !== undefined;
+  }
+
+  /** Any PIN configured at all (login screen shows the viewer option). */
+  anyViewerPinEnabled(): boolean {
+    return this.viewerPinEnabled() || this.store.listSettingsByPrefix(`${VIEWER_PIN_KEY}:`).length > 0;
   }
 
   /**
@@ -144,10 +169,29 @@ export class AuthService {
     return token;
   }
 
-  /** Set (or clear with null) the viewer PIN; existing viewer sessions are revoked. */
-  setViewerPin(pin: string | null): void {
-    if (pin === null) this.store.deleteSetting(VIEWER_PIN_KEY);
-    else this.store.setSetting(VIEWER_PIN_KEY, hashPassword(pin));
+  /**
+   * Set (or clear with null) a viewer PIN — global, or scoped to one event.
+   * A PIN may not duplicate the global PIN or another scope's PIN (login would
+   * be ambiguous — and a global PIN already covers every event). All viewer
+   * sessions are revoked on any change.
+   */
+  setViewerPin(pin: string | null, eventId?: string): void {
+    const key = eventId !== undefined ? this.eventPinKey(eventId) : VIEWER_PIN_KEY;
+    if (pin === null) {
+      this.store.deleteSetting(key);
+    } else {
+      const global = this.store.getSetting(VIEWER_PIN_KEY);
+      if (eventId !== undefined && global !== undefined && verifyPassword(pin, global)) {
+        throw new Error('That PIN is already the global viewer PIN — it already works for this event');
+      }
+      for (const row of this.store.listSettingsByPrefix(`${VIEWER_PIN_KEY}:`)) {
+        if (row.key === key) continue;
+        if (verifyPassword(pin, row.value)) {
+          throw new Error(`That PIN is already used by event "${row.key.slice(VIEWER_PIN_KEY.length + 1)}"`);
+        }
+      }
+      this.store.setSetting(key, hashPassword(pin));
+    }
     this.store.deleteTokensByRole('viewer');
   }
 
@@ -168,7 +212,10 @@ export class AuthService {
     if (row.expires_at_ms - Date.now() < TOKEN_TTL_MS / 2) {
       this.store.touchToken(sha256(token), Date.now() + TOKEN_TTL_MS);
     }
-    if (row.role === 'viewer') return { username: 'viewer', role: 'viewer' };
+    if (row.role === 'viewer') {
+      const eventScope = row.username.startsWith('viewer:') ? row.username.slice('viewer:'.length) : undefined;
+      return { username: 'viewer', role: 'viewer', eventScope };
+    }
     const user = this.store.getUser(row.username);
     if (!user) return null; // account was removed
     return { username: row.username, role: user.role === 'admin' ? 'admin' : 'staff' };
@@ -192,7 +239,11 @@ export class AuthService {
    * Viewer tokens are read-only at the API level — any non-GET request is
    * refused server-side, so hiding buttons in the UI is cosmetic, not the lock.
    */
-  middleware = (req: Request & { operator?: string; role?: Role }, res: Response, next: NextFunction): void => {
+  middleware = (
+    req: Request & { operator?: string; role?: Role; eventScope?: string },
+    res: Response,
+    next: NextFunction,
+  ): void => {
     const auth = this.check(this.tokenFromRequest(req));
     if (!auth) {
       res.status(401).json({ ok: false, error: 'not authenticated' });
@@ -202,8 +253,20 @@ export class AuthService {
       res.status(403).json({ ok: false, error: 'view-only access' });
       return;
     }
+    // Event-scoped viewers may only read the state snapshot (filtered by the
+    // route) and their own event's course geometry.
+    if (auth.role === 'viewer' && auth.eventScope !== undefined) {
+      const ok =
+        req.path === '/state' ||
+        new RegExp(`^/events/${auth.eventScope.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/races/[^/]+/course$`).test(req.path);
+      if (!ok) {
+        res.status(403).json({ ok: false, error: 'access limited to your event' });
+        return;
+      }
+    }
     req.operator = auth.username;
     req.role = auth.role;
+    req.eventScope = auth.eventScope;
     next();
   };
 

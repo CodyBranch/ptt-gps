@@ -2,23 +2,93 @@
   "id": "ironman-utah-2022",
   "name": "Ironman 70.3 Worlds St George 2022 (replay validation)",
   "meetId": 9998,
-  "listeners": [{ "name": "queclink", "port": 1000 }],
+  "listeners": [
+    {
+      "name": "queclink",
+      "port": 1000
+    }
+  ],
   "trackers": [
-    { "imei": "015181000131111", "label": "Lead Men" },
-    { "imei": "015181000134537", "label": "Lead Men B" },
-    { "imei": "015181000128000", "label": "Lead Women" },
-    { "imei": "015181000131640", "label": "Lead Women B" },
-    { "imei": "015181000119835", "label": "Chase Men" },
-    { "imei": "015181000121005", "label": "Chase Women" }
+    {
+      "imei": "015181000131111",
+      "label": "Lead Men"
+    },
+    {
+      "imei": "015181000134537",
+      "label": "Lead Men B"
+    },
+    {
+      "imei": "015181000128000",
+      "label": "Lead Women"
+    },
+    {
+      "imei": "015181000131640",
+      "label": "Lead Women B"
+    },
+    {
+      "imei": "015181000119835",
+      "label": "Chase Men"
+    },
+    {
+      "imei": "015181000121005",
+      "label": "Chase Women"
+    }
   ],
   "roles": [
-    { "key": "mens_lead", "label": "Men's Lead", "trackers": ["015181000131111", "015181000134537"], "cmd": 2, "clockSlot": 3, "mapEvent": "elite_men" },
-    { "key": "womens_lead", "label": "Women's Lead", "trackers": ["015181000128000", "015181000131640"], "cmd": 0, "clockSlot": 1, "mapEvent": "elite_women" },
-    { "key": "mens_chase", "label": "Men's Chase", "trackers": ["015181000119835"], "cmd": 3, "mapEvent": "elite_men_chase" },
-    { "key": "womens_chase", "label": "Women's Chase", "trackers": ["015181000121005"], "cmd": 1, "mapEvent": "elite_women_chase" }
+    {
+      "key": "mens_lead",
+      "label": "Men's Lead",
+      "trackers": [
+        "015181000131111",
+        "015181000134537"
+      ],
+      "cmd": 2,
+      "clockSlot": 3,
+      "mapEvent": "elite_men"
+    },
+    {
+      "key": "womens_lead",
+      "label": "Women's Lead",
+      "trackers": [
+        "015181000128000",
+        "015181000131640"
+      ],
+      "cmd": 0,
+      "clockSlot": 1,
+      "mapEvent": "elite_women"
+    },
+    {
+      "key": "mens_chase",
+      "label": "Men's Chase",
+      "trackers": [
+        "015181000119835"
+      ],
+      "cmd": 3,
+      "mapEvent": "elite_men_chase"
+    },
+    {
+      "key": "womens_chase",
+      "label": "Women's Chase",
+      "trackers": [
+        "015181000121005"
+      ],
+      "cmd": 1,
+      "mapEvent": "elite_women_chase"
+    }
   ],
-  "snapDefaults": { "minInc": 0.2, "maxInc": 1.0, "initialMax": 0.5 },
+  "snapDefaults": {
+    "minInc": 0.2,
+    "maxInc": 1.0,
+    "initialMax": 0.5
+  },
   "races": [
-    { "id": "run", "name": "70.3 Run", "course": "courses/ironman-utah-703.kml", "units": "miles" }
-  ]
+    {
+      "id": "run",
+      "name": "70.3 Run",
+      "course": "courses/ironman-utah-703.kml",
+      "units": "miles"
+    }
+  ],
+  "startDate": "2022-10-28",
+  "endDate": "2022-10-29"
 }

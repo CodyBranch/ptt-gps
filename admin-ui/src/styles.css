@@ -380,6 +380,32 @@ button.mini.has-issues { border-color: var(--warn); color: var(--warn); font-wei
 .map-legend > span { display: inline-flex; align-items: center; gap: 6px; }
 .legend-swatch { width: 14px; height: 4px; border-radius: 2px; display: inline-block; }
 
+/* Event sub-nav (races within the selected event) */
+.event-subnav {
+  display: flex; gap: 6px; flex-wrap: wrap; padding: 6px 14px;
+  background: var(--bg); border-bottom: 1px solid var(--border);
+}
+.event-subnav button {
+  background: var(--panel); color: var(--text); border: 1px solid var(--border);
+  padding: 4px 12px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 7px;
+  font-size: 13px;
+}
+.event-subnav button.active { border-color: var(--brand-red); box-shadow: inset 0 -2px 0 var(--brand-red); }
+.event-chip { font-weight: 600; }
+.setup-grid.one-col { grid-template-columns: 1fr; }
+.section-gap { margin-top: 18px; }
+.event-card-actions { display: flex; gap: 8px; margin-top: 4px; }
+.events-layout { display: grid; grid-template-columns: 1fr 340px; gap: 16px; padding: 16px; align-items: start; }
+.events-column { display: flex; flex-direction: column; gap: 10px; }
+.event-create label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--dim); margin-bottom: 8px; }
+.event-create input, .event-create select {
+  background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 5px;
+  padding: 7px 9px; font-size: 13px;
+}
+.event-create .form-row label { margin-bottom: 0; }
+.completed-toggle { align-self: flex-start; }
+@media (max-width: 900px) { .events-layout { grid-template-columns: 1fr; } }
+
 /* Home dashboard */
 .home-grid {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; padding: 18px;

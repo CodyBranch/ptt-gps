@@ -5,47 +5,37 @@ import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { Server as SocketIOServer } from 'socket.io';
 import type { App } from '../app.js';
-import { listEvents, createEvent, eventRosters, type ConfigManager } from '../config/manager.js';
+import { listEvents, createEvent, eventRosters, listCoursesIn, saveCourseIn, type ConfigManager } from '../config/manager.js';
 import { loadCourse } from '../engine/course.js';
 import type { Forwarder } from '../ingest/forwarder.js';
+import type { FixGate } from '../ingest/hygiene.js';
 import type { FirebaseHub } from '../outputs/hub.js';
+import type { Store } from '../state/store.js';
 import { resolveRace } from '../config/schema.js';
 import { SimEngine, type SimTrackerCfg } from '../sim/engine.js';
-import { AuthService, hashPassword } from './auth.js';
+import { AuthService, hashPassword, type Role } from './auth.js';
 import { TunnelManager } from './tunnel.js';
 
-export interface AppHolder {
-  app: App;
-  /** Rebuild engines/publishers from an edited config (setup UI saves). */
-  rebuild: (json: unknown) => void;
-  readonly manager: ConfigManager;
-  eventsDir: string;
+/** Everything the API needs from the multi-event runtime in index.ts. */
+export interface ServerContext {
+  store: Store;
   hub: FirebaseHub;
   forwarder: Forwarder;
-  /** Switch the running server to another event file in eventsDir. */
-  activateEvent: (file: string) => void;
+  eventsDir: string;
+  apps: Map<string, App>;
+  managers: Map<string, ConfigManager>;
+  gate: FixGate;
+  lastSeen: Map<string, number>;
+  publishing: { readonly enabled: boolean; set(enabled: boolean, by?: string): void };
+  loadEvent: (file: string) => App;
+  unloadEvent: (eventId: string) => void;
+  rebuildEvent: (eventId: string, json: unknown) => void;
+  snapshotAll: () => unknown;
+  snapshotFor: (eventId: string) => unknown;
+  onSimulatedDistance: (data: Record<string, unknown>) => void;
 }
 
-/**
- * REST for operator commands + socket.io for live streaming to the admin UI.
- * Serves the built admin UI (admin-ui/dist) when present, so operators reach
- * the console at http://<server>:<port>/ with nothing else running.
- */
-export function startApi(holder: AppHolder, port: number): { httpServer: http.Server; io: SocketIOServer } {
-  // Routes capture `app` once, but the holder swaps App instances on config
-  // edits/event activation — so resolve every access against the current
-  // instance, and bind methods to it so `this` mutations land on the real App.
-  const app = new Proxy({} as App, {
-    get: (_t, prop) => {
-      const current = holder.app as unknown as Record<string | symbol, unknown>;
-      const v = current[prop];
-      return typeof v === 'function' ? (v as (...a: unknown[]) => unknown).bind(holder.app) : v;
-    },
-    set: (_t, prop, value) => {
-      (holder.app as unknown as Record<string | symbol, unknown>)[prop] = value;
-      return true;
-    },
-  }) as App;
+export function startApi(ctx: ServerContext, port: number): { httpServer: http.Server; io: SocketIOServer; broadcast: (event: string, payload: unknown) => void } {
   const ex = express();
   ex.use(express.json({ limit: '5mb' }));
 
@@ -61,11 +51,21 @@ export function startApi(holder: AppHolder, port: number): { httpServer: http.Se
 
   const httpServer = http.createServer(ex);
   const io = new SocketIOServer(httpServer, { cors: { origin: true } });
-  const auth = new AuthService(app.store);
+  const auth = new AuthService(ctx.store);
+
+  /** Event-tagged payloads go to full-access clients and that event's scoped
+   *  viewers; untagged (global) payloads go to everyone. */
+  const broadcast = (event: string, payload: unknown): void => {
+    const eid = (payload as { eventId?: unknown } | undefined)?.eventId;
+    if (typeof eid === 'string') io.to('all-events').to(`ev:${eid}`).emit(event, payload);
+    else io.emit(event, payload);
+  };
+  const broadcastSnapshot = (): void => {
+    io.to('all-events').emit('snapshot', ctx.snapshotAll());
+    for (const id of ctx.apps.keys()) io.to(`ev:${id}`).emit('snapshot', ctx.snapshotFor(id));
+  };
 
   io.use((socket, next) => {
-    // Machine feeds (e.g. the NYC split-time source) authenticate with the
-    // ingest token: socket.io `auth: { token }` or `?token=` on the query.
     const t = (socket.handshake.auth as Record<string, unknown> | undefined)?.token ?? socket.handshake.query?.token;
     if (typeof t === 'string' && auth.ingestTokenValid(t)) {
       socket.data.ingest = true;
@@ -76,32 +76,39 @@ export function startApi(holder: AppHolder, port: number): { httpServer: http.Se
     socket.data.role = user.role;
     next();
   });
+  io.use((socket, next) => {
+    // room membership drives which live updates each client receives
+    if (socket.data.ingest) return next();
+    const c = auth.check(auth.tokenFromRequest(socket.handshake));
+    socket.data.eventScope = c?.eventScope;
+    next();
+  });
   io.on('connection', (socket) => {
     if (socket.data.ingest) {
       console.log('[splits] external feed connected');
       socket.on('disconnect', () => console.log('[splits] external feed disconnected'));
+    } else if (typeof socket.data.eventScope === 'string') {
+      socket.join(`ev:${socket.data.eventScope}`);
+      socket.emit('snapshot', ctx.snapshotFor(socket.data.eventScope));
     } else {
-      socket.emit('snapshot', app.snapshot());
+      socket.join('all-events');
+      socket.emit('snapshot', ctx.snapshotAll());
     }
-    // Legacy NYC event name and payload: { tracker, distance, raceTime }.
-    // Accepted from the ingest token or any staff/admin session.
+    // Legacy NYC split feed: raceTimeUpdate { tracker, distance, raceTime }.
     socket.on('raceTimeUpdate', (data) => {
       if (socket.data.ingest || (socket.data.role && socket.data.role !== 'viewer')) {
-        app.onSimulatedDistance(data ?? {});
+        ctx.onSimulatedDistance(data ?? {});
       }
     });
   });
 
   // --- unauthenticated: first-run bootstrap ---
-  // No default credentials exist by design. On a fresh server (zero users)
-  // the login screen offers creating the first admin account; the endpoint
-  // hard-locks the moment any user exists.
   ex.get('/api/setup-needed', (_req, res) => {
-    res.json({ needed: app.store.countUsers() === 0 });
+    res.json({ needed: ctx.store.countUsers() === 0 });
   });
 
   ex.post('/api/first-admin', (req, res) => {
-    if (app.store.countUsers() > 0) {
+    if (ctx.store.countUsers() > 0) {
       return void res.status(403).json({ ok: false, error: 'Setup is already complete' });
     }
     const { username, password } = req.body ?? {};
@@ -111,52 +118,50 @@ export function startApi(holder: AppHolder, port: number): { httpServer: http.Se
     if (typeof password !== 'string' || password.length < 8) {
       return void res.status(400).json({ ok: false, error: 'Password must be at least 8 characters' });
     }
-    app.store.addUser(username, hashPassword(password), 'admin');
+    ctx.store.addUser(username, hashPassword(password), 'admin');
     const ip = (req.socket.remoteAddress ?? '?').replace('::ffff:', '');
     const token = auth.login(username, password, ip)!;
     res.setHeader('Set-Cookie', auth.cookie(token));
     res.json({ ok: true, username, role: 'admin' });
   });
 
-  // --- unauthenticated: login/logout/me ---
+  // --- unauthenticated: login/logout/me + split feed ingest ---
   ex.post('/api/login', (req, res) => {
     const { username, password } = req.body ?? {};
     const ip = (req.socket.remoteAddress ?? '?').replace('::ffff:', '');
-    const token = typeof username === 'string' && typeof password === 'string'
-      ? auth.login(username, password, ip)
-      : null;
+    const token =
+      typeof username === 'string' && typeof password === 'string' ? auth.login(username, password, ip) : null;
     if (!token) return void res.status(401).json({ ok: false, error: 'invalid credentials' });
+    const role = ctx.store.getUser(username)?.role === 'admin' ? 'admin' : 'staff';
     res.setHeader('Set-Cookie', auth.cookie(token));
-    res.json({ ok: true, username });
+    res.json({ ok: true, username, role });
   });
 
   ex.post('/api/viewer-login', (req, res) => {
     const { pin } = req.body ?? {};
     const ip = (req.socket.remoteAddress ?? '?').replace('::ffff:', '');
-    if (!auth.viewerPinEnabled()) {
+    if (!auth.anyViewerPinEnabled()) {
       return void res.status(404).json({ ok: false, error: 'Viewer access is not enabled for this server' });
     }
-    const token = typeof pin === 'string' ? auth.loginViewer(pin, ip) : null;
-    if (!token) return void res.status(401).json({ ok: false, error: 'invalid PIN' });
-    res.setHeader('Set-Cookie', auth.cookie(token));
-    res.json({ ok: true, username: 'viewer', role: 'viewer' });
+    const result = typeof pin === 'string' ? auth.loginViewer(pin, ip) : null;
+    if (!result) return void res.status(401).json({ ok: false, error: 'invalid PIN' });
+    res.setHeader('Set-Cookie', auth.cookie(result.token));
+    res.json({ ok: true, username: 'viewer', role: 'viewer', eventScope: result.eventScope ?? null });
   });
 
   ex.get('/api/viewer-enabled', (_req, res) => {
-    res.json({ enabled: auth.viewerPinEnabled() });
+    res.json({ enabled: auth.anyViewerPinEnabled() });
   });
 
-  // REST alternative for the split feed: X-Ingest-Token header (or an
-  // operator session). Same payload as the socket event.
   ex.post('/api/splits', (req, res) => {
     const headerToken = req.headers['x-ingest-token'];
     const viaToken = typeof headerToken === 'string' && auth.ingestTokenValid(headerToken);
-    const ctx = viaToken ? null : auth.check(auth.tokenFromRequest(req));
-    if (!viaToken && (!ctx || ctx.role === 'viewer')) {
+    const c = viaToken ? null : auth.check(auth.tokenFromRequest(req));
+    if (!viaToken && (!c || c.role === 'viewer')) {
       return void res.status(401).json({ ok: false, error: 'ingest token or operator session required' });
     }
     const updates = Array.isArray(req.body) ? req.body : [req.body];
-    for (const u of updates) app.onSimulatedDistance(u ?? {});
+    for (const u of updates) ctx.onSimulatedDistance(u ?? {});
     res.json({ ok: true, accepted: updates.length });
   });
 
@@ -167,29 +172,15 @@ export function startApi(holder: AppHolder, port: number): { httpServer: http.Se
   });
 
   ex.get('/api/me', (req, res) => {
-    const ctx = auth.check(auth.tokenFromRequest(req));
-    if (!ctx) return void res.status(401).json({ ok: false });
-    res.json({ ok: true, username: ctx.username, role: ctx.role });
+    const c = auth.check(auth.tokenFromRequest(req));
+    if (!c) return void res.status(401).json({ ok: false });
+    res.json({ ok: true, username: c.username, role: c.role, eventScope: c.eventScope ?? null });
   });
 
   // --- everything below requires a logged-in operator ---
   ex.use('/api', auth.middleware);
 
-  ex.get('/api/state', (_req, res) => {
-    res.json(app.snapshot());
-  });
-
-  ex.get('/api/races/:raceId/course', (req, res) => {
-    const engine = app.engines.get(req.params.raceId);
-    if (!engine) return void res.status(404).json({ error: 'unknown race' });
-    res.json({ line: engine.course.line, length: engine.course.length, units: engine.course.units });
-  });
-
-  ex.get('/api/devices', (_req, res) => {
-    res.json(app.store.devices());
-  });
-
-  type OpRequest = express.Request & { operator?: string };
+  type OpRequest = express.Request & { operator?: string; role?: Role };
   const act = (fn: (req: OpRequest) => unknown) => (req: express.Request, res: express.Response) => {
     try {
       res.json({ ok: true, result: fn(req as OpRequest) ?? null });
@@ -198,50 +189,267 @@ export function startApi(holder: AppHolder, port: number): { httpServer: http.Se
     }
   };
 
+  const eventApp = (req: express.Request): App => {
+    const app = ctx.apps.get(req.params.eventId as string);
+    if (!app) throw new Error(`Event "${req.params.eventId}" is not active`);
+    return app;
+  };
+  const eventManager = (req: express.Request): ConfigManager => {
+    const m = ctx.managers.get(req.params.eventId as string);
+    if (!m) throw new Error(`Event "${req.params.eventId}" is not active`);
+    return m;
+  };
+
+  ex.get('/api/state', (req, res) => {
+    const scope = (req as OpRequest & { eventScope?: string }).eventScope;
+    res.json(scope !== undefined ? ctx.snapshotFor(scope) : ctx.snapshotAll());
+  });
+
+  ex.get('/api/devices', (_req, res) => {
+    res.json(ctx.store.devices());
+  });
+
+  // --- race operations (event-scoped) ---
+
+  ex.get('/api/events/:eventId/races/:raceId/course', (req, res) => {
+    try {
+      const engine = eventApp(req).engines.get(req.params.raceId as string);
+      if (!engine) return void res.status(404).json({ error: 'unknown race' });
+      res.json({ line: engine.course.line, length: engine.course.length, units: engine.course.units });
+    } catch (err) {
+      res.status(404).json({ error: (err as Error).message });
+    }
+  });
+
   ex.post(
-    '/api/races/:raceId/lifecycle',
-    act((req) => app.lifecycle(req.params.raceId as string, req.body.action, req.body.atMs, req.operator)),
+    '/api/events/:eventId/races/:raceId/lifecycle',
+    act((req) => eventApp(req).lifecycle(req.params.raceId as string, req.body.action, req.body.atMs, req.operator)),
   );
 
   ex.post(
-    '/api/races/:raceId/roles/:roleKey/active',
+    '/api/events/:eventId/races/:raceId/roles/:roleKey/active',
     act((req) => {
+      const app = eventApp(req);
       const engine = app.engines.get(req.params.raceId as string);
       if (!engine) throw new Error('unknown race');
       engine.setActive(req.params.roleKey as string, req.body.imei, req.operator);
-      io.emit('race', app.raceSnapshot(req.params.raceId as string));
+      broadcast('race', app.raceSnapshot(req.params.raceId as string));
     }),
   );
 
   ex.post(
-    '/api/races/:raceId/roles/:roleKey/source',
+    '/api/events/:eventId/races/:raceId/roles/:roleKey/source',
     act((req) => {
+      const app = eventApp(req);
       const engine = app.engines.get(req.params.raceId as string);
       if (!engine) throw new Error('unknown race');
-      engine.setSource(req.params.roleKey as string, req.body.source, (req as OpRequest).operator);
-      io.emit('race', app.raceSnapshot(req.params.raceId as string));
+      engine.setSource(req.params.roleKey as string, req.body.source, req.operator);
+      broadcast('race', app.raceSnapshot(req.params.raceId as string));
     }),
   );
 
   ex.post(
-    '/api/races/:raceId/trackers/:imei/window',
+    '/api/events/:eventId/races/:raceId/trackers/:imei/window',
     act((req) => {
-      const engine = app.engines.get(req.params.raceId as string);
+      const engine = eventApp(req).engines.get(req.params.raceId as string);
       if (!engine) throw new Error('unknown race');
       engine.setWindow(req.params.imei as string, req.body.start, req.body.end, !!req.body.latch, req.operator);
     }),
   );
 
   ex.delete(
-    '/api/races/:raceId/trackers/:imei/window',
+    '/api/events/:eventId/races/:raceId/trackers/:imei/window',
     act((req) => {
-      const engine = app.engines.get(req.params.raceId as string);
+      const engine = eventApp(req).engines.get(req.params.raceId as string);
       if (!engine) throw new Error('unknown race');
       engine.releaseClamp(req.params.imei as string, req.operator);
     }),
   );
 
-  // --- viewer PIN (operator-managed; middleware blocks viewers from non-GET) ---
+  ex.post(
+    '/api/publishing',
+    act((req) => {
+      ctx.publishing.set(!!req.body.enabled, (req as OpRequest).operator);
+    }),
+  );
+
+  // --- event library ---
+
+  ex.get('/api/events', (_req, res) => {
+    res.json({ loaded: [...ctx.apps.keys()], events: listEvents(ctx.eventsDir) });
+  });
+
+  ex.post(
+    '/api/events',
+    auth.adminOnly,
+    act((req: OpRequest) => {
+      const { id, name, meetId, startDate, endDate, copyFromFile } = req.body ?? {};
+      if (!name || typeof name !== 'string') throw new Error('Event name is required');
+      const file = createEvent(ctx.eventsDir, { id: id || name, name, meetId: Number(meetId) || 0, copyFromFile });
+      // dates are plain fields — patch them into the new file
+      if (startDate || endDate) {
+        const p = path.join(ctx.eventsDir, file);
+        const json = JSON.parse(fs.readFileSync(p, 'utf8'));
+        if (typeof startDate === 'string' && startDate) json.startDate = startDate;
+        if (typeof endDate === 'string' && endDate) json.endDate = endDate;
+        fs.writeFileSync(p, JSON.stringify(json, null, 2) + '\n');
+      }
+      const roster = eventRosters(ctx.eventsDir).find((r) => r.file === file);
+      for (const imei of roster?.imeis ?? []) {
+        ctx.store.recordAssignment(imei, roster!.id, roster!.name, 'added', req.operator);
+      }
+      return { file };
+    }),
+  );
+
+  ex.post(
+    '/api/events/:file/load',
+    auth.adminOnly,
+    act((req) => {
+      const file = req.params.file as string;
+      const listing = listEvents(ctx.eventsDir).find((e) => e.file === file);
+      if (!listing) throw new Error(`Unknown event file: ${file}`);
+      if (listing.error) throw new Error(`Event file is invalid: ${listing.error}`);
+      ctx.loadEvent(file);
+      broadcastSnapshot();
+    }),
+  );
+
+  ex.post(
+    '/api/events/:eventId/unload',
+    auth.adminOnly,
+    act((req) => {
+      ctx.unloadEvent(req.params.eventId as string);
+      broadcastSnapshot();
+    }),
+  );
+
+  // --- event setup (config editing, event-scoped) ---
+
+  ex.get('/api/events/:eventId/config', (req, res) => {
+    try {
+      res.json(eventManager(req).raw);
+    } catch (err) {
+      res.status(404).json({ ok: false, error: (err as Error).message });
+    }
+  });
+
+  ex.put(
+    '/api/events/:eventId/config',
+    auth.adminOnly,
+    act((req: OpRequest) => {
+      const app = eventApp(req);
+      if (app.hasActiveRaces()) throw new Error('A race is armed or live — finish or reset it before editing setup');
+      const manager = eventManager(req);
+      const before = new Set(manager.raw.trackers.map((t) => t.imei));
+      ctx.rebuildEvent(req.params.eventId as string, req.body);
+      const raw = [...ctx.managers.values()].find((m) => m.raw.id === (req.body as { id?: string })?.id)?.raw ?? manager.raw;
+      const after = new Set(raw.trackers.map((t) => t.imei));
+      for (const imei of after) {
+        if (!before.has(imei)) ctx.store.recordAssignment(imei, raw.id, raw.name, 'added', req.operator);
+      }
+      for (const imei of before) {
+        if (!after.has(imei)) ctx.store.recordAssignment(imei, raw.id, raw.name, 'removed', req.operator);
+      }
+      broadcastSnapshot();
+    }),
+  );
+
+  ex.get('/api/events/:eventId/export', auth.adminOnly, (req, res) => {
+    try {
+      const manager = eventManager(req);
+      const raw = manager.raw;
+      const resolved = manager.resolved();
+      const courses: Record<string, [number, number][]> = {};
+      for (let i = 0; i < resolved.races.length; i++) {
+        const rawFile = raw.races[i].course;
+        if (!courses[rawFile]) {
+          courses[rawFile] = loadCourse(resolved.races[i].course, 'miles').line.geometry.coordinates as [number, number][];
+        }
+      }
+      res.setHeader('Content-Disposition', `attachment; filename="${raw.id}-sim.json"`);
+      res.json({ kind: 'ptt-sim-package', exportedAt: new Date().toISOString(), config: raw, courses });
+    } catch (err) {
+      res.status(404).json({ ok: false, error: (err as Error).message });
+    }
+  });
+
+  // --- courses (shared across events) ---
+
+  ex.get('/api/courses', (_req, res) => {
+    res.json(listCoursesIn(ctx.eventsDir));
+  });
+
+  ex.post(
+    '/api/courses/:name',
+    auth.adminOnly,
+    express.text({ type: () => true, limit: '25mb' }),
+    act((req) => {
+      if (typeof req.body !== 'string' || req.body.length === 0) throw new Error('Empty upload');
+      return saveCourseIn(ctx.eventsDir, req.params.name as string, req.body);
+    }),
+  );
+
+  // --- operator accounts ---
+
+  ex.get('/api/users', auth.adminOnly, (_req, res) => {
+    res.json(ctx.store.listUsers());
+  });
+
+  ex.post(
+    '/api/users',
+    auth.adminOnly,
+    act((req) => {
+      const { username, password } = req.body ?? {};
+      if (!username || !/^[a-zA-Z0-9._-]{2,32}$/.test(username)) {
+        throw new Error('Username: 2–32 letters, digits, dot, dash, underscore');
+      }
+      if (typeof password !== 'string' || password.length < 8) {
+        throw new Error('Password must be at least 8 characters');
+      }
+      const role = req.body.role === 'admin' ? 'admin' : 'staff';
+      const existing = ctx.store.getUser(username);
+      if (existing?.role === 'admin' && role !== 'admin' && ctx.store.countAdmins() <= 1) {
+        throw new Error('Cannot demote the last admin');
+      }
+      ctx.store.addUser(username, hashPassword(password), role);
+    }),
+  );
+
+  ex.delete(
+    '/api/users/:username',
+    auth.adminOnly,
+    act((req: OpRequest) => {
+      const username = req.params.username as string;
+      if (username === req.operator) throw new Error('You cannot remove the account you are signed in with');
+      const target = ctx.store.getUser(username);
+      if (!target) throw new Error('Unknown user');
+      if (target.role === 'admin' && ctx.store.countAdmins() <= 1) {
+        throw new Error('Cannot remove the last admin');
+      }
+      ctx.store.deleteUser(username);
+    }),
+  );
+
+  ex.get('/api/events/:eventId/viewer-pin', (req, res) => {
+    res.json({ enabled: auth.viewerPinEnabled(req.params.eventId as string) });
+  });
+
+  ex.put(
+    '/api/events/:eventId/viewer-pin',
+    auth.adminOnly,
+    act((req) => {
+      const { pin } = req.body ?? {};
+      if (pin === null) {
+        auth.setViewerPin(null, req.params.eventId as string);
+        return;
+      }
+      if (typeof pin !== 'string' || !/^\d{4,12}$/.test(pin)) {
+        throw new Error('PIN must be 4-12 digits');
+      }
+      auth.setViewerPin(pin, req.params.eventId as string);
+    }),
+  );
 
   ex.put(
     '/api/viewer-pin',
@@ -259,80 +467,58 @@ export function startApi(holder: AppHolder, port: number): { httpServer: http.Se
     }),
   );
 
-  // --- operator accounts ---
+  // --- device owners ---
 
-  ex.get('/api/users', auth.adminOnly, (_req, res) => {
-    res.json(app.store.listUsers());
+  ex.get('/api/owners', (_req, res) => {
+    res.json(ctx.store.listOwners());
   });
 
   ex.post(
-    '/api/users',
+    '/api/owners',
     auth.adminOnly,
-    act((req) => {
-      const { username, password } = req.body ?? {};
-      if (!username || !/^[a-zA-Z0-9._-]{2,32}$/.test(username)) {
-        throw new Error('Username: 2–32 letters, digits, dot, dash, underscore');
-      }
-      if (typeof password !== 'string' || password.length < 8) {
-        throw new Error('Password must be at least 8 characters');
-      }
-      const role = req.body.role === 'admin' ? 'admin' : 'staff';
-      // Demoting the last admin would lock everyone out of setup.
-      const existing = app.store.getUser(username);
-      if (existing?.role === 'admin' && role !== 'admin' && app.store.countAdmins() <= 1) {
-        throw new Error('Cannot demote the last admin');
-      }
-      app.store.addUser(username, hashPassword(password), role);
-    }),
+    act((req) => ctx.store.addOwner(String(req.body?.name ?? ''))),
   );
 
   ex.delete(
-    '/api/users/:username',
+    '/api/owners/:id',
     auth.adminOnly,
-    act((req: express.Request & { operator?: string }) => {
-      const username = req.params.username as string;
-      if (username === req.operator) throw new Error('You cannot remove the account you are signed in with');
-      const target = app.store.getUser(username);
-      if (!target) throw new Error('Unknown user');
-      if (target.role === 'admin' && app.store.countAdmins() <= 1) {
-        throw new Error('Cannot remove the last admin');
-      }
-      app.store.deleteUser(username);
+    act((req) => {
+      ctx.store.deleteOwner(Number(req.params.id));
     }),
   );
 
   // --- fleet registry ---
 
   ex.get('/api/fleet', (_req, res) => {
-    // Attach event membership: every event roster containing the device, with
-    // the currently-active event flagged. A device in 2+ events gets a warning
-    // in the UI.
-    const rosters = eventRosters(holder.eventsDir);
-    const activeId = holder.manager.raw.id;
-    const issueCounts = app.store.openIssueCounts();
-    const rows = (app.store.listFleet() as Array<Record<string, unknown>>).map((f) => ({
+    const rosters = eventRosters(ctx.eventsDir);
+    const loaded = new Set(ctx.apps.keys());
+    const issueCounts = ctx.store.openIssueCounts();
+    const rows = (ctx.store.listFleet() as Array<Record<string, unknown>>).map((f) => ({
       ...f,
       events: rosters
         .filter((r) => r.imeis.includes(f.imei as string))
-        .map((r) => ({ id: r.id, name: r.name, active: r.id === activeId })),
+        .map((r) => ({ id: r.id, name: r.name, active: loaded.has(r.id) })),
       openIssues: issueCounts.get(f.imei as string) ?? 0,
     }));
     res.json(rows);
   });
 
-  // Device history: assignment log + issue log. Logging/resolving issues is a
-  // staff-level action (crew in the field), not admin-only.
   ex.get('/api/fleet/:imei/history', (req, res) => {
     res.json({
-      assignments: app.store.listAssignments(req.params.imei as string),
-      issues: app.store.listIssues(req.params.imei as string),
+      assignments: ctx.store.listAssignments(req.params.imei as string),
+      issues: ctx.store.listIssues(req.params.imei as string),
     });
   });
 
   ex.post(
     '/api/fleet/:imei/issues',
     act((req: OpRequest) => {
-      const id = app.store.addIssue(req.params.imei as string, String(req.body?.text ?? ''), String(req.body?.severity ?? 'issue'), req.operator);
+      const id = ctx.store.addIssue(
+        req.params.imei as string,
+        String(req.body?.text ?? ''),
+        String(req.body?.severity ?? 'issue'),
+        req.operator,
+      );
       return { id };
     }),
   );
@@ -340,25 +526,7 @@ export function startApi(holder: AppHolder, port: number): { httpServer: http.Se
   ex.post(
     '/api/fleet/issues/:id/resolve',
     act((req: OpRequest) => {
-      app.store.resolveIssue(Number(req.params.id), req.operator);
-    }),
-  );
-
-  ex.get('/api/owners', (_req, res) => {
-    res.json(app.store.listOwners());
-  });
-
-  ex.post(
-    '/api/owners',
-    auth.adminOnly,
-    act((req) => app.store.addOwner(String(req.body?.name ?? ''))),
-  );
-
-  ex.delete(
-    '/api/owners/:id',
-    auth.adminOnly,
-    act((req) => {
-      app.store.deleteOwner(Number(req.params.id));
+      ctx.store.resolveIssue(Number(req.params.id), req.operator);
     }),
   );
 
@@ -369,7 +537,7 @@ export function startApi(holder: AppHolder, port: number): { httpServer: http.Se
       const { imei, label, model, hasBattery, notes, ownerId, retired } = req.body ?? {};
       if (!/^\d{15}$/.test(imei ?? '')) throw new Error('IMEI must be 15 digits');
       if (!label || typeof label !== 'string') throw new Error('Label is required');
-      app.store.upsertFleet({
+      ctx.store.upsertFleet({
         imei,
         label,
         model,
@@ -385,21 +553,72 @@ export function startApi(holder: AppHolder, port: number): { httpServer: http.Se
     '/api/fleet/:imei',
     auth.adminOnly,
     act((req) => {
-      if (!app.store.deleteFleet(req.params.imei as string)) throw new Error('Unknown tracker');
+      if (!ctx.store.deleteFleet(req.params.imei as string)) throw new Error('Unknown tracker');
     }),
   );
+
+  // --- firebase connections ---
+
+  ex.get('/api/firebase', auth.adminOnly, (_req, res) => {
+    res.json(ctx.hub.list());
+  });
 
   ex.post(
-    '/api/publishing',
+    '/api/firebase',
+    auth.adminOnly,
     act((req) => {
-      app.setPublishing(!!req.body.enabled, (req as OpRequest).operator);
+      const { name, databaseURL, serviceAccount } = req.body ?? {};
+      if (typeof name !== 'string' || typeof databaseURL !== 'string' || typeof serviceAccount !== 'object' || !serviceAccount) {
+        throw new Error('name, databaseURL, and serviceAccount JSON are required');
+      }
+      ctx.hub.saveConnection(name, databaseURL, serviceAccount);
     }),
   );
 
-  // --- live ping forwarding (mirror raw tracker frames to other systems) ---
+  ex.delete(
+    '/api/firebase/:name',
+    auth.adminOnly,
+    act((req) => {
+      const name = req.params.name as string;
+      for (const m of ctx.managers.values()) {
+        if (m.raw.firebase.some((t) => t.connection === name)) {
+          throw new Error(`Connection "${name}" is used by active event "${m.raw.id}" — remove it from the event first`);
+        }
+      }
+      ctx.hub.deleteConnection(name);
+    }),
+  );
+
+  ex.post('/api/firebase/:name/test', auth.adminOnly, (req, res) => {
+    ctx.hub
+      .test(req.params.name as string)
+      .then((result) => res.json(result))
+      .catch((err: Error) => res.json({ ok: false, error: err.message }));
+  });
+
+  ex.get('/api/firebase/:name/data', auth.adminOnly, (req, res) => {
+    ctx.hub
+      .read(req.params.name as string, String(req.query.path ?? ''))
+      .then((value) => res.json({ ok: true, value }))
+      .catch((err: Error) => res.status(400).json({ ok: false, error: err.message }));
+  });
+
+  ex.put('/api/firebase/:name/data', auth.adminOnly, (req, res) => {
+    const { path: refPath, value, method } = req.body ?? {};
+    const m = method === 'update' || method === 'delete' ? method : 'set';
+    ctx.hub
+      .write(req.params.name as string, String(refPath ?? ''), value, m)
+      .then(() => {
+        ctx.store.recordPublish(null, `manual:${req.params.name}`, String(refPath), m === 'delete' ? null : value);
+        res.json({ ok: true });
+      })
+      .catch((err: Error) => res.status(400).json({ ok: false, error: err.message }));
+  });
+
+  // --- live ping forwarding ---
 
   ex.get('/api/forwards', auth.adminOnly, (_req, res) => {
-    res.json(holder.forwarder.status());
+    res.json(ctx.forwarder.status());
   });
 
   ex.put(
@@ -408,18 +627,18 @@ export function startApi(holder: AppHolder, port: number): { httpServer: http.Se
     act((req) => {
       const targets = req.body?.targets;
       if (!Array.isArray(targets)) throw new Error('targets array required');
-      holder.forwarder.setTargets(
+      ctx.forwarder.setTargets(
         targets.map((t: Record<string, unknown>) => ({
           host: String(t.host ?? '').trim(),
           port: Number(t.port),
           enabled: !!t.enabled,
         })),
       );
-      return holder.forwarder.status();
+      return ctx.forwarder.status();
     }),
   );
 
-  // --- split feed token management ---
+  // --- split feed token ---
 
   ex.get('/api/ingest-token', auth.adminOnly, (_req, res) => {
     res.json({ token: auth.ingestToken() ?? null });
@@ -429,36 +648,24 @@ export function startApi(holder: AppHolder, port: number): { httpServer: http.Se
     res.json({ ok: true, token: auth.regenerateIngestToken() });
   });
 
-  // --- simulation: export package + run the sim engine against our own listener ---
+  // --- simulation ---
 
   let sim: SimEngine | null = null;
 
-  ex.get('/api/export', auth.adminOnly, (_req, res) => {
-    const raw = holder.manager.raw;
-    const resolved = holder.manager.resolved();
-    const courses: Record<string, [number, number][]> = {};
-    for (let i = 0; i < resolved.races.length; i++) {
-      const rawFile = raw.races[i].course;
-      if (!courses[rawFile]) {
-        courses[rawFile] = loadCourse(resolved.races[i].course, 'miles').line.geometry.coordinates as [number, number][];
-      }
-    }
-    res.setHeader('Content-Disposition', `attachment; filename="${raw.id}-sim.json"`);
-    res.json({ kind: 'ptt-sim-package', exportedAt: new Date().toISOString(), config: raw, courses });
-  });
-
   ex.get('/api/sim', auth.adminOnly, (_req, res) => {
-    res.json(sim ? sim.status() : { running: false, trackers: [] });
+    res.json(sim ? sim.status() : { running: false, trackers: [], targets: [] });
   });
 
   ex.post('/api/sim/start', auth.adminOnly, (req, res) => {
     try {
       if (sim?.running) throw new Error('A simulation is already running — stop it first');
-      const { raceId, timescale, intervalS, jitterM, paces, extraTargets } = req.body ?? {};
+      const { eventId, raceId, timescale, intervalS, jitterM, paces, extraTargets } = req.body ?? {};
+      const app = ctx.apps.get(String(eventId));
+      const manager = ctx.managers.get(String(eventId));
+      if (!app || !manager) throw new Error(`Event "${eventId}" is not active`);
       const engine = app.engines.get(String(raceId));
       if (!engine) throw new Error('unknown race');
-      const race = engine.race;
-      const { trackers, roles } = resolveRace(holder.manager.resolved(), race);
+      const { trackers, roles } = resolveRace(manager.resolved(), engine.race);
       const paceMap: Record<string, number> = typeof paces === 'object' && paces ? paces : {};
       const defaultPace = 12;
       const sims: SimTrackerCfg[] = [];
@@ -476,9 +683,7 @@ export function startApi(holder: AppHolder, port: number): { httpServer: http.Se
         });
         roleIdx++;
       }
-      const port = holder.manager.resolved().listeners[0]?.port ?? 1000;
-      // Extra targets: "host:port, host:port" — the same pings also go to
-      // other systems (legacy stack, partner ingest) for side-by-side tests.
+      const port = manager.resolved().listeners[0]?.port ?? 1000;
       const targets = [{ host: '127.0.0.1', port }];
       if (typeof extraTargets === 'string' && extraTargets.trim()) {
         for (const part of extraTargets.split(',')) {
@@ -492,7 +697,7 @@ export function startApi(holder: AppHolder, port: number): { httpServer: http.Se
           targets,
           courseCoords: engine.course.line.geometry.coordinates as [number, number][],
           trackers: sims,
-          intervalS: Math.max(1, Number(intervalS) || holder.manager.raw.reportIntervalS || 10),
+          intervalS: Math.max(1, Number(intervalS) || manager.raw.reportIntervalS || 10),
           timescale: Math.min(240, Math.max(1, Number(timescale) || 10)),
           jitterM: Math.min(100, Math.max(0, Number(jitterM ?? 8))),
         },
@@ -520,65 +725,10 @@ export function startApi(holder: AppHolder, port: number): { httpServer: http.Se
     res.json({ ok: true });
   });
 
-  // --- firebase connections: registry, status test, open data browser ---
+  // --- remote access (ngrok) ---
 
-  ex.get('/api/firebase', auth.adminOnly, (_req, res) => {
-    res.json(holder.hub.list());
-  });
-
-  ex.post(
-    '/api/firebase',
-    auth.adminOnly,
-    act((req) => {
-      const { name, databaseURL, serviceAccount } = req.body ?? {};
-      if (typeof name !== 'string' || typeof databaseURL !== 'string' || typeof serviceAccount !== 'object' || !serviceAccount) {
-        throw new Error('name, databaseURL, and serviceAccount JSON are required');
-      }
-      holder.hub.saveConnection(name, databaseURL, serviceAccount);
-    }),
-  );
-
-  ex.delete(
-    '/api/firebase/:name',
-    auth.adminOnly,
-    act((req) => {
-      const name = req.params.name as string;
-      const inUse = holder.manager.raw.firebase.some((t) => t.connection === name);
-      if (inUse) throw new Error(`Connection "${name}" is used by the active event — remove it from the event first`);
-      holder.hub.deleteConnection(name);
-    }),
-  );
-
-  ex.post('/api/firebase/:name/test', auth.adminOnly, (req, res) => {
-    holder.hub
-      .test(req.params.name as string)
-      .then((result) => res.json(result))
-      .catch((err: Error) => res.json({ ok: false, error: err.message }));
-  });
-
-  ex.get('/api/firebase/:name/data', auth.adminOnly, (req, res) => {
-    holder.hub
-      .read(req.params.name as string, String(req.query.path ?? ''))
-      .then((value) => res.json({ ok: true, value }))
-      .catch((err: Error) => res.status(400).json({ ok: false, error: err.message }));
-  });
-
-  ex.put('/api/firebase/:name/data', auth.adminOnly, (req, res) => {
-    const { path: refPath, value, method } = req.body ?? {};
-    const m = method === 'update' || method === 'delete' ? method : 'set';
-    holder.hub
-      .write(req.params.name as string, String(refPath ?? ''), value, m)
-      .then(() => {
-        app.store.recordPublish(null, `manual:${req.params.name}`, String(refPath), m === 'delete' ? null : value);
-        res.json({ ok: true });
-      })
-      .catch((err: Error) => res.status(400).json({ ok: false, error: err.message }));
-  });
-
-  // --- remote access (ngrok tunnel for the console) ---
-
-  const tunnel = new TunnelManager(app.store, port);
-  if (app.store.getSetting('ngrok-enabled') === '1') {
+  const tunnel = new TunnelManager(ctx.store, port);
+  if (ctx.store.getSetting('ngrok-enabled') === '1') {
     tunnel.start().catch((err) => console.error('[tunnel] startup failed:', err));
   }
 
@@ -598,92 +748,8 @@ export function startApi(holder: AppHolder, port: number): { httpServer: http.Se
       .catch((err: Error) => res.status(400).json({ ok: false, error: err.message }));
   });
 
-  // --- setup: event config + courses ---
-
-  const guardIdle = () => {
-    for (const engine of app.engines.values()) {
-      if (engine.status === 'armed' || engine.status === 'live') {
-        throw new Error(`Race "${engine.race.id}" is ${engine.status} — finish or reset it before editing setup`);
-      }
-    }
-  };
-
-  // --- event library ---
-
-  ex.get('/api/events', (_req, res) => {
-    res.json({ active: holder.manager.raw.id, events: listEvents(holder.eventsDir) });
-  });
-
-  ex.post(
-    '/api/events',
-    auth.adminOnly,
-    act((req: OpRequest) => {
-      const { id, name, meetId, copyFromFile } = req.body ?? {};
-      if (!name || typeof name !== 'string') throw new Error('Event name is required');
-      const file = createEvent(holder.eventsDir, { id: id || name, name, meetId: Number(meetId) || 0, copyFromFile });
-      // A copied event inherits a roster — log those as assignments too.
-      const roster = eventRosters(holder.eventsDir).find((r) => r.file === file);
-      for (const imei of roster?.imeis ?? []) {
-        app.store.recordAssignment(imei, roster!.id, roster!.name, 'added', req.operator);
-      }
-      return { file };
-    }),
-  );
-
-  ex.post(
-    '/api/events/:file/activate',
-    auth.adminOnly,
-    act((req) => {
-      guardIdle();
-      const file = req.params.file as string;
-      const listing = listEvents(holder.eventsDir).find((e) => e.file === file);
-      if (!listing) throw new Error(`Unknown event file: ${file}`);
-      if (listing.error) throw new Error(`Event file is invalid: ${listing.error}`);
-      holder.activateEvent(file);
-      io.emit('snapshot', holder.app.snapshot());
-    }),
-  );
-
-  ex.get('/api/config', (_req, res) => {
-    res.json(holder.manager.raw);
-  });
-
-  ex.put(
-    '/api/config',
-    auth.adminOnly,
-    act((req: OpRequest) => {
-      guardIdle();
-      const before = new Set(holder.manager.raw.trackers.map((t) => t.imei));
-      holder.rebuild(req.body);
-      // Roster diff → device assignment history
-      const raw = holder.manager.raw;
-      const after = new Set(raw.trackers.map((t) => t.imei));
-      for (const imei of after) {
-        if (!before.has(imei)) app.store.recordAssignment(imei, raw.id, raw.name, 'added', req.operator);
-      }
-      for (const imei of before) {
-        if (!after.has(imei)) app.store.recordAssignment(imei, raw.id, raw.name, 'removed', req.operator);
-      }
-      io.emit('snapshot', holder.app.snapshot());
-    }),
-  );
-
-  ex.get('/api/courses', (_req, res) => {
-    res.json(holder.manager.listCourses());
-  });
-
-  ex.post(
-    '/api/courses/:name',
-    auth.adminOnly,
-    express.text({ type: () => true, limit: '25mb' }),
-    act((req) => {
-      if (typeof req.body !== 'string' || req.body.length === 0) throw new Error('Empty upload');
-      return holder.manager.saveCourse(req.params.name as string, req.body);
-    }),
-  );
-
   httpServer.listen(port, () => {
     console.log(`[api] http + socket.io on :${port}`);
   });
-  return { httpServer, io };
+  return { httpServer, io, broadcast };
 }

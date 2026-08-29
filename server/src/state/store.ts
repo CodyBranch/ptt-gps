@@ -479,6 +479,12 @@ export class Store {
     this.db.prepare(`DELETE FROM settings WHERE key = ?`).run(key);
   }
 
+  listSettingsByPrefix(prefix: string): Array<{ key: string; value: string }> {
+    return this.db
+      .prepare(`SELECT key, value FROM settings WHERE key LIKE ? ESCAPE '\\'`)
+      .all(prefix.replace(/[%_\\]/g, '\\$&') + '%') as Array<{ key: string; value: string }>;
+  }
+
   touchToken(tokenHash: string, expiresAtMs: number): void {
     this.db.prepare(`UPDATE auth_tokens SET expires_at_ms = ? WHERE token_hash = ?`).run(expiresAtMs, tokenHash);
   }

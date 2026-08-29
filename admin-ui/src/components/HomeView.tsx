@@ -1,97 +1,64 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
-import type { EventListing, FleetRow, Snapshot, TunnelStatus } from '../types';
+import type { FleetRow, Snapshot, TunnelStatus } from '../types';
 
 /**
- * Post-login landing: the operation at a glance — active event, event library,
- * fleet health, and system state — with jumps into each area. Race pages are
- * one click away, not the front door.
+ * Post-login landing: general status only. Events live in the header — this
+ * page answers "is everything healthy?" at a glance: per-event race states,
+ * fleet health, and system state.
  */
 export function HomeView({
   snapshot,
   role,
+  onOpenEvent,
   onNavigate,
 }: {
   snapshot: Snapshot;
   role: 'admin' | 'staff';
-  onNavigate: (view: 'ops' | 'all' | 'setup' | 'events' | 'sim', raceId?: string) => void;
+  onOpenEvent: (eventId: string) => void;
+  onNavigate: (view: 'events' | 'fleet' | 'system' | 'sim') => void;
 }) {
-  const [events, setEvents] = useState<EventListing[]>([]);
   const [fleet, setFleet] = useState<FleetRow[]>([]);
   const [tunnel, setTunnel] = useState<TunnelStatus>();
 
   useEffect(() => {
-    api.events().then((r: { events: EventListing[] }) => setEvents(r.events)).catch(console.error);
     api.fleet().then(setFleet).catch(console.error);
     if (role === 'admin') api.tunnelStatus().then(setTunnel).catch(() => {});
   }, [role]);
 
   const now = Date.now();
-  const intervalS = snapshot.event.reportIntervalS || 10;
-  const online = fleet.filter((f) => !f.retired && f.last_received_ms && now - f.last_received_ms < intervalS * 6 * 1000);
+  const online = fleet.filter((f) => !f.retired && f.last_received_ms && now - f.last_received_ms < 120_000);
   const activeFleet = fleet.filter((f) => !f.retired);
   const openIssues = fleet.reduce((n, f) => n + (f.openIssues ?? 0), 0);
-  const liveRaces = snapshot.races.filter((r) => r.status === 'live');
-  const armedRaces = snapshot.races.filter((r) => r.status === 'armed');
 
   return (
     <div className="setup">
       <div className="home-grid">
-        <section className="home-card home-active-event">
+        <section className="home-card home-events-card">
           <div className="home-card-head">
-            <h3>Active event</h3>
-            <span className="event-card-meta">meet {snapshot.event.meetId}</span>
+            <h3>Active events</h3>
+            <span className="home-stat">{snapshot.events.length}</span>
           </div>
-          <div className="home-event-name">{snapshot.event.name}</div>
-          {liveRaces.length > 0 && (
-            <div className="home-live-banner">● {liveRaces.map((r) => r.name).join(', ')} LIVE</div>
+          {snapshot.events.length === 0 && (
+            <p className="hint">No events are running. Activate one from the Events page.</p>
           )}
-          <div className="home-races">
-            {snapshot.races.length === 0 && <span className="dim">No races configured yet.</span>}
-            {snapshot.races.map((r) => (
-              <button key={r.raceId} className="home-race-row" onClick={() => onNavigate('ops', r.raceId)}>
-                <span className={`status-dot ${r.status}`} />
-                <span className="home-race-name">{r.name}</span>
-                <span className="dim">{r.status}</span>
-              </button>
-            ))}
-          </div>
-          <div className="home-actions">
-            {snapshot.races.length > 1 && (
-              <button className="mini primary" onClick={() => onNavigate('all')}>
-                Race operations →
-              </button>
-            )}
-            {snapshot.races.length === 1 && (
-              <button className="mini primary" onClick={() => onNavigate('ops', snapshot.races[0].raceId)}>
-                Race operations →
-              </button>
-            )}
-            {role === 'admin' && (
-              <button className="mini" onClick={() => onNavigate('setup')}>
-                Event setup
-              </button>
-            )}
-          </div>
-        </section>
-
-        <section className="home-card">
-          <div className="home-card-head">
-            <h3>Events</h3>
-            <span className="home-stat">{events.length}</span>
-          </div>
-          <div className="home-list">
-            {events.slice(0, 5).map((e) => (
-              <div key={e.file} className="home-list-row">
-                <span className={e.id === snapshot.event.id ? 'home-active-mark' : 'home-inactive-mark'}>
-                  {e.id === snapshot.event.id ? '▶' : '·'}
+          {snapshot.events.map((ev) => {
+            const live = ev.races.filter((r) => r.status === 'live');
+            const armed = ev.races.filter((r) => r.status === 'armed');
+            return (
+              <button key={ev.event.id} className="home-race-row" onClick={() => onOpenEvent(ev.event.id)}>
+                <span className={`status-dot ${live.length ? 'live' : armed.length ? 'armed' : 'scheduled'}`} />
+                <span className="home-race-name">{ev.event.name}</span>
+                <span className="dim">
+                  {live.length > 0
+                    ? `${live.length} LIVE`
+                    : armed.length > 0
+                      ? `${armed.length} armed`
+                      : `${ev.races.length} race${ev.races.length === 1 ? '' : 's'}`}
                 </span>
-                <span className="home-list-name">{e.name}</span>
-                <span className="dim">{e.races} race{e.races === 1 ? '' : 's'}</span>
-              </div>
-            ))}
-            {events.length > 5 && <div className="dim">…and {events.length - 5} more</div>}
-          </div>
+              </button>
+            );
+          })}
           {role === 'admin' && (
             <div className="home-actions">
               <button className="mini" onClick={() => onNavigate('events')}>
@@ -124,13 +91,11 @@ export function HomeView({
               <span className="home-metric-label">retired</span>
             </div>
           </div>
-          {role === 'admin' && (
-            <div className="home-actions">
-              <button className="mini" onClick={() => onNavigate('setup')}>
-                Manage fleet →
-              </button>
-            </div>
-          )}
+          <div className="home-actions">
+            <button className="mini" onClick={() => onNavigate('fleet')}>
+              Fleet →
+            </button>
+          </div>
         </section>
 
         <section className="home-card">
@@ -153,14 +118,16 @@ export function HomeView({
               </div>
             )}
             <div className="home-list-row">
-              <span className="home-list-name">Report cadence</span>
-              <span className="dim">{intervalS}s expected</span>
+              <span className="home-list-name">Live races</span>
+              <span className="dim">
+                {snapshot.events.reduce((n, ev) => n + ev.races.filter((r) => r.status === 'live').length, 0)}
+              </span>
             </div>
           </div>
           {role === 'admin' && (
             <div className="home-actions">
-              <button className="mini" onClick={() => onNavigate('setup')}>
-                System setup →
+              <button className="mini" onClick={() => onNavigate('system')}>
+                System →
               </button>
               <button className="mini" onClick={() => onNavigate('sim')}>
                 Simulation

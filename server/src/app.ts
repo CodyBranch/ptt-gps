@@ -1,8 +1,7 @@
 import type { EventConfig } from './config/schema.js';
 import { convertUnits, resolveRace } from './config/schema.js';
 import { RaceEngine, type RaceStatus, type TrackerState } from './engine/race-engine.js';
-import { FixGate } from './ingest/hygiene.js';
-import type { Fix, Telemetry } from './ingest/types.js';
+import type { Fix } from './ingest/types.js';
 import { DebugPublisher, type Publisher } from './outputs/publisher.js';
 import { FirebasePublisher } from './outputs/firebase.js';
 import type { FirebaseHub } from './outputs/hub.js';
@@ -12,68 +11,46 @@ export interface AppEvents {
   emit: (event: string, payload: unknown) => void;
 }
 
-/** Ties ingest → hygiene → engines → publishers together for one event (meet). */
+/**
+ * One App per loaded event — engines, sessions, and publishers for that meet.
+ * Several run concurrently (multi-event weekends); the shared ingest pipeline
+ * in index.ts fans accepted fixes to every loaded App, and each engine simply
+ * ignores IMEIs outside its roster.
+ */
 export class App {
   readonly cfg: EventConfig;
   readonly store: Store;
-  readonly gate: FixGate;
   readonly engines = new Map<string, RaceEngine>();
   readonly publishers: Publisher[] = [];
   /** Active session per race (only while live). */
   readonly sessions = new Map<string, number>();
   /** Session to attribute the publish being emitted right now (single-threaded). */
   private publishContextSession: number | null = null;
-  /**
-   * Master output switch: when off, nothing is pushed to any publisher
-   * (Firebase/debug) even while races are live. Persisted across restarts.
-   */
-  publishEnabled: boolean;
-  /**
-   * Last time ANY frame arrived per IMEI (fixes, valid or not, and telemetry).
-   * This is comms health — independent of race state and GPS lock — so the
-   * console's Age column works during pre-race checks too.
-   */
-  readonly lastSeen = new Map<string, number>();
-  /**
-   * Split-time simulated distances from an external source (legacy NYC
-   * raceTimeUpdate feed), keyed by whatever the source calls the tracker —
-   * an IMEI, a role key, or its own id. Rebroadcast as 'simulatedDistance'
-   * (legacy event name) and shown in the console alongside GPS distances.
-   */
-  readonly simulated = new Map<string, { distance: number; raceTime?: string; tMs: number }>();
+  /** Master output switch — owned globally (index.ts), mirrored here. */
+  publishEnabled = true;
   private out: AppEvents;
+  /** Per-IMEI comms health from the shared gate (gaps/rejections). */
+  private healthFn: (imei: string) => unknown;
 
-  constructor(cfg: EventConfig, store: Store, out: AppEvents, hub?: FirebaseHub) {
+  constructor(cfg: EventConfig, store: Store, out: AppEvents, hub?: FirebaseHub, healthFn?: (imei: string) => unknown) {
     this.cfg = cfg;
     this.store = store;
     this.out = out;
-    this.gate = new FixGate();
-    this.publishEnabled = store.getSetting('publish-enabled') !== '0';
-
-    // Seed packet-age data from the device registry so a server restart shows
-    // real "last heard from" times instead of blanks.
-    for (const d of store.devices() as Array<{ imei: string; last_received_ms: number | null }>) {
-      if (d.last_received_ms) this.lastSeen.set(d.imei, d.last_received_ms);
-    }
+    this.healthFn = healthFn ?? (() => undefined);
 
     const recorder = (target: string, path: string, value: unknown) => {
-      // publishContextSession is set synchronously by whichever race triggered
-      // the publish, so records stay correctly attributed when several races
-      // are live at once.
       this.store.recordPublish(this.publishContextSession, target, path, value);
     };
 
     if (cfg.firebase.length === 0 || !hub) {
       this.publishers.push(new DebugPublisher(recorder));
-      console.log('[outputs] no firebase targets configured — running with debug publisher');
     } else {
       for (const target of cfg.firebase) {
         try {
           this.publishers.push(new FirebasePublisher(target, hub, recorder));
-          console.log(`[outputs] firebase target "${target.connection}" (${target.flavor})`);
+          console.log(`[${cfg.id}] firebase target "${target.connection}" (${target.flavor})`);
         } catch (err) {
-          // A missing/broken connection must not take the server down mid-setup.
-          console.error(`[outputs] firebase target "${target.connection}" skipped:`, (err as Error).message);
+          console.error(`[${cfg.id}] firebase target "${target.connection}" skipped:`, (err as Error).message);
         }
       }
       if (this.publishers.length === 0) this.publishers.push(new DebugPublisher(recorder));
@@ -91,67 +68,34 @@ export class App {
         onSessionEvent: (raceId, type, payload) => {
           const sessionId = this.sessions.get(raceId);
           if (sessionId !== undefined) this.store.addSessionEvent(sessionId, type, payload);
-          this.out.emit('session-event', { raceId, type, payload, tMs: Date.now() });
+          this.out.emit('session-event', { eventId: cfg.id, raceId, type, payload, tMs: Date.now() });
         },
       });
       this.engines.set(race.id, engine);
       console.log(
-        `[engine] race "${race.id}": course ${engine.course.length.toFixed(2)} ${race.units}, ` +
+        `[${cfg.id}] race "${race.id}": course ${engine.course.length.toFixed(2)} ${race.units}, ` +
           `${engine.trackers.size} trackers, ${engine.roles.length} roles`,
       );
     }
   }
 
+  /** Feed one gate-accepted fix (shared pipeline calls this on every loaded App). */
   onFix(fix: Fix): void {
-    this.lastSeen.set(fix.imei, fix.receivedAtMs);
-    const gate = this.gate.accept(fix);
-    this.store.recordFix(fix, gate.ok, gate.reason);
-    this.out.emit('fix', {
-      imei: fix.imei,
-      receivedAtMs: fix.receivedAtMs,
-      lat: fix.lat,
-      lon: fix.lon,
-      tUtcMs: fix.tUtcMs,
-      battery: fix.battery,
-      accuracy: fix.accuracy,
-      buffered: fix.buffered,
-      accepted: gate.ok,
-      reason: gate.reason,
-      source: fix.source,
-      protocol: fix.protocol,
-    });
-    if (!gate.ok) return;
     for (const engine of this.engines.values()) engine.onFix(fix);
   }
 
-  /** Ingest one split-based distance update from the external feed. */
-  onSimulatedDistance(data: { tracker?: unknown; distance?: unknown; raceTime?: unknown }): void {
-    const tracker = String(data.tracker ?? '').trim();
-    const distance = Number(data.distance);
-    if (!tracker || !Number.isFinite(distance)) return; // malformed — drop silently, feed is bursty
-    const raceTime = data.raceTime !== undefined ? String(data.raceTime) : undefined;
-    const entry = { distance, raceTime, tMs: Date.now() };
-    this.simulated.set(tracker, entry);
-    this.store.recordTelemetry({
-      type: 'split-distance',
-      imei: /^\d{15}$/.test(tracker) ? tracker : undefined,
-      detail: { tracker, distance, raceTime },
-      source: 'splits',
-      raw: JSON.stringify(data),
-    });
-    for (const sessionId of this.sessions.values()) {
-      this.store.addSessionEvent(sessionId, 'split-distance', { tracker, distance, raceTime });
-    }
-    // Legacy-compatible rebroadcast: pages listening for 'simulatedDistance'
-    // keep working with the same payload shape.
-    this.out.emit('simulatedDistance', { tracker, distance, raceTime, tMs: entry.tMs });
-
-    // Roles switched to the splits source publish this distance directly.
-    // The feed's numbers are taken as already being in the event's output
-    // units (legacy behavior: passed through untouched).
-    if (!this.publishEnabled) return;
+  /**
+   * A split-feed update matched against this event's roles: publishes for live
+   * races whose role source is 'splits' and logs into their sessions.
+   */
+  applySimulatedDistance(tracker: string, distance: number, raceTime?: string): void {
     for (const engine of this.engines.values()) {
       if (engine.status !== 'live') continue;
+      const sessionId = this.sessions.get(engine.race.id);
+      if (sessionId !== undefined) {
+        this.store.addSessionEvent(sessionId, 'split-distance', { tracker, distance, raceTime });
+      }
+      if (!this.publishEnabled) continue;
       for (const role of engine.roles) {
         if (role.source !== 'splits') continue;
         const match =
@@ -159,7 +103,7 @@ export class App {
         if (!match) continue;
         const state = engine.trackers.get(role.activeImei);
         if (!state) continue;
-        this.publishContextSession = this.sessions.get(engine.race.id) ?? null;
+        this.publishContextSession = sessionId ?? null;
         const syntheticFix: Fix = {
           imei: role.activeImei,
           lat: state.lastFix?.lat ?? 0,
@@ -177,19 +121,14 @@ export class App {
     }
   }
 
-  onTelemetry(t: Telemetry): void {
-    if (t.imei) this.lastSeen.set(t.imei, Date.now());
-    this.store.recordTelemetry(t);
-    this.out.emit('telemetry', { imei: t.imei, type: t.type, tUtcMs: t.tUtcMs, source: t.source, receivedAtMs: Date.now() });
-  }
-
   private handleTrackerUpdate(raceId: string, state: TrackerState): void {
     const engine = this.engines.get(raceId)!;
     this.out.emit('tracker', {
+      eventId: this.cfg.id,
       raceId,
       state: publicTrackerState(state),
       slice: engine.sliceFor(state.imei),
-      health: this.gate.health(state.imei),
+      health: this.healthFn(state.imei),
     });
     if (engine.status === 'live' && state.lastFix && this.publishEnabled) {
       this.publishContextSession = this.sessions.get(raceId) ?? null;
@@ -237,11 +176,9 @@ export class App {
         const race = this.cfg.races.find((r) => r.id === raceId)!;
         const snapshot = { race, resolved: resolveRace(this.cfg, race), startedBy: by };
         const firstLive = this.sessions.size === 0;
-        // atMs allows back-dating a start — the fixes are already in the store.
         const sessionId = this.store.startSession(this.cfg.id, raceId, snapshot, atMs ?? Date.now());
         this.sessions.set(raceId, sessionId);
         engine.setStatus('live', by);
-        // showDistance is meet-wide: turn on with the first live race only.
         if (firstLive && this.publishEnabled) {
           this.publishContextSession = sessionId;
           for (const p of this.publishers) p.showDistance(this.cfg.meetId, true);
@@ -255,7 +192,6 @@ export class App {
           this.store.endSession(sessionId, atMs ?? Date.now());
           this.sessions.delete(raceId);
         }
-        // ...and off only when the last live race finishes.
         if (this.sessions.size === 0 && this.publishEnabled) {
           this.publishContextSession = sessionId ?? null;
           for (const p of this.publishers) p.showDistance(this.cfg.meetId, false);
@@ -270,11 +206,7 @@ export class App {
     return engine.status;
   }
 
-  /**
-   * Master output switch. Turning off sends a final showDistance=false so
-   * downstream consumers blank cleanly; turning on mid-race re-asserts
-   * showDistance=true and distances resume with the next fixes.
-   */
+  /** Flip this app's publishing (global switch calls every loaded app). */
   setPublishing(enabled: boolean, by?: string): void {
     if (enabled === this.publishEnabled) return;
     const anyLive = this.sessions.size > 0;
@@ -286,17 +218,19 @@ export class App {
     if (enabled && anyLive) {
       for (const p of this.publishers) p.showDistance(this.cfg.meetId, true);
     }
-    this.store.setSetting('publish-enabled', enabled ? '1' : '0');
     for (const sessionId of this.sessions.values()) {
       this.store.addSessionEvent(sessionId, 'publishing', { enabled, by });
     }
-    this.out.emit('publishing', { enabled, by, tMs: Date.now() });
-    console.log(`[outputs] publishing ${enabled ? 'ENABLED' : 'DISABLED'}${by ? ` by ${by}` : ''}`);
+  }
+
+  hasActiveRaces(): boolean {
+    return [...this.engines.values()].some((e) => e.status === 'armed' || e.status === 'live');
   }
 
   raceSnapshot(raceId: string) {
     const engine = this.engines.get(raceId)!;
     return {
+      eventId: this.cfg.id,
       raceId,
       name: engine.race.name,
       status: engine.status,
@@ -307,7 +241,7 @@ export class App {
       trackers: [...engine.trackers.values()].map((s) => ({
         ...publicTrackerState(s),
         slice: engine.sliceFor(s.imei),
-        health: this.gate.health(s.imei),
+        health: this.healthFn(s.imei),
       })),
     };
   }
@@ -319,11 +253,10 @@ export class App {
         name: this.cfg.name,
         meetId: this.cfg.meetId,
         reportIntervalS: this.cfg.reportIntervalS,
+        startDate: this.cfg.startDate,
+        endDate: this.cfg.endDate,
       },
       races: this.cfg.races.map((r) => this.raceSnapshot(r.id)),
-      lastSeen: Object.fromEntries(this.lastSeen),
-      publishEnabled: this.publishEnabled,
-      simulated: Object.fromEntries(this.simulated),
     };
   }
 }

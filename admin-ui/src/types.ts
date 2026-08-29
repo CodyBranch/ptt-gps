@@ -45,6 +45,58 @@ export interface TrackerPub {
   health?: TrackerHealth;
 }
 
+export interface RoleState {
+  key: string;
+  label: string;
+  trackers: string[];
+  activeImei: string;
+  /** Which feed publishes the role's headline distance. */
+  source: 'gps' | 'splits';
+  cmd?: number;
+  clockSlot?: number;
+  mapEvent?: string;
+}
+
+export interface RaceSnap {
+  eventId: string;
+  raceId: string;
+  name: string;
+  status: RaceStatus;
+  units: 'miles' | 'kilometers';
+  courseLength: number;
+  sessionId: number | null;
+  roles: RoleState[];
+  trackers: TrackerPub[];
+}
+
+export interface EventMeta {
+  id: string;
+  name: string;
+  meetId: number;
+  reportIntervalS: number;
+  startDate?: string;
+  endDate?: string;
+}
+
+export interface EventSnap {
+  event: EventMeta;
+  races: RaceSnap[];
+}
+
+/** Full server snapshot: every loaded (active) event + global state. */
+export interface Snapshot {
+  events: EventSnap[];
+  lastSeen: Record<string, number>;
+  publishEnabled: boolean;
+  simulated: Record<string, SimulatedDistance>;
+}
+
+export interface SimulatedDistance {
+  distance: number;
+  raceTime?: string;
+  tMs: number;
+}
+
 export type Units = 'miles' | 'kilometers';
 
 /** Mirrors the server's as-authored event config (setup editing). */
@@ -52,6 +104,8 @@ export interface EventConfigT {
   id: string;
   name: string;
   meetId: number;
+  startDate?: string;
+  endDate?: string;
   outputUnits: Units;
   reportIntervalS: number;
   listeners: Array<{ name: string; port: number }>;
@@ -76,14 +130,9 @@ export interface EventListing {
   file: string;
   races: number;
   trackers: number;
+  startDate?: string;
+  endDate?: string;
   error?: string;
-}
-
-export interface CourseInfo {
-  file: string;
-  points: number;
-  lengthMi: number;
-  lengthKm: number;
 }
 
 export interface Owner {
@@ -131,58 +180,6 @@ export interface DeviceIssue {
   resolved_by: string | null;
 }
 
-export interface DeviceRow {
-  imei: string;
-  last_lat: number | null;
-  last_lon: number | null;
-  last_t_utc_ms: number | null;
-  last_received_ms: number | null;
-  battery: number | null;
-  accuracy: number | null;
-  protocol: string | null;
-  source: string | null;
-}
-
-export interface RoleState {
-  key: string;
-  label: string;
-  trackers: string[];
-  activeImei: string;
-  /** Which feed publishes the role's headline distance. */
-  source: 'gps' | 'splits';
-  cmd?: number;
-  clockSlot?: number;
-  mapEvent?: string;
-}
-
-export interface RaceSnap {
-  raceId: string;
-  name: string;
-  status: RaceStatus;
-  units: 'miles' | 'kilometers';
-  courseLength: number;
-  sessionId: number | null;
-  roles: RoleState[];
-  trackers: TrackerPub[];
-}
-
-export interface Snapshot {
-  event: { id: string; name: string; meetId: number; reportIntervalS: number };
-  races: RaceSnap[];
-  /** Last time any frame arrived per IMEI (comms health, race-independent). */
-  lastSeen: Record<string, number>;
-  /** Master output switch — false = nothing is pushed to Firebase/outputs. */
-  publishEnabled: boolean;
-  /** Split-time distances from the external feed, keyed by tracker/role id. */
-  simulated: Record<string, SimulatedDistance>;
-}
-
-export interface SimulatedDistance {
-  distance: number;
-  raceTime?: string;
-  tMs: number;
-}
-
 export interface FirebaseConn {
   name: string;
   databaseURL: string;
@@ -206,17 +203,21 @@ export interface UserRow {
   role: 'admin' | 'staff';
 }
 
-export interface FixEvent {
+export interface CourseInfo {
+  file: string;
+  points: number;
+  lengthMi: number;
+  lengthKm: number;
+}
+
+export interface DeviceRow {
   imei: string;
-  receivedAtMs: number;
-  lat: number;
-  lon: number;
-  tUtcMs: number;
-  battery?: number;
-  accuracy?: number;
-  buffered: boolean;
-  accepted: boolean;
-  reason?: string;
-  source: string;
-  protocol: string;
+  last_lat: number | null;
+  last_lon: number | null;
+  last_t_utc_ms: number | null;
+  last_received_ms: number | null;
+  battery: number | null;
+  accuracy: number | null;
+  protocol: string | null;
+  source: string | null;
 }

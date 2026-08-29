@@ -4,9 +4,11 @@ import path from 'node:path';
 import { ConfigManager, listEvents } from './config/manager.js';
 import { App } from './app.js';
 import { Forwarder } from './ingest/forwarder.js';
+import { FixGate } from './ingest/hygiene.js';
+import type { Fix, Telemetry } from './ingest/types.js';
 import { FirebaseHub } from './outputs/hub.js';
 import { Store } from './state/store.js';
-import { startApi, type AppHolder } from './api/server.js';
+import { startApi, type ServerContext } from './api/server.js';
 import { startListener } from './ingest/source.js';
 
 function arg(name: string, fallback?: string): string | undefined {
@@ -14,7 +16,7 @@ function arg(name: string, fallback?: string): string | undefined {
   return i >= 0 ? process.argv[i + 1] : fallback;
 }
 
-// --- resolve the events directory and the event to boot with ---
+// --- events directory ---
 
 const eventArg = arg('event');
 const eventsDir = path.resolve(
@@ -27,86 +29,193 @@ if (!fs.existsSync(eventsDir)) {
 }
 
 const store = new Store(arg('db', 'data/ptt.db')!);
+const hub = new FirebaseHub(store, path.dirname(path.resolve(arg('db', 'data/ptt.db')!)));
+const forwarder = new Forwarder(store);
 
-const available = listEvents(eventsDir).filter((e) => !e.error);
-let eventFile: string | undefined = eventArg ? path.basename(eventArg) : undefined;
-if (!eventFile) {
-  const remembered = store.getSetting('active-event');
-  if (remembered && fs.existsSync(path.join(eventsDir, remembered))) eventFile = remembered;
-}
-if (!eventFile && available.length === 1) eventFile = available[0].file;
-if (!eventFile) {
-  console.error(`No event selected. Pass --event, or available in ${eventsDir}:`);
-  for (const e of available) console.error(`  ${e.file}  (${e.name})`);
-  process.exit(1);
-}
-
-// --- boot the active event ---
+// --- shared ingest pipeline (one gate/store/lastSeen for all loaded events) ---
 
 let emitFn: (event: string, payload: unknown) => void = () => {};
 const out = { emit: (e: string, p: unknown) => emitFn(e, p) };
 
-let manager = new ConfigManager(path.join(eventsDir, eventFile));
-store.setSetting('active-event', eventFile);
+const gate = new FixGate();
+const lastSeen = new Map<string, number>();
+const simulated = new Map<string, { distance: number; raceTime?: string; tMs: number }>();
+for (const d of store.devices() as Array<{ imei: string; last_received_ms: number | null }>) {
+  if (d.last_received_ms) lastSeen.set(d.imei, d.last_received_ms);
+}
 
-const dbPath = arg('db', 'data/ptt.db')!;
-const hub = new FirebaseHub(store, path.dirname(path.resolve(dbPath)));
-const forwarder = new Forwarder(store);
+// --- loaded events (several can run at once) ---
 
-const holder: AppHolder = {
-  app: new App(manager.resolved(), store, out, hub),
-  eventsDir,
-  hub,
-  forwarder,
-  get manager() {
-    return manager;
+const apps = new Map<string, App>();
+const managers = new Map<string, ConfigManager>();
+
+const publishing = {
+  get enabled(): boolean {
+    return store.getSetting('publish-enabled') !== '0';
   },
-  rebuild: (json: unknown) => {
-    const resolved = manager.update(json);
-    holder.app = new App(resolved, store, out, hub);
-    syncListeners(resolved.listeners);
-    console.log(`[config] event config updated — engines rebuilt (${resolved.races.length} race(s))`);
-  },
-  activateEvent: (file: string) => {
-    const nextManager = new ConfigManager(path.join(eventsDir, file));
-    const resolved = nextManager.resolved();
-    manager = nextManager;
-    holder.app = new App(resolved, store, out, hub);
-    store.setSetting('active-event', file);
-    syncListeners(resolved.listeners);
-    console.log(`[config] activated event "${resolved.name}" (${file})`);
+  set(enabled: boolean, by?: string): void {
+    store.setSetting('publish-enabled', enabled ? '1' : '0');
+    for (const app of apps.values()) app.setPublishing(enabled, by);
+    out.emit('publishing', { enabled, by, tMs: Date.now() });
+    console.log(`[outputs] publishing ${enabled ? 'ENABLED' : 'DISABLED'}${by ? ` by ${by}` : ''}`);
   },
 };
 
-console.log(`[config] events dir ${eventsDir} — active event "${manager.raw.name}" (${eventFile})`);
+function persistLoaded(): void {
+  store.setSetting('loaded-events', JSON.stringify([...managers.keys()].map((id) => loadedFiles.get(id))));
+}
+const loadedFiles = new Map<string, string>(); // eventId → file
 
-const { io } = startApi(holder, Number(arg('api-port', '8080')));
-emitFn = (e, p) => io.emit(e, p);
+function loadEvent(file: string): App {
+  const manager = new ConfigManager(path.join(eventsDir, file));
+  const resolved = manager.resolved();
+  if (apps.has(resolved.id)) throw new Error(`Event "${resolved.id}" is already active`);
+  const app = new App(resolved, store, out, hub, (imei) => gate.health(imei));
+  app.publishEnabled = publishing.enabled;
+  apps.set(resolved.id, app);
+  managers.set(resolved.id, manager);
+  loadedFiles.set(resolved.id, file);
+  persistLoaded();
+  syncListeners();
+  console.log(`[events] activated "${resolved.name}" (${file}) — ${apps.size} event(s) running`);
+  return app;
+}
 
-// --- listeners: rebound only when the port set changes between events ---
+function unloadEvent(eventId: string): void {
+  const app = apps.get(eventId);
+  if (!app) throw new Error(`Event "${eventId}" is not active`);
+  if (app.hasActiveRaces()) throw new Error('Event has an armed or live race — finish or reset it first');
+  apps.delete(eventId);
+  managers.delete(eventId);
+  loadedFiles.delete(eventId);
+  persistLoaded();
+  syncListeners();
+  console.log(`[events] deactivated "${eventId}" — ${apps.size} event(s) running`);
+}
+
+/** Rebuild one loaded event's App from an edited config. */
+function rebuildEvent(eventId: string, json: unknown): void {
+  const manager = managers.get(eventId);
+  if (!manager) throw new Error(`Event "${eventId}" is not active`);
+  const resolved = manager.update(json);
+  if (resolved.id !== eventId) {
+    // id changed in the edit — rekey
+    apps.delete(eventId);
+    const file = loadedFiles.get(eventId)!;
+    loadedFiles.delete(eventId);
+    managers.delete(eventId);
+    managers.set(resolved.id, manager);
+    loadedFiles.set(resolved.id, file);
+    persistLoaded();
+  }
+  const app = new App(resolved, store, out, hub, (imei) => gate.health(imei));
+  app.publishEnabled = publishing.enabled;
+  apps.set(resolved.id, app);
+  syncListeners();
+  console.log(`[events] "${resolved.id}" config updated — engines rebuilt`);
+}
+
+// --- shared fix/telemetry handling ---
+
+function onFix(fix: Fix): void {
+  lastSeen.set(fix.imei, fix.receivedAtMs);
+  const g = gate.accept(fix);
+  store.recordFix(fix, g.ok, g.reason);
+  out.emit('fix', {
+    imei: fix.imei,
+    receivedAtMs: fix.receivedAtMs,
+    lat: fix.lat,
+    lon: fix.lon,
+    tUtcMs: fix.tUtcMs,
+    battery: fix.battery,
+    accuracy: fix.accuracy,
+    buffered: fix.buffered,
+    accepted: g.ok,
+    reason: g.reason,
+    source: fix.source,
+    protocol: fix.protocol,
+  });
+  if (!g.ok) return;
+  for (const app of apps.values()) app.onFix(fix);
+}
+
+function onTelemetry(t: Telemetry): void {
+  if (t.imei) lastSeen.set(t.imei, Date.now());
+  store.recordTelemetry(t);
+  out.emit('telemetry', { imei: t.imei, type: t.type, tUtcMs: t.tUtcMs, source: t.source, receivedAtMs: Date.now() });
+}
+
+function onSimulatedDistance(data: { tracker?: unknown; distance?: unknown; raceTime?: unknown }): void {
+  const tracker = String(data.tracker ?? '').trim();
+  const distance = Number(data.distance);
+  if (!tracker || !Number.isFinite(distance)) return;
+  const raceTime = data.raceTime !== undefined ? String(data.raceTime) : undefined;
+  const entry = { distance, raceTime, tMs: Date.now() };
+  simulated.set(tracker, entry);
+  store.recordTelemetry({
+    type: 'split-distance',
+    imei: /^\d{15}$/.test(tracker) ? tracker : undefined,
+    detail: { tracker, distance, raceTime },
+    source: 'splits',
+    raw: JSON.stringify(data),
+  });
+  out.emit('simulatedDistance', { tracker, distance, raceTime, tMs: entry.tMs });
+  for (const app of apps.values()) app.applySimulatedDistance(tracker, distance, raceTime);
+}
+
+function snapshotAll() {
+  return {
+    events: [...apps.values()].map((a) => a.snapshot()),
+    lastSeen: Object.fromEntries(lastSeen),
+    publishEnabled: publishing.enabled,
+    simulated: Object.fromEntries(simulated),
+  };
+}
+
+/** Filtered snapshot for an event-scoped viewer PIN session. */
+function snapshotFor(eventId: string) {
+  const app = apps.get(eventId);
+  return {
+    events: app ? [app.snapshot()] : [],
+    lastSeen: Object.fromEntries(lastSeen),
+    publishEnabled: publishing.enabled,
+    simulated: Object.fromEntries(simulated),
+  };
+}
+
+// --- listeners: union of ports across loaded events ---
 
 let listenerServers: net.Server[] = [];
 const liveSockets = new Set<net.Socket>();
 let currentPorts = '';
 
-function syncListeners(listeners: Array<{ name: string; port: number }>): void {
-  const ports = listeners.map((l) => `${l.name}:${l.port}`).sort().join(',');
-  if (ports === currentPorts) return; // same ports — connections keep flowing to the current App
+function syncListeners(): void {
+  const portNames = new Map<number, string>();
+  for (const m of managers.values()) {
+    for (const l of m.resolved().listeners) {
+      if (!portNames.has(l.port)) portNames.set(l.port, l.name);
+    }
+  }
+  const key = [...portNames.keys()].sort().join(',');
+  if (key === currentPorts) return;
   for (const s of liveSockets) s.destroy();
   liveSockets.clear();
   for (const srv of listenerServers) srv.close();
   listenerServers = [];
-  currentPorts = ports;
-  for (const listener of listeners) {
-    const srv = startListener(listener, {
-      onFix: (fix) => holder.app.onFix(fix),
-      onTelemetry: (t) => holder.app.onTelemetry(t),
-      onRawFrame: (raw) => forwarder.write(raw),
-      onConnection: (event, ip, source) => {
-        console.log(`[${source}] ${ip} ${event}`);
-        io.emit('connection', { event, ip, source, tMs: Date.now() });
+  currentPorts = key;
+  for (const [port, name] of portNames) {
+    const srv = startListener(
+      { name, port },
+      {
+        onFix,
+        onTelemetry,
+        onRawFrame: (raw) => forwarder.write(raw),
+        onConnection: (event, ip, source) => {
+          console.log(`[${source}] ${ip} ${event}`);
+          out.emit('connection', { event, ip, source, tMs: Date.now() });
+        },
       },
-    });
+    );
     srv.on('connection', (sock) => {
       liveSockets.add(sock);
       sock.on('close', () => liveSockets.delete(sock));
@@ -115,7 +224,54 @@ function syncListeners(listeners: Array<{ name: string; port: number }>): void {
   }
 }
 
-syncListeners(manager.resolved().listeners);
+// --- boot: restore loaded events (or seed from --event / legacy setting) ---
+
+const ctx: ServerContext = {
+  store,
+  hub,
+  forwarder,
+  eventsDir,
+  apps,
+  managers,
+  gate,
+  lastSeen,
+  publishing,
+  loadEvent,
+  unloadEvent,
+  rebuildEvent,
+  snapshotAll,
+  snapshotFor,
+  onSimulatedDistance,
+};
+
+const { broadcast } = startApi(ctx, Number(arg('api-port', '8080')));
+emitFn = broadcast;
+
+const available = listEvents(eventsDir).filter((e) => !e.error);
+let toLoad: string[] = [];
+try {
+  toLoad = JSON.parse(store.getSetting('loaded-events') ?? '[]');
+} catch {
+  toLoad = [];
+}
+if (toLoad.length === 0) {
+  const legacy = store.getSetting('active-event');
+  if (legacy) toLoad = [legacy];
+}
+if (eventArg) {
+  const f = path.basename(eventArg);
+  if (!toLoad.includes(f)) toLoad.push(f);
+}
+for (const file of toLoad) {
+  if (!available.some((e) => e.file === file)) continue;
+  try {
+    loadEvent(file);
+  } catch (err) {
+    console.error(`[events] failed to activate ${file}:`, (err as Error).message);
+  }
+}
+console.log(`[events] dir ${eventsDir} — ${apps.size} active event(s): ${[...apps.keys()].join(', ') || 'none'}`);
+syncListeners();
 
 process.on('unhandledRejection', (err) => {
   console.error('unhandledRejection', err);
