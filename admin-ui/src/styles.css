@@ -357,6 +357,41 @@ button.mini.has-issues { border-color: var(--warn); color: var(--warn); font-wei
 .map-legend > span { display: inline-flex; align-items: center; gap: 6px; }
 .legend-swatch { width: 14px; height: 4px; border-radius: 2px; display: inline-block; }
 
+/* Home dashboard */
+.home-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; padding: 18px;
+  align-items: start; max-width: 1200px; margin: 0 auto;
+}
+.home-card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; }
+.home-card-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 10px; }
+.home-card-head h3 { margin: 0; }
+.home-stat { font-size: 22px; font-weight: 800; color: var(--accent); font-variant-numeric: tabular-nums; }
+.home-active-event { border-color: var(--brand-red); }
+.home-event-name { font-size: 17px; font-weight: 700; margin-bottom: 8px; }
+.home-live-banner { color: var(--ok); font-weight: 800; font-size: 13px; margin-bottom: 8px; }
+.home-races { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+.home-race-row {
+  display: flex; align-items: center; gap: 10px; background: var(--panel2); border: 1px solid var(--border);
+  border-radius: 6px; padding: 7px 10px; cursor: pointer; color: var(--text); text-align: left;
+}
+.home-race-row:hover { border-color: var(--dim); }
+.home-race-name { flex: 1; font-weight: 600; }
+.home-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.home-list { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
+.home-list-row { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.home-list-name { flex: 1; }
+.home-active-mark { color: var(--ok); }
+.home-inactive-mark { color: var(--dim); }
+.home-metrics { display: flex; gap: 18px; margin-bottom: 12px; flex-wrap: wrap; }
+.home-metric { display: flex; flex-direction: column; align-items: center; }
+.home-metric-num { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.home-metric-num.ok { color: var(--ok); }
+.home-metric-num.warn { color: var(--warn); }
+.home-metric-label { font-size: 11px; color: var(--dim); }
+@media (max-width: 900px) {
+  .home-grid { grid-template-columns: 1fr; padding: 10px; }
+}
+
 /* Event library */
 .events-list {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; padding: 16px;

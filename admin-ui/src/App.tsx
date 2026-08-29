@@ -3,6 +3,7 @@ import { io } from 'socket.io-client';
 import { api } from './api';
 import { ConfirmDialog, type ConfirmRequest } from './components/Confirm';
 import { EventsView } from './components/EventsView';
+import { HomeView } from './components/HomeView';
 import { Login, type AuthInfo } from './components/Login';
 import { MapView, type MapSelection } from './components/MapView';
 import { RacePanel } from './components/RacePanel';
@@ -81,7 +82,7 @@ export default function App() {
   const [raceId, setRaceId] = useState<string>();
   const [selected, setSelected] = useState<MapSelection>();
   const [windowDialog, setWindowDialog] = useState<MapSelection>();
-  const [view, setView] = useState<'ops' | 'all' | 'setup' | 'events' | 'sim'>('ops');
+  const [view, setView] = useState<'home' | 'ops' | 'all' | 'setup' | 'events' | 'sim'>(VIEWER_URL ? 'ops' : 'home');
   const [simProgress, setSimProgress] = useState<SimProgress>();
   const [displayUnits, setDisplayUnits] = useState<Units>(() => {
     try {
@@ -230,6 +231,11 @@ export default function App() {
           </span>
         </div>
         <nav className="race-tabs">
+          {!viewer && (
+            <button className={view === 'home' ? 'active' : ''} onClick={() => setView('home')}>
+              ⌂ Home
+            </button>
+          )}
           {races.length > 1 && (
             <button className={view === 'all' ? 'active' : ''} onClick={() => setView('all')}>
               All races
@@ -292,7 +298,16 @@ export default function App() {
           <RacePanel race={race} ask={ask} onAction={(a) => api.lifecycle(race.raceId, a).catch(oops('Lifecycle change failed'))} />
         )}
       </header>
-      {view === 'events' ? (
+      {view === 'home' && !viewer && typeof auth === 'object' && auth.role !== 'viewer' ? (
+        <HomeView
+          snapshot={state.snapshot}
+          role={auth.role}
+          onNavigate={(v, rid) => {
+            if (rid) setRaceId(rid);
+            setView(v);
+          }}
+        />
+      ) : view === 'events' ? (
         <EventsView
           ask={ask}
           onActivated={() => {
