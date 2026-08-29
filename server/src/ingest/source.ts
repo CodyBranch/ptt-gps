@@ -35,8 +35,9 @@ export function startListener(cfg: ListenerConfig, events: SourceEvents): net.Se
         try {
           if (frame.kind === 'ascii') {
             events.onRawFrame?.(frame.text, cfg.name, ip);
-            const { fix, telemetry } = parseAsciiFrame(frame.text, cfg.name, receivedAtMs);
-            if (fix) events.onFix(fix);
+            // one frame can carry a whole backlog of positions
+            const { fixes, telemetry } = parseAsciiFrame(frame.text, cfg.name, receivedAtMs);
+            fixes.forEach(events.onFix);
             if (telemetry) events.onTelemetry(telemetry);
           } else if (frame.kind === 'binary') {
             events.onRawFrame?.(frame.bytes, cfg.name, ip);

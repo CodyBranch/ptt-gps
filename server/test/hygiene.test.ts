@@ -78,3 +78,24 @@ describe('FixGate', () => {
     expect(g.health('015181000128000').rejected['no-fix']).toBe(2);
   });
 });
+
+describe('restart recovery', () => {
+  it('seeded chronology drops a backlog the engine already consumed, keeps the gap', () => {
+    const gate = new FixGate();
+    const t = NOW;
+    // as if the process had already accepted everything up to t
+    gate.seedLastAccepted(new Map([['015181000128000', t]]));
+
+    // device flushes its buffer: first what we already have, then the gap
+    expect(gate.accept(fix({ tUtcMs: t - 60_000 })).ok).toBe(false);
+    expect(gate.accept(fix({ tUtcMs: t - 60_000 })).reason).toBe('stale');
+    expect(gate.accept(fix({ tUtcMs: t + 30_000 })).ok).toBe(true);
+    expect(gate.accept(fix({ tUtcMs: t + 60_000 })).ok).toBe(true);
+  });
+
+  it('an unseeded tracker still starts fresh', () => {
+    const gate = new FixGate();
+    gate.seedLastAccepted(new Map([['999999999999999', NOW]]));
+    expect(gate.accept(fix({ tUtcMs: NOW - 60_000 })).ok).toBe(true);
+  });
+});

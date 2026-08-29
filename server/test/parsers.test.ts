@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { parseAsciiFrame, parseQueclinkTime } from '../src/ingest/parsers/ascii-gtfri.js';
 import { parseBinaryFrame } from '../src/ingest/parsers/binary-pro.js';
-import { GTFRI_27, MIRROR_ACK, MIRROR_ASCII, PRO_REPORT, REAL_GTFRI_22 } from './fixtures.js';
+import { FixGate } from '../src/ingest/hygiene.js';
+import { GTFRI_22_MULTI, GTFRI_27, MIRROR_ACK, MIRROR_ASCII, PRO_REPORT, REAL_GTFRI_22 } from './fixtures.js';
+
+/** Most frames carry one position; these tests assert on that one. */
+const fixesOf = (...args: Parameters<typeof parseAsciiFrame>) => parseAsciiFrame(...args).fixes;
 
 const NOW = 1666951600000;
 
@@ -17,7 +21,7 @@ describe('parseQueclinkTime', () => {
 
 describe('ascii GTFRI parser', () => {
   it('parses a real 22-field GL300 frame from the 2022 logs', () => {
-    const { fix } = parseAsciiFrame(REAL_GTFRI_22, 'test', NOW);
+    const [fix] = fixesOf(REAL_GTFRI_22, 'test', NOW);
     expect(fix).toBeDefined();
     expect(fix!.imei).toBe('015181000128000');
     expect(fix!.lon).toBeCloseTo(-113.582319, 6);
@@ -33,14 +37,14 @@ describe('ascii GTFRI parser', () => {
   });
 
   it('parses the mirror @Track dialect (still 22 fields)', () => {
-    const { fix } = parseAsciiFrame(MIRROR_ASCII, 'mirror', NOW);
+    const [fix] = fixesOf(MIRROR_ASCII, 'mirror', NOW);
     expect(fix!.imei).toBe('860931070051250');
     expect(fix!.lat).toBeCloseTo(33.849298, 6);
     expect(fix!.battery).toBe(95);
   });
 
   it('parses the 27-field GL30 layout (battery at 21, count at 26)', () => {
-    const { fix } = parseAsciiFrame(GTFRI_27, 'test', NOW);
+    const [fix] = fixesOf(GTFRI_27, 'test', NOW);
     expect(fix!.imei).toBe('860201060067272');
     expect(fix!.lat).toBeCloseTo(42.229944, 6);
     expect(fix!.battery).toBe(87);
@@ -49,28 +53,51 @@ describe('ascii GTFRI parser', () => {
   });
 
   it('treats +BUFF as buffered', () => {
-    const { fix } = parseAsciiFrame(REAL_GTFRI_22.replace('+RESP', '+BUFF'), 'test', NOW);
+    const [fix] = fixesOf(REAL_GTFRI_22.replace('+RESP', '+BUFF'), 'test', NOW);
     expect(fix!.buffered).toBe(true);
   });
 
+  it('reads every position in a backlog frame, not just the first', () => {
+    const { fixes } = parseAsciiFrame(GTFRI_22_MULTI, 'test', NOW);
+    expect(fixes).toHaveLength(3);
+    expect(fixes.map((f) => f.tUtcMs)).toEqual([
+      Date.UTC(2022, 9, 28, 9, 45, 41),
+      Date.UTC(2022, 9, 28, 9, 45, 51),
+      Date.UTC(2022, 9, 28, 9, 46, 1),
+    ]);
+    // the shared tail applies to all of them
+    expect(fixes.every((f) => f.battery === 100)).toBe(true);
+    expect(fixes.every((f) => f.imei === '015181000128000')).toBe(true);
+    expect(fixes[2].lat).toBeCloseTo(37.065, 6);
+    // one frame = one count number, or gap detection sees phantom losses
+    expect(fixes.filter((f) => f.countNumber !== undefined)).toHaveLength(1);
+    expect(fixes[2].countNumber).toBe(0x75c4);
+  });
+
+  it('a backlog frame feeds the gate in time order', () => {
+    const { fixes } = parseAsciiFrame(GTFRI_22_MULTI, 'test', NOW);
+    const gate = new FixGate();
+    expect(fixes.map((f) => gate.accept(f).ok)).toEqual([true, true, true]);
+  });
+
   it('routes non-GTFRI frames to telemetry (GV500 ACK relays etc.)', () => {
-    const { fix, telemetry } = parseAsciiFrame(MIRROR_ACK, 'mirror', NOW);
-    expect(fix).toBeUndefined();
+    const { fixes, telemetry } = parseAsciiFrame(MIRROR_ACK, 'mirror', NOW);
+    expect(fixes).toHaveLength(0);
     expect(telemetry!.type).toBe('+ACK:RTO');
     expect(telemetry!.imei).toBe('865134050946566');
   });
 
   it('flags unknown GTFRI layouts instead of misreading fields', () => {
     const weird = REAL_GTFRI_22.replace(/\$$/, '') + ',extra$';
-    const { fix, telemetry } = parseAsciiFrame(weird, 'test', NOW);
-    expect(fix).toBeUndefined();
+    const { fixes, telemetry } = parseAsciiFrame(weird, 'test', NOW);
+    expect(fixes).toHaveLength(0);
     expect(telemetry!.type).toContain('unknown-layout(23)');
   });
 
   it('marks empty coordinates as fixValid=false', () => {
     const noCoords =
       '+RESP:GTFRI,F50A01,015181000128000,,0,0,1,0,0.0,0,,,,20221028094541,0310,0410,9909,06F23911,,100,20221028094542,75C4$';
-    const { fix } = parseAsciiFrame(noCoords, 'test', NOW);
+    const [fix] = fixesOf(noCoords, 'test', NOW);
     expect(fix!.fixValid).toBe(false);
   });
 });

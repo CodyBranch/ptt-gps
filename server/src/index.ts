@@ -38,6 +38,10 @@ let emitFn: (event: string, payload: unknown) => void = () => {};
 const out = { emit: (e: string, p: unknown) => emitFn(e, p) };
 
 const gate = new FixGate();
+// Seed the gate from the fix log: after a restart a device flushing its
+// backlog would otherwise re-feed fixes the engines already consumed. Anything
+// at or before what we have is dropped as stale; the gap still gets through.
+gate.seedLastAccepted(store.lastAcceptedFixTimes());
 const lastSeen = new Map<string, number>();
 const simulated = new Map<string, { distance: number; raceTime?: string; tMs: number }>();
 for (const d of store.devices() as Array<{ imei: string; last_received_ms: number | null }>) {
@@ -272,7 +276,8 @@ if (eventArg) {
 for (const file of toLoad) {
   if (!available.some((e) => e.file === file)) continue;
   try {
-    loadEvent(file);
+    const app = loadEvent(file);
+    app.recoverOpenSessions();
   } catch (err) {
     console.error(`[events] failed to activate ${file}:`, (err as Error).message);
   }

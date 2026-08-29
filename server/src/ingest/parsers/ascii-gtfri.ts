@@ -29,13 +29,39 @@ const num = (s: string | undefined): number | undefined => {
   return Number.isFinite(n) ? n : undefined;
 };
 
+/**
+ * GTFRI carries N position blocks, not one: after an outage a GL3xx clears its
+ * backlog by packing several fixes into a single report (the `Number` field at
+ * index 6 says how many). Field counts are unambiguous, so N is derived from
+ * the length:
+ *
+ *   header 0..6 (7) + N × block (11) + tail (4 for GL200/GL300, 9 for GL30)
+ *
+ * Reading only the first block — as the legacy server did — threw away the
+ * rest of the backlog; treating the longer frame as an unknown layout, as this
+ * parser used to, threw away all of it.
+ */
+const HEADER = 7;
+const BLOCK = 11;
+const TAILS = { 'gtfri-22': 4, 'gtfri-27': 9 } as const;
+type Layout = keyof typeof TAILS;
+
+/** Which family/point-count a field count implies, or undefined if neither. */
+function layoutOf(len: number): { layout: Layout; points: number } | undefined {
+  for (const layout of Object.keys(TAILS) as Layout[]) {
+    const rest = len - HEADER - TAILS[layout];
+    if (rest >= 0 && rest % BLOCK === 0) return { layout, points: rest / BLOCK };
+  }
+  return undefined;
+}
+
 export function parseAsciiFrame(
   text: string,
   source: string,
   receivedAtMs: number,
-): { fix?: Fix; telemetry?: Telemetry } {
+): { fixes: Fix[]; telemetry?: Telemetry } {
   const raw = text.trim().replace(/\$$/, '');
-  if (raw === '') return {};
+  if (raw === '') return { fixes: [] };
   const f = raw.split(',');
   const head = f[0] ?? '';
 
@@ -44,43 +70,53 @@ export function parseAsciiFrame(
     // Command replies, other report types, GV500 ACK/QRY relays — telemetry only.
     // IMEI position varies by frame type (ACKs have no protocol field), so scan.
     const imei = f.find((x) => /^\d{15}$/.test(x));
-    return { telemetry: { type: head, imei, source, raw } };
+    return { fixes: [], telemetry: { type: head, imei, source, raw } };
   }
 
-  let battery: number | undefined;
-  let countHex: string | undefined;
-  if (f.length === 22) {
-    battery = num(f[19]);
-    countHex = f[21];
-  } else if (f.length === 27) {
-    battery = num(f[21]);
-    countHex = f[26];
-  } else {
+  const shape = layoutOf(f.length);
+  if (!shape) {
     // Unknown GTFRI layout — surface it rather than guessing field positions.
-    return { telemetry: { type: `${head}:unknown-layout(${f.length})`, imei: f[2], source, raw } };
+    return { fixes: [], telemetry: { type: `${head}:unknown-layout(${f.length})`, imei: f[2], source, raw } };
   }
+  const { layout, points } = shape;
+  const tail = HEADER + BLOCK * points;
+  const battery = num(layout === 'gtfri-22' ? f[tail + 1] : f[tail + 3]);
+  const countHex = layout === 'gtfri-22' ? f[tail + 3] : f[tail + 8];
+  const countNumber = countHex && /^[0-9a-fA-F]+$/.test(countHex) ? parseInt(countHex, 16) : undefined;
+  const imei = f[2] ?? '';
 
-  const lon = num(f[11]);
-  const lat = num(f[12]);
-  const tUtcMs = parseQueclinkTime(f[13] ?? '');
-
-  const fix: Fix = {
-    imei: f[2] ?? '',
-    lat: lat ?? NaN,
-    lon: lon ?? NaN,
-    altM: num(f[10]),
-    tUtcMs,
-    speedKmh: num(f[8]),
-    azimuth: num(f[9]),
-    accuracy: num(f[7]),
-    battery,
-    fixValid: lat !== undefined && lon !== undefined && Number.isFinite(tUtcMs),
-    buffered: head.startsWith('+BUFF'),
-    countNumber: countHex && /^[0-9a-fA-F]+$/.test(countHex) ? parseInt(countHex, 16) : undefined,
-    source,
-    protocol: f.length === 22 ? 'gtfri-22' : 'gtfri-27',
-    raw,
-    receivedAtMs,
-  };
-  return { fix };
+  const fixes: Fix[] = [];
+  for (let b = 0; b < points; b++) {
+    const i = HEADER + BLOCK * b;
+    const lon = num(f[i + 4]);
+    const lat = num(f[i + 5]);
+    const tUtcMs = parseQueclinkTime(f[i + 6] ?? '');
+    fixes.push({
+      imei,
+      lat: lat ?? NaN,
+      lon: lon ?? NaN,
+      altM: num(f[i + 3]),
+      tUtcMs,
+      speedKmh: num(f[i + 1]),
+      azimuth: num(f[i + 2]),
+      accuracy: num(f[i + 0]),
+      battery,
+      fixValid: lat !== undefined && lon !== undefined && Number.isFinite(tUtcMs),
+      buffered: head.startsWith('+BUFF'),
+      // The count number identifies the frame, so it belongs to the last block:
+      // gap detection must not see one frame as several missing ones.
+      countNumber: b === points - 1 ? countNumber : undefined,
+      source,
+      protocol: layout,
+      raw,
+      receivedAtMs,
+    });
+  }
+  // Backlog blocks are packed oldest-first by some firmware and newest-first by
+  // others; the engine wants them in time order either way.
+  fixes.sort((a, b2) => a.tUtcMs - b2.tUtcMs);
+  if (points === 0) {
+    return { fixes: [], telemetry: { type: `${head}:no-fix`, imei, source, raw } };
+  }
+  return { fixes };
 }

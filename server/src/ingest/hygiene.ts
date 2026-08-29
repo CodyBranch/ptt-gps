@@ -41,6 +41,17 @@ export class FixGate {
     this.maxFutureMs = opts.maxFutureMs ?? 5 * 60_000;
   }
 
+  /**
+   * Restore per-tracker chronology after a restart. Without this the gate has
+   * no memory, so a device clearing its backlog would replay fixes the engine
+   * already consumed and drag distances backwards.
+   */
+  seedLastAccepted(times: Map<string, number>): void {
+    for (const [imei, t] of times) {
+      if (Number.isFinite(t) && t > 0) this.state(imei).lastAcceptedT = t;
+    }
+  }
+
   private state(imei: string): ImeiState {
     let s = this.perImei.get(imei);
     if (!s) {

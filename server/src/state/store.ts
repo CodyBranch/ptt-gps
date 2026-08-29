@@ -288,6 +288,37 @@ export class Store {
     return Number(res.lastInsertRowid);
   }
 
+  /**
+   * Races that were live when the process stopped. A crash or restart mid-race
+   * leaves the session open; on the way back up we resume it rather than
+   * stranding the race and its timeline.
+   */
+  openSessions(eventId: string): Array<{ id: number; race_id: string; started_at_ms: number }> {
+    return this.db
+      .prepare(`SELECT id, race_id, started_at_ms FROM sessions WHERE event_id = ? AND ended_at_ms IS NULL ORDER BY id`)
+      .all(eventId) as Array<{ id: number; race_id: string; started_at_ms: number }>;
+  }
+
+  /**
+   * Newest accepted GPS time per tracker. Seeds the hygiene gate after a
+   * restart so a device flushing its backlog does not replay fixes the engine
+   * has already consumed — only the ones from the gap get through.
+   */
+  lastAcceptedFixTimes(): Map<string, number> {
+    const rows = this.db
+      .prepare(`SELECT imei, MAX(t_utc_ms) AS t FROM fixes WHERE accepted = 1 GROUP BY imei`)
+      .all() as Array<{ imei: string; t: number }>;
+    return new Map(rows.map((r) => [r.imei, r.t]));
+  }
+
+  /** Accepted fixes for a race session, in GPS-time order — the recovery feed. */
+  acceptedFixesSince(startMs: number, imeis: string[]): Array<Record<string, unknown>> {
+    if (imeis.length === 0) return [];
+    const q = `SELECT * FROM fixes WHERE accepted = 1 AND t_utc_ms >= ?
+       AND imei IN (${imeis.map(() => '?').join(',')}) ORDER BY t_utc_ms`;
+    return this.db.prepare(q).all(startMs, ...imeis) as Array<Record<string, unknown>>;
+  }
+
   endSession(sessionId: number, endedAtMs = Date.now()): void {
     this.db.prepare(`UPDATE sessions SET ended_at_ms = ? WHERE id = ?`).run(endedAtMs, sessionId);
   }

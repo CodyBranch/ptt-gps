@@ -58,8 +58,8 @@ async function collect(): Promise<void> {
       const m = line.match(/^\s*[\d/]+ [\d:.]+ \| (.+)$/);
       const frameText = m ? m[1] : line.trim();
       if (!frameText.startsWith('+')) continue;
-      const { fix } = parseAsciiFrame(frameText, 'replay', Date.now());
-      if (fix) fixes.push(fix);
+      const parsed = parseAsciiFrame(frameText, 'replay', Date.now());
+      fixes.push(...parsed.fixes);
     }
   } else {
     const sessionId = Number(arg('session'));
