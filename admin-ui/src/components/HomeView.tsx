@@ -1,6 +1,7 @@
 import { useEffect, useReducer, useState } from 'react';
 import { api } from '../api';
 import type { EventSnap, FleetRow, Snapshot, TunnelStatus } from '../types';
+import { PublishBadge, RaceRows, ReportingCount, eventImeis, isReporting as reporting } from './EventLive';
 
 type Severity = 'bad' | 'warn' | 'info';
 interface Alert {
@@ -17,11 +18,15 @@ interface Alert {
  */
 export function HomeView({
   snapshot,
+  lastSeen,
   role,
   onOpenEvent,
   onNavigate,
 }: {
   snapshot: Snapshot;
+  /** Live packet ages — kept outside the snapshot so they update between
+   *  snapshots, as fixes arrive. */
+  lastSeen: Record<string, number>;
   role: 'admin' | 'staff';
   onOpenEvent: (eventId: string, tab?: string) => void;
   onNavigate: (view: 'events' | 'fleet' | 'system' | 'sim') => void;
@@ -46,16 +51,7 @@ export function HomeView({
   const openIssues = fleet.reduce((n, f) => n + (f.openIssues ?? 0), 0);
   const lowBattery = activeFleet.filter((f) => f.seen_battery !== null && f.seen_battery < 20);
 
-  /** A tracker counts as reporting if a frame landed within 3 report intervals. */
-  const staleAfter = (ev: EventSnap) => Math.max(30_000, (ev.event.reportIntervalS || 10) * 3000);
-  const isReporting = (imei: string, ev: EventSnap) => {
-    const t = snapshot.lastSeen[imei];
-    return t !== undefined && now - t < staleAfter(ev);
-  };
-  const imeisByEvent = new Map(
-    snapshot.events.map((ev) => [ev.event.id, [...new Set(ev.races.flatMap((r) => r.trackers.map((t) => t.imei)))]]),
-  );
-  const eventImeis = (ev: EventSnap) => imeisByEvent.get(ev.event.id) ?? [];
+  const isReporting = (imei: string, ev: EventSnap) => reporting(imei, ev, lastSeen, now);
 
   const fleetOnline = activeFleet.filter((f) => f.last_received_ms && now - f.last_received_ms < 120_000);
   const liveRaces = snapshot.events.flatMap((ev) => ev.races.filter((r) => r.status === 'live'));
@@ -189,8 +185,6 @@ export function HomeView({
             </div>
           )}
           {snapshot.events.map((ev) => {
-            const imeis = eventImeis(ev);
-            const reporting = imeis.filter((i) => isReporting(i, ev)).length;
             const live = ev.races.some((r) => r.status === 'live');
             return (
               <div key={ev.event.id} className={`home-event ${live ? 'live' : ''}`}>
@@ -199,38 +193,18 @@ export function HomeView({
                   <button className="home-event-title" onClick={() => onOpenEvent(ev.event.id)}>
                     {ev.event.name}
                   </button>
-                  <span className={`home-pub ${ev.publishEnabled ? 'on' : 'off'}`}>
-                    {ev.publishEnabled ? 'PUBLISHING' : '⛔ OUTPUTS OFF'}
-                  </span>
+                  <PublishBadge on={ev.publishEnabled} />
                 </div>
                 <div className="home-event-meta">
                   {dateLabel(ev)} · meet {ev.event.meetId} ·{' '}
-                  <span className={reporting < imeis.length ? 'warn-text' : 'ok-text'}>
-                    {reporting}/{imeis.length} trackers reporting
-                  </span>
+                  <ReportingCount ev={ev} lastSeen={lastSeen} now={now} />
                 </div>
-                {ev.races.length === 0 && <p className="hint">No races configured yet.</p>}
-                {ev.races.map((race) => {
-                  const rImeis = race.trackers.map((t) => t.imei);
-                  const rOn = rImeis.filter((i) => isReporting(i, ev)).length;
-                  return (
-                    <button
-                      key={race.raceId}
-                      className="home-race"
-                      onClick={() => onOpenEvent(ev.event.id, race.raceId)}
-                    >
-                      <span className={`status-dot ${race.status}`} />
-                      <span className="home-race-name">{race.name}</span>
-                      <span className={`home-race-status ${race.status}`}>{race.status.toUpperCase()}</span>
-                      <span className="home-race-len dim">
-                        {race.courseLength.toFixed(1)} {race.units === 'miles' ? 'mi' : 'km'}
-                      </span>
-                      <span className={`home-report ${rOn < rImeis.length ? 'warn-text' : 'ok-text'}`}>
-                        {rOn}/{rImeis.length}
-                      </span>
-                    </button>
-                  );
-                })}
+                <RaceRows
+                  ev={ev}
+                  lastSeen={lastSeen}
+                  now={now}
+                  onOpenRace={(raceId) => onOpenEvent(ev.event.id, raceId)}
+                />
                 <div className="home-actions">
                   <button className="mini" onClick={() => onOpenEvent(ev.event.id)}>
                     Open event →

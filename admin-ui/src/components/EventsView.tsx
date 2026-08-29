@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useReducer, useState } from 'react';
 import { api } from '../api';
 import type { ConfirmRequest } from './Confirm';
-import type { CourseInfo, EventListing } from '../types';
+import type { CourseInfo, EventListing, EventSnap } from '../types';
+import { PublishBadge, RaceRows, ReportingCount } from './EventLive';
 
 /**
  * Event library. Several events can be active (running) at once. Sorted:
@@ -9,22 +10,34 @@ import type { CourseInfo, EventListing } from '../types';
  * events (end date in the past) are hidden behind a toggle.
  */
 export function EventsView({
-  loaded,
+  live,
+  lastSeen,
   ask,
   onChanged,
   onOpenSetup,
+  onOpenEvent,
   onManageCourses,
 }: {
-  loaded: string[];
+  /** Snapshot of the running events — active cards show their live state. */
+  live: EventSnap[];
+  lastSeen: Record<string, number>;
   ask: (req: ConfirmRequest) => void;
   onChanged: () => void;
   onOpenSetup: (eventId: string) => void;
+  onOpenEvent: (eventId: string, tab?: string) => void;
   onManageCourses: () => void;
 }) {
   const [events, setEvents] = useState<EventListing[]>([]);
   const [courses, setCourses] = useState<CourseInfo[]>([]);
   const [showCompleted, setShowCompleted] = useState(false);
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string }>();
+  const [, tick] = useReducer((n: number) => n + 1, 0);
+
+  // packet ages go stale on their own between snapshots
+  useEffect(() => {
+    const t = setInterval(tick, 5000);
+    return () => clearInterval(t);
+  }, []);
   // create form
   const [name, setName] = useState('');
   const [meetId, setMeetId] = useState('');
@@ -44,8 +57,10 @@ export function EventsView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const now = Date.now();
   const today = new Date().toISOString().slice(0, 10);
-  const loadedSet = new Set(loaded);
+  const liveById = new Map(live.map((e) => [e.event.id, e]));
+  const loadedSet = new Set(liveById.keys());
   const isCompleted = (e: EventListing) => !!e.endDate && e.endDate < today && !loadedSet.has(e.id);
 
   const sortKey = (e: EventListing): [number, string] => {
@@ -130,20 +145,39 @@ export function EventsView({
   };
 
   const card = (e: EventListing) => {
-    const active = loadedSet.has(e.id);
+    const ev = liveById.get(e.id);
+    const active = !!ev;
+    const running = ev?.races.some((r) => r.status === 'live');
     return (
-      <div key={e.file} className={`event-card ${active ? 'active' : ''}`}>
+      <div key={e.file} className={`event-card ${active ? 'active' : ''} ${running ? 'running' : ''}`}>
         <div className="event-card-head">
           <span className="event-card-name">{e.name}</span>
+          {ev ? <PublishBadge on={ev.publishEnabled} /> : null}
           {active && <span className="active-badge">ACTIVE</span>}
         </div>
         <div className="event-card-meta">
-          {dateRange(e)} · meet {e.meetId} · {e.races} race{e.races === 1 ? '' : 's'} · {e.trackers} tracker
-          {e.trackers === 1 ? '' : 's'}
+          {dateRange(e)} · meet {e.meetId} ·{' '}
+          {ev ? (
+            <ReportingCount ev={ev} lastSeen={lastSeen} now={now} />
+          ) : (
+            <>
+              {e.races} race{e.races === 1 ? '' : 's'} · {e.trackers} tracker{e.trackers === 1 ? '' : 's'}
+            </>
+          )}
         </div>
+        {/* An active event shows the same live picture as Home: a row per
+            race with its state and how much of its fleet is reporting. */}
+        {ev && (
+          <div className="event-card-races">
+            <RaceRows ev={ev} lastSeen={lastSeen} now={now} onOpenRace={(raceId) => onOpenEvent(e.id, raceId)} />
+          </div>
+        )}
         <div className="event-card-actions">
           {active ? (
             <>
+              <button className="mini" onClick={() => onOpenEvent(e.id)}>
+                Open →
+              </button>
               <button className="mini" onClick={() => onOpenSetup(e.id)}>
                 ⚙ Setup
               </button>

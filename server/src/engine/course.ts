@@ -50,6 +50,9 @@ export interface PlacedMarker {
   at: number;
   label: string;
   kind: 'start' | 'finish' | 'unit' | 'custom' | 'timing';
+  /** Which unit a distance post counts in — mile and km posts are drawn
+   *  differently, and a course can carry both sets. */
+  units?: 'miles' | 'kilometers';
   lat: number;
   lon: number;
 }
@@ -74,10 +77,10 @@ export function placeMarkers(
   },
 ): PlacedMarker[] {
   const out: PlacedMarker[] = [];
-  const place = (at: number, label: string, kind: PlacedMarker['kind']) => {
+  const place = (at: number, label: string, kind: PlacedMarker['kind'], units?: 'miles' | 'kilometers') => {
     const clamped = Math.min(Math.max(at, 0), course.length);
     const p = turf.along(course.line, clamped, { units: course.units });
-    out.push({ at: clamped, label, kind, lon: p.geometry.coordinates[0], lat: p.geometry.coordinates[1] });
+    out.push({ at: clamped, label, kind, units, lon: p.geometry.coordinates[0], lat: p.geometry.coordinates[1] });
   };
 
   place(0, 'START', 'start');
@@ -87,14 +90,15 @@ export function placeMarkers(
     const unit = cfg.units === 'miles' ? 'mi' : 'km';
     const lengthInMarkerUnits = convert(course.length, course.units, cfg.units);
     for (let d = 1; d < lengthInMarkerUnits; d++) {
-      place(convert(d, cfg.units, course.units), `${d} ${unit}`, 'unit');
+      place(convert(d, cfg.units, course.units), `${d} ${unit}`, 'unit', cfg.units);
     }
   }
   for (const m of cfg.markers) {
     // each marker carries its own unit; fall back to the course's default
     const at = convert(m.at, m.units ?? cfg.units, course.units);
     if (at <= course.length) {
-      place(at, m.label, m.kind === 'timing' ? 'timing' : m.kind === 'post' ? 'unit' : 'custom');
+      const mu = m.units ?? cfg.units;
+      place(at, m.label, m.kind === 'timing' ? 'timing' : m.kind === 'post' ? 'unit' : 'custom', mu);
     }
   }
   return out.sort((a, b) => a.at - b.at);

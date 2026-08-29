@@ -462,16 +462,19 @@ export default function App() {
       {page === 'home' && !viewer ? (
         <HomeView
           snapshot={state.snapshot}
+          lastSeen={state.lastSeen}
           role={admin ? 'admin' : 'staff'}
           onOpenEvent={(id) => openEvent(id)}
           onNavigate={(v) => setPage(v)}
         />
       ) : page === 'events' && admin && !viewer ? (
         <EventsView
-          loaded={events.map((e) => e.event.id)}
+          live={events}
+          lastSeen={state.lastSeen}
           ask={ask}
           onChanged={() => {}}
           onOpenSetup={(id) => openEvent(id, 'setup')}
+          onOpenEvent={(id, tab) => openEvent(id, tab)}
           onManageCourses={() => setPage('courses')}
         />
       ) : page === 'courses' && admin && !viewer ? (

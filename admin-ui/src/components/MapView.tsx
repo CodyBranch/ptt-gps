@@ -8,6 +8,7 @@ export interface CourseMarker {
   at: number;
   label: string;
   kind: 'start' | 'finish' | 'unit' | 'custom' | 'timing';
+  units?: 'miles' | 'kilometers';
   lat: number;
   lon: number;
 }
@@ -139,14 +140,16 @@ const emptyFc: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features
 /** One look for course markers, shared by the race map and the course preview. */
 export const MARKER_DOT_PAINT: mapboxgl.CircleLayerSpecification['paint'] = {
   'circle-radius': ['match', ['get', 'kind'], 'start', 6, 'finish', 6, 'custom', 5, 'timing', 5, 3.5],
+  // distance posts are coloured by their unit — green miles, yellow kilometres
+  // — so both sets stay readable on a course that carries each.
   'circle-color': [
-    'match',
-    ['get', 'kind'],
-    'start', '#1fa860',
-    'finish', '#e70518',
-    'custom', '#ffb02e',
-    'timing', '#c85fd4',
-    '#5b74e8',
+    'case',
+    ['==', ['get', 'kind'], 'start'], '#1fa860',
+    ['==', ['get', 'kind'], 'finish'], '#e70518',
+    ['==', ['get', 'kind'], 'timing'], '#c85fd4',
+    ['==', ['get', 'kind'], 'custom'], '#5b74e8',
+    ['==', ['get', 'units'], 'kilometers'], '#ffb02e',
+    '#1fa860',
   ],
   'circle-stroke-width': 1.5,
   'circle-stroke-color': '#ffffff',
@@ -231,7 +234,7 @@ function setMarkerData(map: mapboxgl.Map, markers: CourseMarker[]) {
     type: 'FeatureCollection',
     features: markers.map((m) => ({
       type: 'Feature',
-      properties: { label: m.label, kind: m.kind },
+      properties: { label: m.label, kind: m.kind, units: m.units ?? '' },
       geometry: { type: 'Point', coordinates: [m.lon, m.lat] },
     })),
   });
@@ -288,7 +291,7 @@ export function MapView({ races, selected }: { races: RaceSnap[]; selected?: Map
           type: 'FeatureCollection',
           features: course.markers.map((m) => ({
             type: 'Feature',
-            properties: { label: m.label, kind: m.kind },
+            properties: { label: m.label, kind: m.kind, units: m.units ?? '' },
             geometry: { type: 'Point', coordinates: [m.lon, m.lat] },
           })),
         },
