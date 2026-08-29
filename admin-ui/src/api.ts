@@ -45,7 +45,7 @@ export const api = {
   course: (eventId: string, raceId: string): Promise<{ line: GeoJSON.Feature; length: number; units: string }> =>
     getJson(`/api/events/${eventId}/races/${raceId}/course`),
 
-  setPublishing: (enabled: boolean) => post('/api/publishing', { enabled }),
+  setPublishing: (eventId: string, enabled: boolean) => post(`/api/events/${eventId}/publishing`, { enabled }),
 
   // --- events ---
   events: (): Promise<{ loaded: string[]; events: import('./types').EventListing[] }> => getJson('/api/events'),

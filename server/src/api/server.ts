@@ -26,7 +26,7 @@ export interface ServerContext {
   managers: Map<string, ConfigManager>;
   gate: FixGate;
   lastSeen: Map<string, number>;
-  publishing: { readonly enabled: boolean; set(enabled: boolean, by?: string): void };
+  setPublishing: (eventId: string, enabled: boolean, by?: string) => void;
   loadEvent: (file: string) => App;
   unloadEvent: (eventId: string) => void;
   rebuildEvent: (eventId: string, json: unknown) => void;
@@ -267,9 +267,9 @@ export function startApi(ctx: ServerContext, port: number): { httpServer: http.S
   );
 
   ex.post(
-    '/api/publishing',
+    '/api/events/:eventId/publishing',
     act((req) => {
-      ctx.publishing.set(!!req.body.enabled, (req as OpRequest).operator);
+      ctx.setPublishing(req.params.eventId as string, !!req.body.enabled, (req as OpRequest).operator);
     }),
   );
 

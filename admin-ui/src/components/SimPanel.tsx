@@ -70,10 +70,10 @@ export function SimPanel({
         onMsg({ kind: 'err', text: (err as Error).message });
       }
     };
-    if (snapshot.publishEnabled) {
+    if (ev?.publishEnabled) {
       ask({
         title: 'Publishing is ON — simulate anyway?',
-        body: 'Simulated positions will reach Firebase if a race goes live. For a pure rehearsal, turn publishing off first.',
+        body: `Simulated positions will reach Firebase if a ${ev!.event.name} race goes live. For a pure rehearsal, turn that event's publishing off first.`,
         confirmLabel: 'Simulate anyway',
         danger: true,
         onConfirm: doStart,
@@ -104,10 +104,10 @@ export function SimPanel({
         track. Export the package to simulate from another machine.
       </p>
 
-      {!snapshot.publishEnabled ? (
-        <p className="sim-safe">⛔ Outputs are off — safe to rehearse, nothing reaches Firebase.</p>
+      {!ev.publishEnabled ? (
+        <p className="sim-safe">⛔ This event's outputs are off — safe to rehearse, nothing reaches Firebase.</p>
       ) : (
-        <p className="sim-warn">⚠ Publishing is ON — simulated data will reach Firebase if a race is live.</p>
+        <p className="sim-warn">⚠ Publishing is ON for this event — simulated data will reach Firebase if a race goes live.</p>
       )}
 
       <div className="form-row">

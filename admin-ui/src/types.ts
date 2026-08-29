@@ -80,6 +80,8 @@ export interface EventMeta {
 
 export interface EventSnap {
   event: EventMeta;
+  /** Per-event master output switch. */
+  publishEnabled: boolean;
   races: RaceSnap[];
 }
 
@@ -87,7 +89,6 @@ export interface EventSnap {
 export interface Snapshot {
   events: EventSnap[];
   lastSeen: Record<string, number>;
-  publishEnabled: boolean;
   simulated: Record<string, SimulatedDistance>;
 }
 

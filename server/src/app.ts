@@ -256,6 +256,7 @@ export class App {
         startDate: this.cfg.startDate,
         endDate: this.cfg.endDate,
       },
+      publishEnabled: this.publishEnabled,
       races: this.cfg.races.map((r) => this.raceSnapshot(r.id)),
     };
   }

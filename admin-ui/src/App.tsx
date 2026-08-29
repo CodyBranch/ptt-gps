@@ -27,7 +27,7 @@ type Action =
   | { type: 'race'; race: RaceSnap }
   | { type: 'tracker'; eventId: string; raceId: string; state: TrackerPub; slice: [number, number][]; health: TrackerPub['health'] }
   | { type: 'seen'; imei: string; ms: number }
-  | { type: 'publishing'; enabled: boolean }
+  | { type: 'publishing'; eventId: string; enabled: boolean }
   | { type: 'simulated'; tracker: string; entry: SimulatedDistance }
   | { type: 'connected'; connected: boolean };
 
@@ -38,8 +38,13 @@ function reducer(state: State, action: Action): State {
       return { ...state, snapshot: action.snapshot, lastSeen: { ...action.snapshot.lastSeen } };
     case 'seen':
       return { ...state, lastSeen: { ...state.lastSeen, [action.imei]: action.ms } };
-    case 'publishing':
-      return snap ? { ...state, snapshot: { ...snap, publishEnabled: action.enabled } } : state;
+    case 'publishing': {
+      if (!snap) return state;
+      const events = snap.events.map((ev) =>
+        ev.event.id === action.eventId ? { ...ev, publishEnabled: action.enabled } : ev,
+      );
+      return { ...state, snapshot: { ...snap, events } };
+    }
     case 'simulated':
       return snap
         ? { ...state, snapshot: { ...snap, simulated: { ...snap.simulated, [action.tracker]: action.entry } } }
@@ -148,7 +153,7 @@ export default function App() {
     socket.on('telemetry', (t: { imei?: string; receivedAtMs?: number }) => {
       if (t.imei) dispatch({ type: 'seen', imei: t.imei, ms: t.receivedAtMs ?? Date.now() });
     });
-    socket.on('publishing', (p: { enabled: boolean }) => dispatch({ type: 'publishing', enabled: p.enabled }));
+    socket.on('publishing', (p: { eventId: string; enabled: boolean }) => dispatch({ type: 'publishing', eventId: p.eventId, enabled: p.enabled }));
     socket.on('sim', (p: SimProgress) => setSimProgress(p));
     socket.on('simulatedDistance', (d: { tracker: string; distance: number; raceTime?: string; tMs: number }) =>
       dispatch({ type: 'simulated', tracker: d.tracker, entry: { distance: d.distance, raceTime: d.raceTime, tMs: d.tMs } }),
@@ -328,27 +333,6 @@ export default function App() {
         <button className="mini units-toggle" onClick={toggleUnits} title="Display units (does not change published output)">
           {displayUnits === 'miles' ? 'mi' : 'km'}
         </button>
-        {!viewer && (
-          <button
-            className={`publish-toggle ${state.snapshot.publishEnabled ? 'on' : 'off'}`}
-            title="Master switch for pushing data to Firebase and other outputs"
-            onClick={() => {
-              const next = !state.snapshot!.publishEnabled;
-              ask({
-                title: next ? 'Enable output publishing?' : 'Disable output publishing?',
-                body: next
-                  ? 'Distances resume flowing to Firebase (scoreboards, clocks, maps) with the next fixes — for every active event.'
-                  : 'Nothing is pushed to Firebase while disabled — all active events. Races keep computing.',
-                confirmLabel: next ? 'Enable' : 'Disable',
-                danger: !next,
-                onConfirm: () => api.setPublishing(next).catch(oops('Publishing toggle failed')),
-              });
-            }}
-          >
-            {state.snapshot.publishEnabled ? '⬆ PUBLISHING' : '⛔ OUTPUTS OFF'}
-          </button>
-        )}
-        {viewer && !state.snapshot.publishEnabled && <span className="publish-toggle off">⛔ OUTPUTS OFF</span>}
       </header>
 
       {page === 'event' && ev && (
@@ -368,6 +352,29 @@ export default function App() {
             <button className={eventTab === 'setup' ? 'active' : ''} onClick={() => setEventTab('setup')}>
               ⚙ Setup
             </button>
+          )}
+          <span className="spacer" />
+          {!viewer ? (
+            <button
+              className={`publish-toggle ${ev.publishEnabled ? 'on' : 'off'}`}
+              title={`Output switch for ${ev.event.name} only`}
+              onClick={() => {
+                const next = !ev.publishEnabled;
+                ask({
+                  title: next ? `Enable publishing for ${ev.event.name}?` : `Disable publishing for ${ev.event.name}?`,
+                  body: next
+                    ? 'Distances for this event resume flowing to Firebase with the next fixes. Other events are unaffected.'
+                    : 'Nothing from this event reaches Firebase while disabled (a final showDistance-off goes out). Other events keep publishing.',
+                  confirmLabel: next ? 'Enable' : 'Disable',
+                  danger: !next,
+                  onConfirm: () => api.setPublishing(ev.event.id, next).catch(oops('Publishing toggle failed')),
+                });
+              }}
+            >
+              {ev.publishEnabled ? '⬆ PUBLISHING' : '⛔ OUTPUTS OFF'}
+            </button>
+          ) : (
+            !ev.publishEnabled && <span className="publish-toggle off">⛔ OUTPUTS OFF</span>
           )}
         </nav>
       )}

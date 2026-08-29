@@ -56,6 +56,7 @@ export function HomeView({
                       ? `${armed.length} armed`
                       : `${ev.races.length} race${ev.races.length === 1 ? '' : 's'}`}
                 </span>
+                {!ev.publishEnabled && <span className="tunnel-err">⛔</span>}
               </button>
             );
           })}
@@ -105,9 +106,14 @@ export function HomeView({
           <div className="home-list">
             <div className="home-list-row">
               <span className="home-list-name">Output publishing</span>
-              <span className={snapshot.publishEnabled ? 'fwd-ok' : 'tunnel-err'}>
-                {snapshot.publishEnabled ? '● on' : '⛔ OFF'}
-              </span>
+              {(() => {
+                const off = snapshot.events.filter((e) => !e.publishEnabled);
+                return off.length === 0 ? (
+                  <span className="fwd-ok">● on for all events</span>
+                ) : (
+                  <span className="tunnel-err">⛔ OFF: {off.map((e) => e.event.id).join(', ')}</span>
+                );
+              })()}
             </div>
             {tunnel && (
               <div className="home-list-row">

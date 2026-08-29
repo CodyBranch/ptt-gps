@@ -49,17 +49,22 @@ for (const d of store.devices() as Array<{ imei: string; last_received_ms: numbe
 const apps = new Map<string, App>();
 const managers = new Map<string, ConfigManager>();
 
-const publishing = {
-  get enabled(): boolean {
-    return store.getSetting('publish-enabled') !== '0';
-  },
-  set(enabled: boolean, by?: string): void {
-    store.setSetting('publish-enabled', enabled ? '1' : '0');
-    for (const app of apps.values()) app.setPublishing(enabled, by);
-    out.emit('publishing', { enabled, by, tMs: Date.now() });
-    console.log(`[outputs] publishing ${enabled ? 'ENABLED' : 'DISABLED'}${by ? ` by ${by}` : ''}`);
-  },
-};
+/** Per-event publishing switch, persisted per event (falls back to the old
+ *  global setting for first-time migration). */
+function publishSetting(eventId: string): boolean {
+  const perEvent = store.getSetting(`publish-enabled:${eventId}`);
+  if (perEvent !== undefined) return perEvent !== '0';
+  return store.getSetting('publish-enabled') !== '0';
+}
+
+function setPublishing(eventId: string, enabled: boolean, by?: string): void {
+  const app = apps.get(eventId);
+  if (!app) throw new Error(`Event "${eventId}" is not active`);
+  store.setSetting(`publish-enabled:${eventId}`, enabled ? '1' : '0');
+  app.setPublishing(enabled, by);
+  out.emit('publishing', { eventId, enabled, by, tMs: Date.now() });
+  console.log(`[outputs] ${eventId}: publishing ${enabled ? 'ENABLED' : 'DISABLED'}${by ? ` by ${by}` : ''}`);
+}
 
 function persistLoaded(): void {
   store.setSetting('loaded-events', JSON.stringify([...managers.keys()].map((id) => loadedFiles.get(id))));
@@ -71,7 +76,7 @@ function loadEvent(file: string): App {
   const resolved = manager.resolved();
   if (apps.has(resolved.id)) throw new Error(`Event "${resolved.id}" is already active`);
   const app = new App(resolved, store, out, hub, (imei) => gate.health(imei));
-  app.publishEnabled = publishing.enabled;
+  app.publishEnabled = publishSetting(resolved.id);
   apps.set(resolved.id, app);
   managers.set(resolved.id, manager);
   loadedFiles.set(resolved.id, file);
@@ -109,7 +114,7 @@ function rebuildEvent(eventId: string, json: unknown): void {
     persistLoaded();
   }
   const app = new App(resolved, store, out, hub, (imei) => gate.health(imei));
-  app.publishEnabled = publishing.enabled;
+  app.publishEnabled = publishSetting(resolved.id);
   apps.set(resolved.id, app);
   syncListeners();
   console.log(`[events] "${resolved.id}" config updated — engines rebuilt`);
@@ -167,7 +172,6 @@ function snapshotAll() {
   return {
     events: [...apps.values()].map((a) => a.snapshot()),
     lastSeen: Object.fromEntries(lastSeen),
-    publishEnabled: publishing.enabled,
     simulated: Object.fromEntries(simulated),
   };
 }
@@ -178,7 +182,6 @@ function snapshotFor(eventId: string) {
   return {
     events: app ? [app.snapshot()] : [],
     lastSeen: Object.fromEntries(lastSeen),
-    publishEnabled: publishing.enabled,
     simulated: Object.fromEntries(simulated),
   };
 }
@@ -235,7 +238,7 @@ const ctx: ServerContext = {
   managers,
   gate,
   lastSeen,
-  publishing,
+  setPublishing,
   loadEvent,
   unloadEvent,
   rebuildEvent,
