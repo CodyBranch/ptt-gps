@@ -9,6 +9,7 @@
     "sim": "tsx src/sim/simulator.ts",
     "user": "tsx src/tools/user.ts",
     "replay": "tsx src/replay/replay.ts",
+    "seed-legacy": "tsx src/tools/seed-legacy.ts",
     "test": "vitest run",
     "build": "tsc -p tsconfig.json"
   },

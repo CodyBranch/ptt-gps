@@ -228,6 +228,7 @@ button.mini.primary { background: var(--brand-red); border-color: var(--brand-re
 .dialog-row { display: flex; gap: 12px; margin-bottom: 12px; }
 .dialog-row label { display: flex; flex-direction: column; gap: 4px; flex: 1; font-size: 12px; color: var(--dim); }
 .dialog-row input {
+  min-width: 0; width: 100%;
   background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 5px;
   padding: 7px 9px; font-size: 14px; font-variant-numeric: tabular-nums;
 }
@@ -465,9 +466,11 @@ button.mini.has-issues { border-color: var(--warn); color: var(--warn); font-wei
 
 /* Event sub-nav (races within the selected event) */
 .event-subnav {
-  display: flex; gap: 6px; flex-wrap: wrap; padding: 6px 14px;
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 6px 14px;
   background: var(--bg); border-bottom: 1px solid var(--border);
 }
+/* pushes the publishing switch to the right-hand end of the bar */
+.event-subnav .spacer { flex: 1; }
 .event-subnav button {
   background: var(--panel); color: var(--text); border: 1px solid var(--border);
   padding: 4px 12px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 7px;
@@ -844,7 +847,6 @@ a.mini.linkbtn { text-decoration: none; display: inline-flex; align-items: cente
 .course-history-row:hover { border-color: var(--accent); }
 .course-history-name { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dialog-actions { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
-.dialog-actions .spacer { flex: 1; }
 @media (max-width: 900px) {
   .courses-wrap { grid-template-columns: 1fr; padding: 10px; }
 }

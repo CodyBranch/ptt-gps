@@ -573,6 +573,8 @@ function PasswordDialog({ onClose, onDone }: { onClose: () => void; onDone: () =
             New password (min 8)
             <input type="password" value={next} onChange={(e) => setNext(e.target.value)} autoComplete="new-password" />
           </label>
+        </div>
+        <div className="dialog-row">
           <label>
             Confirm
             <input type="password" value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} autoComplete="new-password" />
