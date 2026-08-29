@@ -112,6 +112,12 @@ export class Store {
     if (!cols.some((c) => c.name === 'role')) {
       this.db.exec(`ALTER TABLE auth_tokens ADD COLUMN role TEXT NOT NULL DEFAULT 'operator'`);
     }
+    // additive migration: permission level on users. Pre-existing accounts
+    // become admins (they had full access before levels existed).
+    const userCols = this.db.prepare(`PRAGMA table_info(users)`).all() as Array<{ name: string }>;
+    if (!userCols.some((c) => c.name === 'role')) {
+      this.db.exec(`ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'admin'`);
+    }
   }
 
   private stmts = {
@@ -295,11 +301,11 @@ export class Store {
 
   // --- auth ---
 
-  addUser(username: string, passwordHash: string): void {
+  addUser(username: string, passwordHash: string, role: 'admin' | 'staff' = 'staff'): void {
     this.db
-      .prepare(`INSERT INTO users (username, password_hash, created_at_ms) VALUES (?, ?, ?)
-                ON CONFLICT(username) DO UPDATE SET password_hash = excluded.password_hash`)
-      .run(username, passwordHash, Date.now());
+      .prepare(`INSERT INTO users (username, password_hash, created_at_ms, role) VALUES (?, ?, ?, ?)
+                ON CONFLICT(username) DO UPDATE SET password_hash = excluded.password_hash, role = excluded.role`)
+      .run(username, passwordHash, Date.now(), role);
   }
 
   deleteUser(username: string): boolean {
@@ -307,17 +313,26 @@ export class Store {
     return this.db.prepare(`DELETE FROM users WHERE username = ?`).run(username).changes > 0;
   }
 
-  getUser(username: string): { username: string; password_hash: string } | undefined {
-    return this.db.prepare(`SELECT username, password_hash FROM users WHERE username = ?`).get(username) as
-      | { username: string; password_hash: string }
+  getUser(username: string): { username: string; password_hash: string; role: string } | undefined {
+    return this.db.prepare(`SELECT username, password_hash, role FROM users WHERE username = ?`).get(username) as
+      | { username: string; password_hash: string; role: string }
       | undefined;
   }
 
-  listUsers(): Array<{ username: string; created_at_ms: number }> {
-    return this.db.prepare(`SELECT username, created_at_ms FROM users ORDER BY username`).all() as Array<{
+  listUsers(): Array<{ username: string; created_at_ms: number; role: string }> {
+    return this.db.prepare(`SELECT username, created_at_ms, role FROM users ORDER BY username`).all() as Array<{
       username: string;
       created_at_ms: number;
+      role: string;
     }>;
+  }
+
+  countUsers(): number {
+    return (this.db.prepare(`SELECT COUNT(*) c FROM users`).get() as { c: number }).c;
+  }
+
+  countAdmins(): number {
+    return (this.db.prepare(`SELECT COUNT(*) c FROM users WHERE role = 'admin'`).get() as { c: number }).c;
   }
 
   insertToken(tokenHash: string, username: string, expiresAtMs: number, role = 'operator'): void {

@@ -537,6 +537,9 @@ export function SetupView({ ask, onSaved }: { ask: (req: ConfirmRequest) => void
               {users.map((u) => (
                 <tr key={u.username}>
                   <td>{u.username}</td>
+                  <td>
+                    <span className={`role-badge ${u.role}`}>{u.role}</span>
+                  </td>
                   <td className="dim">added {new Date(u.created_at_ms).toLocaleDateString()}</td>
                   <td>
                     <button
@@ -566,16 +569,20 @@ export function SetupView({ ask, onSaved }: { ask: (req: ConfirmRequest) => void
             </tbody>
           </table>
           <NewUserRow
-            onAdd={async (username, password) => {
+            onAdd={async (username, password, role) => {
               try {
-                await api.addUser(username, password);
+                await api.addUser(username, password, role);
                 setUsers(await api.users());
-                setMsg({ kind: 'ok', text: `Login "${username}" created.` });
+                setMsg({ kind: 'ok', text: `${role === 'admin' ? 'Admin' : 'Staff'} login "${username}" created.` });
               } catch (err) {
                 setMsg({ kind: 'err', text: (err as Error).message });
               }
             }}
           />
+          <p className="hint">
+            <b>admin</b> — full access including this setup page · <b>staff</b> — run races (start/finish,
+            failover, windows, publishing) but no setup changes · viewers use the PIN below.
+          </p>
           <ViewerPinRow onMsg={setMsg} ask={ask} />
         </section>
 
@@ -1034,10 +1041,11 @@ function RemoteAccessPanel({
   );
 }
 
-function NewUserRow({ onAdd }: { onAdd: (username: string, password: string) => void }) {
+function NewUserRow({ onAdd }: { onAdd: (username: string, password: string, role: 'admin' | 'staff') => void }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
+  const [role, setRole] = useState<'admin' | 'staff'>('staff');
   const valid = /^[a-zA-Z0-9._-]{2,32}$/.test(username) && password.length >= 8 && password === confirm;
   return (
     <div className="form-row">
@@ -1053,14 +1061,22 @@ function NewUserRow({ onAdd }: { onAdd: (username: string, password: string) => 
         Confirm
         <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" />
       </label>
+      <label>
+        Level
+        <select value={role} onChange={(e) => setRole(e.target.value as 'admin' | 'staff')}>
+          <option value="staff">staff</option>
+          <option value="admin">admin</option>
+        </select>
+      </label>
       <button
         className="mini self-end"
         disabled={!valid}
         onClick={() => {
-          onAdd(username, password);
+          onAdd(username, password, role);
           setUsername('');
           setPassword('');
           setConfirm('');
+          setRole('staff');
         }}
       >
         + Add login

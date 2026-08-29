@@ -47,7 +47,15 @@ function parseCookies(header: string | undefined): Record<string, string> {
 
 interface Attempts { fails: number; lockedUntil: number }
 
-export type Role = 'operator' | 'viewer';
+/**
+ * Permission levels:
+ *  - admin:  everything, including setup (users, fleet, firebase, tunnel,
+ *            events, config, viewer PIN)
+ *  - staff:  race operations (lifecycle, failover, windows, publishing) and
+ *            read access to everything
+ *  - viewer: read-only (shared PIN)
+ */
+export type Role = 'admin' | 'staff' | 'viewer';
 export interface AuthContext {
   username: string;
   role: Role;
@@ -127,16 +135,23 @@ export class AuthService {
     if (token) this.store.deleteToken(sha256(token));
   }
 
-  /** Auth context for a valid token, extending its life when past halfway. */
+  /**
+   * Auth context for a valid token, extending its life when past halfway.
+   * User roles are resolved live from the users table, so a level change
+   * applies to existing sessions immediately.
+   */
   check(token: string | undefined): AuthContext | null {
-    if (this.disabled) return { username: 'dev', role: 'operator' };
+    if (this.disabled) return { username: 'dev', role: 'admin' };
     if (!token) return null;
     const row = this.store.getToken(sha256(token));
     if (!row || row.expires_at_ms < Date.now()) return null;
     if (row.expires_at_ms - Date.now() < TOKEN_TTL_MS / 2) {
       this.store.touchToken(sha256(token), Date.now() + TOKEN_TTL_MS);
     }
-    return { username: row.username, role: row.role === 'viewer' ? 'viewer' : 'operator' };
+    if (row.role === 'viewer') return { username: 'viewer', role: 'viewer' };
+    const user = this.store.getUser(row.username);
+    if (!user) return null; // account was removed
+    return { username: row.username, role: user.role === 'admin' ? 'admin' : 'staff' };
   }
 
   tokenFromRequest(req: { headers: Record<string, unknown> }): string | undefined {
@@ -169,6 +184,15 @@ export class AuthService {
     }
     req.operator = auth.username;
     req.role = auth.role;
+    next();
+  };
+
+  /** Route guard for admin-only endpoints — register after `middleware`. */
+  adminOnly = (req: Request & { role?: Role }, res: Response, next: NextFunction): void => {
+    if (req.role !== 'admin') {
+      res.status(403).json({ ok: false, error: 'admin access required' });
+      return;
+    }
     next();
   };
 }

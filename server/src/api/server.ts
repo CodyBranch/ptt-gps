@@ -47,6 +47,8 @@ export function startApi(holder: AppHolder, port: number): { httpServer: http.Se
   const uiDist = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../admin-ui/dist');
   if (fs.existsSync(path.join(uiDist, 'index.html'))) {
     ex.use(express.static(uiDist));
+    // The link to hand viewers: /watch opens straight into PIN entry + view-only.
+    ex.get('/watch', (_req, res) => res.sendFile(path.join(uiDist, 'index.html')));
     console.log(`[api] serving admin UI from ${uiDist}`);
   } else {
     console.log('[api] no admin-ui build found — run "npm run build -w admin-ui" to serve the console here');
@@ -63,6 +65,32 @@ export function startApi(holder: AppHolder, port: number): { httpServer: http.Se
   });
   io.on('connection', (socket) => {
     socket.emit('snapshot', app.snapshot());
+  });
+
+  // --- unauthenticated: first-run bootstrap ---
+  // No default credentials exist by design. On a fresh server (zero users)
+  // the login screen offers creating the first admin account; the endpoint
+  // hard-locks the moment any user exists.
+  ex.get('/api/setup-needed', (_req, res) => {
+    res.json({ needed: app.store.countUsers() === 0 });
+  });
+
+  ex.post('/api/first-admin', (req, res) => {
+    if (app.store.countUsers() > 0) {
+      return void res.status(403).json({ ok: false, error: 'Setup is already complete' });
+    }
+    const { username, password } = req.body ?? {};
+    if (!username || !/^[a-zA-Z0-9._-]{2,32}$/.test(username)) {
+      return void res.status(400).json({ ok: false, error: 'Username: 2–32 letters, digits, dot, dash, underscore' });
+    }
+    if (typeof password !== 'string' || password.length < 8) {
+      return void res.status(400).json({ ok: false, error: 'Password must be at least 8 characters' });
+    }
+    app.store.addUser(username, hashPassword(password), 'admin');
+    const ip = (req.socket.remoteAddress ?? '?').replace('::ffff:', '');
+    const token = auth.login(username, password, ip)!;
+    res.setHeader('Set-Cookie', auth.cookie(token));
+    res.json({ ok: true, username, role: 'admin' });
   });
 
   // --- unauthenticated: login/logout/me ---
@@ -168,6 +196,7 @@ export function startApi(holder: AppHolder, port: number): { httpServer: http.Se
 
   ex.put(
     '/api/viewer-pin',
+    auth.adminOnly,
     act((req) => {
       const { pin } = req.body ?? {};
       if (pin === null) {
@@ -183,12 +212,13 @@ export function startApi(holder: AppHolder, port: number): { httpServer: http.Se
 
   // --- operator accounts ---
 
-  ex.get('/api/users', (_req, res) => {
+  ex.get('/api/users', auth.adminOnly, (_req, res) => {
     res.json(app.store.listUsers());
   });
 
   ex.post(
     '/api/users',
+    auth.adminOnly,
     act((req) => {
       const { username, password } = req.body ?? {};
       if (!username || !/^[a-zA-Z0-9._-]{2,32}$/.test(username)) {
@@ -197,18 +227,28 @@ export function startApi(holder: AppHolder, port: number): { httpServer: http.Se
       if (typeof password !== 'string' || password.length < 8) {
         throw new Error('Password must be at least 8 characters');
       }
-      app.store.addUser(username, hashPassword(password));
+      const role = req.body.role === 'admin' ? 'admin' : 'staff';
+      // Demoting the last admin would lock everyone out of setup.
+      const existing = app.store.getUser(username);
+      if (existing?.role === 'admin' && role !== 'admin' && app.store.countAdmins() <= 1) {
+        throw new Error('Cannot demote the last admin');
+      }
+      app.store.addUser(username, hashPassword(password), role);
     }),
   );
 
   ex.delete(
     '/api/users/:username',
+    auth.adminOnly,
     act((req: express.Request & { operator?: string }) => {
       const username = req.params.username as string;
       if (username === req.operator) throw new Error('You cannot remove the account you are signed in with');
-      const remaining = app.store.listUsers().filter((u) => u.username !== username);
-      if (remaining.length === 0) throw new Error('Cannot remove the last user');
-      if (!app.store.deleteUser(username)) throw new Error('Unknown user');
+      const target = app.store.getUser(username);
+      if (!target) throw new Error('Unknown user');
+      if (target.role === 'admin' && app.store.countAdmins() <= 1) {
+        throw new Error('Cannot remove the last admin');
+      }
+      app.store.deleteUser(username);
     }),
   );
 
@@ -220,6 +260,7 @@ export function startApi(holder: AppHolder, port: number): { httpServer: http.Se
 
   ex.post(
     '/api/fleet',
+    auth.adminOnly,
     act((req) => {
       const { imei, label, model, hasBattery, notes, retired } = req.body ?? {};
       if (!/^\d{15}$/.test(imei ?? '')) throw new Error('IMEI must be 15 digits');
@@ -230,6 +271,7 @@ export function startApi(holder: AppHolder, port: number): { httpServer: http.Se
 
   ex.delete(
     '/api/fleet/:imei',
+    auth.adminOnly,
     act((req) => {
       if (!app.store.deleteFleet(req.params.imei as string)) throw new Error('Unknown tracker');
     }),
@@ -244,12 +286,13 @@ export function startApi(holder: AppHolder, port: number): { httpServer: http.Se
 
   // --- firebase connections: registry, status test, open data browser ---
 
-  ex.get('/api/firebase', (_req, res) => {
+  ex.get('/api/firebase', auth.adminOnly, (_req, res) => {
     res.json(holder.hub.list());
   });
 
   ex.post(
     '/api/firebase',
+    auth.adminOnly,
     act((req) => {
       const { name, databaseURL, serviceAccount } = req.body ?? {};
       if (typeof name !== 'string' || typeof databaseURL !== 'string' || typeof serviceAccount !== 'object' || !serviceAccount) {
@@ -261,6 +304,7 @@ export function startApi(holder: AppHolder, port: number): { httpServer: http.Se
 
   ex.delete(
     '/api/firebase/:name',
+    auth.adminOnly,
     act((req) => {
       const name = req.params.name as string;
       const inUse = holder.manager.raw.firebase.some((t) => t.connection === name);
@@ -269,21 +313,21 @@ export function startApi(holder: AppHolder, port: number): { httpServer: http.Se
     }),
   );
 
-  ex.post('/api/firebase/:name/test', (req, res) => {
+  ex.post('/api/firebase/:name/test', auth.adminOnly, (req, res) => {
     holder.hub
       .test(req.params.name as string)
       .then((result) => res.json(result))
       .catch((err: Error) => res.json({ ok: false, error: err.message }));
   });
 
-  ex.get('/api/firebase/:name/data', (req, res) => {
+  ex.get('/api/firebase/:name/data', auth.adminOnly, (req, res) => {
     holder.hub
       .read(req.params.name as string, String(req.query.path ?? ''))
       .then((value) => res.json({ ok: true, value }))
       .catch((err: Error) => res.status(400).json({ ok: false, error: err.message }));
   });
 
-  ex.put('/api/firebase/:name/data', (req, res) => {
+  ex.put('/api/firebase/:name/data', auth.adminOnly, (req, res) => {
     const { path: refPath, value, method } = req.body ?? {};
     const m = method === 'update' || method === 'delete' ? method : 'set';
     holder.hub
@@ -302,11 +346,11 @@ export function startApi(holder: AppHolder, port: number): { httpServer: http.Se
     tunnel.start().catch((err) => console.error('[tunnel] startup failed:', err));
   }
 
-  ex.get('/api/tunnel', (_req, res) => {
+  ex.get('/api/tunnel', auth.adminOnly, (_req, res) => {
     res.json(tunnel.status());
   });
 
-  ex.put('/api/tunnel', (req, res) => {
+  ex.put('/api/tunnel', auth.adminOnly, (req, res) => {
     const { enabled, domain, authtoken } = req.body ?? {};
     tunnel
       .apply({
@@ -336,6 +380,7 @@ export function startApi(holder: AppHolder, port: number): { httpServer: http.Se
 
   ex.post(
     '/api/events',
+    auth.adminOnly,
     act((req) => {
       const { id, name, meetId, copyFromFile } = req.body ?? {};
       if (!name || typeof name !== 'string') throw new Error('Event name is required');
@@ -345,6 +390,7 @@ export function startApi(holder: AppHolder, port: number): { httpServer: http.Se
 
   ex.post(
     '/api/events/:file/activate',
+    auth.adminOnly,
     act((req) => {
       guardIdle();
       const file = req.params.file as string;
@@ -362,6 +408,7 @@ export function startApi(holder: AppHolder, port: number): { httpServer: http.Se
 
   ex.put(
     '/api/config',
+    auth.adminOnly,
     act((req) => {
       guardIdle();
       holder.rebuild(req.body);
@@ -375,6 +422,7 @@ export function startApi(holder: AppHolder, port: number): { httpServer: http.Se
 
   ex.post(
     '/api/courses/:name',
+    auth.adminOnly,
     express.text({ type: () => true, limit: '25mb' }),
     act((req) => {
       if (typeof req.body !== 'string' || req.body.length === 0) throw new Error('Empty upload');

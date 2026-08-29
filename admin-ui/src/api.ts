@@ -182,11 +182,11 @@ export const api = {
     return res.json();
   },
 
-  addUser: async (username: string, password: string) => {
+  addUser: async (username: string, password: string, role: 'admin' | 'staff' = 'staff') => {
     const res = await fetch('/api/users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ username, password, role }),
     });
     const json = await res.json();
     if (!res.ok || json.ok === false) throw new Error(json.error ?? `HTTP ${res.status}`);

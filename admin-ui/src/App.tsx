@@ -58,8 +58,10 @@ function reducer(state: State, action: Action): State {
   }
 }
 
-/** Forced viewer layout (?viewer) — e.g. an operator setting up a wall display. */
-const VIEWER_URL = new URLSearchParams(window.location.search).has('viewer');
+/** Forced viewer layout: the /watch link handed to viewers, or ?viewer for
+ *  an operator setting up a wall display. */
+const VIEWER_URL =
+  window.location.pathname === '/watch' || new URLSearchParams(window.location.search).has('viewer');
 
 export default function App() {
   const [state, dispatch] = useReducer(reducer, { connected: false, lastSeen: {} });
@@ -102,7 +104,7 @@ export default function App() {
   useEffect(() => {
     fetch('/api/me')
       .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((j) => setAuth({ username: j.username ?? 'operator', role: j.role === 'viewer' ? 'viewer' : 'operator' }))
+      .then((j) => setAuth({ username: j.username ?? 'operator', role: j.role === 'viewer' ? 'viewer' : j.role === 'admin' ? 'admin' : 'staff' }))
       .catch(() => setAuth('out'));
   }, []);
 
@@ -199,7 +201,12 @@ export default function App() {
             {state.connected ? '● server' : '○ disconnected'}
           </span>
           <span className="whoami">
-            {typeof auth === "object" ? auth.username : ""} · <button className="linklike" onClick={logout}>sign out</button>
+            {typeof auth === 'object' && (
+              <>
+                {auth.username} <span className={`role-badge ${auth.role}`}>{auth.role}</span>{' '}
+              </>
+            )}
+            · <button className="linklike" onClick={logout}>sign out</button>
           </span>
         </div>
         <nav className="race-tabs">
@@ -222,7 +229,7 @@ export default function App() {
               <span className={`status-dot ${r.status}`} />
             </button>
           ))}
-          {!viewer && (
+          {!viewer && auth.role === 'admin' && (
             <>
               <button className={view === 'events' ? 'active' : ''} onClick={() => setView('events')}>
                 ☰ Events

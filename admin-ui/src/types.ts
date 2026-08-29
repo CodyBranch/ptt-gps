@@ -161,6 +161,7 @@ export interface TunnelStatus {
 export interface UserRow {
   username: string;
   created_at_ms: number;
+  role: 'admin' | 'staff';
 }
 
 export interface FixEvent {

@@ -330,7 +330,23 @@ button.linklike {
   padding: 9px 11px; font-size: 14px;
 }
 .login-error { color: var(--bad); font-size: 13px; }
-.login-alt { text-align: center; margin-top: 2px; }
+.login-secondary {
+  display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%;
+  background: var(--panel2); color: var(--text); border: 1px solid var(--border);
+  border-radius: 6px; padding: 9px; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.login-secondary:hover { border-color: var(--dim); }
+.login-secondary-icon { opacity: 0.8; }
+.login-firstrun {
+  background: var(--panel2); border: 1px solid var(--border); border-radius: 6px;
+  padding: 10px 12px; font-size: 13px; color: var(--dim); line-height: 1.5;
+}
+.login-firstrun b { color: var(--text); }
+.role-badge {
+  font-size: 10px; font-weight: 800; letter-spacing: 0.5px; border-radius: 3px; padding: 1px 6px;
+  background: var(--panel2); border: 1px solid var(--border); color: var(--dim); text-transform: uppercase;
+}
+.role-badge.admin { color: var(--warn); border-color: var(--warn); }
 .login-btn {
   background: var(--brand-red); color: #fff; border: none; border-radius: 6px; padding: 10px;
   font-weight: 700; font-size: 14px; cursor: pointer;
