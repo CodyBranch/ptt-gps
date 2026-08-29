@@ -99,6 +99,23 @@ export const api = {
     if (!res.ok || json.ok === false) throw new Error(json.error ?? `HTTP ${res.status}`);
   },
 
+  tunnelStatus: async () => {
+    const res = await fetch('/api/tunnel');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  },
+
+  tunnelApply: async (opts: { enabled?: boolean; domain?: string; authtoken?: string }) => {
+    const res = await fetch('/api/tunnel', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(opts),
+    });
+    const json = await res.json();
+    if (!res.ok || json.ok === false) throw new Error(json.error ?? `HTTP ${res.status}`);
+    return json.result;
+  },
+
   viewerEnabled: async (): Promise<boolean> => {
     const res = await fetch('/api/viewer-enabled');
     if (!res.ok) return false;

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import type { ConfirmRequest } from './Confirm';
-import type { CourseInfo, DeviceRow, EventConfigT, FleetRow, UserRow } from '../types';
+import type { CourseInfo, DeviceRow, EventConfigT, FleetRow, TunnelStatus, UserRow } from '../types';
 
 /**
  * Event setup.
@@ -538,6 +538,11 @@ export function SetupView({ ask, onSaved }: { ask: (req: ConfirmRequest) => void
         </section>
 
         <section>
+          <h3>Remote access (ngrok)</h3>
+          <RemoteAccessPanel onMsg={setMsg} ask={ask} />
+        </section>
+
+        <section>
           <h3>Courses</h3>
           <table className="setup-table">
             <thead>
@@ -646,6 +651,128 @@ function ViewerPinRow({
             Disable
           </button>
         )}
+      </div>
+    </>
+  );
+}
+
+function RemoteAccessPanel({
+  onMsg,
+  ask,
+}: {
+  onMsg: (m: { kind: 'ok' | 'err'; text: string }) => void;
+  ask: (req: ConfirmRequest) => void;
+}) {
+  const [status, setStatus] = useState<TunnelStatus>();
+  const [domain, setDomain] = useState('');
+  const [authtoken, setAuthtoken] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const refresh = () =>
+    api
+      .tunnelStatus()
+      .then((s: TunnelStatus) => {
+        setStatus(s);
+        setDomain((d) => (d === '' ? s.domain : d));
+      })
+      .catch(console.error);
+  useEffect(() => {
+    refresh();
+  }, []);
+
+  // keep polling while a connect attempt is in flight
+  useEffect(() => {
+    if (status?.state !== 'connecting') return;
+    const t = setInterval(refresh, 2000);
+    return () => clearInterval(t);
+  }, [status?.state]);
+
+  const apply = async (opts: { enabled?: boolean }) => {
+    setBusy(true);
+    try {
+      const s = await api.tunnelApply({
+        ...opts,
+        domain,
+        ...(authtoken ? { authtoken } : {}),
+      });
+      setStatus(s);
+      setAuthtoken('');
+      if (s.state === 'online') onMsg({ kind: 'ok', text: `Tunnel online: ${s.url}` });
+      else if (s.state === 'error') onMsg({ kind: 'err', text: s.error ?? 'Tunnel failed' });
+      else onMsg({ kind: 'ok', text: 'Tunnel settings saved.' });
+    } catch (err) {
+      onMsg({ kind: 'err', text: (err as Error).message });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const stateLabel: Record<string, string> = {
+    off: 'OFF',
+    connecting: 'CONNECTING…',
+    online: 'ONLINE',
+    error: 'ERROR',
+  };
+
+  return (
+    <>
+      <p className="hint">
+        Publishes this console on a public HTTPS URL through ngrok — control and view pages work
+        anywhere, protected by the same logins and viewer PIN. Trackers are unaffected (they use the
+        box's static IP directly).
+      </p>
+      <div className="tunnel-status">
+        <span className={`tunnel-state ${status?.state ?? 'off'}`}>{stateLabel[status?.state ?? 'off']}</span>
+        {status?.url && (
+          <a className="tunnel-url" href={status.url} target="_blank" rel="noreferrer">
+            {status.url}
+          </a>
+        )}
+        {status?.error && <span className="tunnel-err">{status.error}</span>}
+      </div>
+      <div className="form-row">
+        <label>
+          Reserved domain (optional)
+          <input
+            value={domain}
+            onChange={(e) => setDomain(e.target.value)}
+            placeholder="gps.pttiming.ngrok.app"
+          />
+        </label>
+        <label>
+          Authtoken {status?.hasToken ? (status.tokenFromEnv ? '(from env var)' : '(configured)') : ''}
+          <input
+            type="password"
+            value={authtoken}
+            onChange={(e) => setAuthtoken(e.target.value)}
+            placeholder={status?.hasToken ? 'unchanged' : 'from dashboard.ngrok.com'}
+            disabled={status?.tokenFromEnv}
+          />
+        </label>
+        {status?.enabled ? (
+          <button
+            className="mini danger self-end"
+            disabled={busy}
+            onClick={() =>
+              ask({
+                title: 'Take the tunnel offline?',
+                body: 'Remote operators and viewers lose access immediately. Local access continues.',
+                confirmLabel: 'Go offline',
+                danger: true,
+                onConfirm: () => apply({ enabled: false }),
+              })
+            }
+          >
+            Disable
+          </button>
+        ) : (
+          <button className="mini primary self-end" disabled={busy || (!status?.hasToken && !authtoken)} onClick={() => apply({ enabled: true })}>
+            {busy ? 'Connecting…' : 'Connect'}
+          </button>
+        )}
+        <button className="mini self-end" disabled={busy} onClick={() => apply({})}>
+          Save
+        </button>
       </div>
     </>
   );

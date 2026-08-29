@@ -13,6 +13,7 @@
     "build": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@ngrok/ngrok": "^1.7.0",
     "@tmcw/togeojson": "^7.1.2",
     "@turf/turf": "^7.2.0",
     "@xmldom/xmldom": "^0.9.8",

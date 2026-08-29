@@ -7,6 +7,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import type { App } from '../app.js';
 import { listEvents, createEvent, type ConfigManager } from '../config/manager.js';
 import { AuthService, hashPassword } from './auth.js';
+import { TunnelManager } from './tunnel.js';
 
 export interface AppHolder {
   app: App;
@@ -238,6 +239,29 @@ export function startApi(holder: AppHolder, port: number): { httpServer: http.Se
       app.setPublishing(!!req.body.enabled, (req as OpRequest).operator);
     }),
   );
+
+  // --- remote access (ngrok tunnel for the console) ---
+
+  const tunnel = new TunnelManager(app.store, port);
+  if (app.store.getSetting('ngrok-enabled') === '1') {
+    tunnel.start().catch((err) => console.error('[tunnel] startup failed:', err));
+  }
+
+  ex.get('/api/tunnel', (_req, res) => {
+    res.json(tunnel.status());
+  });
+
+  ex.put('/api/tunnel', (req, res) => {
+    const { enabled, domain, authtoken } = req.body ?? {};
+    tunnel
+      .apply({
+        enabled: typeof enabled === 'boolean' ? enabled : undefined,
+        domain: typeof domain === 'string' ? domain : undefined,
+        authtoken: typeof authtoken === 'string' ? authtoken : undefined,
+      })
+      .then((status) => res.json({ ok: true, result: status }))
+      .catch((err: Error) => res.status(400).json({ ok: false, error: err.message }));
+  });
 
   // --- setup: event config + courses ---
 

@@ -141,6 +141,16 @@ export interface Snapshot {
   publishEnabled: boolean;
 }
 
+export interface TunnelStatus {
+  state: 'off' | 'connecting' | 'online' | 'error';
+  url?: string;
+  error?: string;
+  enabled: boolean;
+  domain: string;
+  hasToken: boolean;
+  tokenFromEnv: boolean;
+}
+
 export interface UserRow {
   username: string;
   created_at_ms: number;
