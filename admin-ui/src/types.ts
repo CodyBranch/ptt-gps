@@ -121,7 +121,7 @@ export interface EventConfigT {
     mapEvent?: string;
   }>;
   snapDefaults: { minInc: number; maxInc: number; initialMax: number; maxOffCourse: number; fwdTolerance: number };
-  races: Array<{ id: string; name: string; course: string; units: Units; autoMarkers?: boolean; markers?: Array<{ at: number; label: string }> }>;
+  races: Array<{ id: string; name: string; course: string; units: Units }>;
 }
 
 export interface EventListing {
@@ -223,6 +223,10 @@ export interface CourseInfo {
   notes?: string | null;
   archived?: boolean;
   createdMs?: number | null;
+  /** Markers live on the course, shared by every event that uses it. */
+  autoMarkers?: boolean;
+  markerUnits?: Units;
+  markers?: Array<{ at: number; label: string; kind?: 'point' | 'post' | 'timing' }>;
   /** Every (event, race) pointing at this course — past events included. */
   uses?: CourseUse[];
   eventCount?: number;

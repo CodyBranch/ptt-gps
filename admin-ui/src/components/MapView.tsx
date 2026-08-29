@@ -7,7 +7,7 @@ import type { RaceSnap, TrackerPub } from '../types';
 export interface CourseMarker {
   at: number;
   label: string;
-  kind: 'start' | 'finish' | 'unit' | 'custom';
+  kind: 'start' | 'finish' | 'unit' | 'custom' | 'timing';
   lat: number;
   lon: number;
 }
@@ -55,12 +55,31 @@ export function MiniMap({ lat, lon }: { lat: number; lon: number }) {
   return <div className="mini-map" ref={ref} />;
 }
 
-/** Static course preview for the course library — line, start and finish. */
-export function CoursePreview({ file }: { file: string }) {
+/**
+ * Course preview for the library: the line plus every placed marker. When
+ * `onPick` is given, clicking the map reports where along the course you
+ * clicked — that's how an aid station gets its mileage without measuring.
+ */
+export function CoursePreview({
+  file,
+  markers = [],
+  onPick,
+}: {
+  file: string;
+  markers?: CourseMarker[];
+  onPick?: (lngLat: { lat: number; lon: number }) => void;
+}) {
   const ref = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<mapboxgl.Map>(null);
+  const readyRef = useRef(false);
+  const pickRef = useRef(onPick);
+  pickRef.current = onPick;
+  // 'load' fires after the markers have usually arrived; read them through a
+  // ref so the handler doesn't draw the empty array it closed over.
+  const markersRef = useRef(markers);
+  markersRef.current = markers;
 
   useEffect(() => {
-    let map: mapboxgl.Map | undefined;
     let cancelled = false;
     api
       .courseGeometry(file)
@@ -68,36 +87,154 @@ export function CoursePreview({ file }: { file: string }) {
         if (cancelled || !ref.current) return;
         const coords = data.line.geometry.coordinates as [number, number][];
         if (coords.length < 2) return;
-        const bounds = coords.reduce(
-          (b, c) => b.extend(c),
-          new mapboxgl.LngLatBounds(coords[0], coords[0]),
-        );
-        map = new mapboxgl.Map({
+        const bounds = coords.reduce((b, c) => b.extend(c), new mapboxgl.LngLatBounds(coords[0], coords[0]));
+        const map = new mapboxgl.Map({
           container: ref.current,
           style: STYLES.streets,
           bounds,
           fitBoundsOptions: { padding: 26 },
         });
+        mapRef.current = map;
+        map.on('click', (e) => pickRef.current?.({ lat: e.lngLat.lat, lon: e.lngLat.lng }));
         map.on('load', () => {
-          map!.addSource('preview', { type: 'geojson', data: data.line });
-          map!.addLayer({
+          map.addSource('preview', { type: 'geojson', data: data.line });
+          map.addLayer({
             id: 'preview',
             type: 'line',
             source: 'preview',
             paint: { 'line-color': '#2f7ded', 'line-width': 3 },
           });
-          new mapboxgl.Marker({ color: '#1fa860', scale: 0.7 }).setLngLat(coords[0]).addTo(map!);
-          new mapboxgl.Marker({ color: '#e70518', scale: 0.7 }).setLngLat(coords[coords.length - 1]).addTo(map!);
+          map.addSource('preview-markers', { type: 'geojson', data: emptyFc });
+          map.addLayer({ id: 'preview-markers-dot', type: 'circle', source: 'preview-markers', paint: MARKER_DOT_PAINT });
+          map.addLayer({
+            id: 'preview-markers-label',
+            type: 'symbol',
+            source: 'preview-markers',
+            layout: MARKER_LABEL_LAYOUT,
+            paint: MARKER_LABEL_PAINT,
+          });
+          addTimingLayer(map, 'preview-markers-timing', 'preview-markers');
+          readyRef.current = true;
+          setMarkerData(map, markersRef.current);
         });
       })
       .catch(console.error);
     return () => {
       cancelled = true;
-      map?.remove();
+      readyRef.current = false;
+      mapRef.current?.remove();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [file]);
 
-  return <div className="course-preview" ref={ref} />;
+  useEffect(() => {
+    if (mapRef.current && readyRef.current) setMarkerData(mapRef.current, markers);
+  }, [markers]);
+
+  return <div className={`course-preview ${onPick ? 'pickable' : ''}`} ref={ref} />;
+}
+
+const emptyFc: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
+
+/** One look for course markers, shared by the race map and the course preview. */
+export const MARKER_DOT_PAINT: mapboxgl.CircleLayerSpecification['paint'] = {
+  'circle-radius': ['match', ['get', 'kind'], 'start', 6, 'finish', 6, 'custom', 5, 'timing', 5, 3.5],
+  'circle-color': [
+    'match',
+    ['get', 'kind'],
+    'start', '#1fa860',
+    'finish', '#e70518',
+    'custom', '#ffb02e',
+    'timing', '#c85fd4',
+    '#5b74e8',
+  ],
+  'circle-stroke-width': 1.5,
+  'circle-stroke-color': '#ffffff',
+};
+export const MARKER_LABEL_LAYOUT: mapboxgl.SymbolLayerSpecification['layout'] = {
+  'text-field': ['get', 'label'],
+  'text-size': ['match', ['get', 'kind'], 'unit', 10, 12],
+  'text-offset': [0, 1.1],
+  'text-anchor': 'top',
+};
+
+/**
+ * Stopwatch badge for timing points. Drawn to a canvas and registered as a map
+ * image rather than set as an emoji in the label — Mapbox renders labels from
+ * SDF glyph fonts that have no emoji coverage, so ⏱ in a text-field silently
+ * disappears.
+ */
+const STOPWATCH_ID = 'ptt-stopwatch';
+function ensureStopwatch(map: mapboxgl.Map): void {
+  if (map.hasImage(STOPWATCH_ID)) return;
+  const px = 2;
+  const size = 18 * px;
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = size;
+  const g = cv.getContext('2d');
+  if (!g) return;
+  const c = size / 2;
+  const r = 6.2 * px;
+  g.lineWidth = 1.6 * px;
+  g.strokeStyle = '#7a2f86';
+  // crown + side button
+  g.beginPath();
+  g.moveTo(c - 2.6 * px, 2.1 * px);
+  g.lineTo(c + 2.6 * px, 2.1 * px);
+  g.stroke();
+  g.beginPath();
+  g.moveTo(c, 2.1 * px);
+  g.lineTo(c, 4.1 * px);
+  g.stroke();
+  // body
+  g.beginPath();
+  g.arc(c, c + 1.1 * px, r, 0, Math.PI * 2);
+  g.fillStyle = '#c85fd4';
+  g.fill();
+  g.stroke();
+  // hand
+  g.beginPath();
+  g.moveTo(c, c + 1.1 * px);
+  g.lineTo(c + 2.9 * px, c - 2.1 * px);
+  g.strokeStyle = '#ffffff';
+  g.lineWidth = 1.5 * px;
+  g.lineCap = 'round';
+  g.stroke();
+  map.addImage(STOPWATCH_ID, g.getImageData(0, 0, size, size), { pixelRatio: px });
+}
+
+/** Symbol layer drawing the stopwatch above timing-point markers. */
+function addTimingLayer(map: mapboxgl.Map, id: string, source: string): void {
+  ensureStopwatch(map);
+  map.addLayer({
+    id,
+    type: 'symbol',
+    source,
+    filter: ['==', ['get', 'kind'], 'timing'],
+    layout: {
+      'icon-image': STOPWATCH_ID,
+      'icon-anchor': 'bottom',
+      'icon-offset': [0, -4],
+      'icon-allow-overlap': true,
+    },
+  });
+}
+export const MARKER_LABEL_PAINT: mapboxgl.SymbolLayerSpecification['paint'] = {
+  'text-color': '#1a2340',
+  'text-halo-color': '#ffffff',
+  'text-halo-width': 1.6,
+};
+
+function setMarkerData(map: mapboxgl.Map, markers: CourseMarker[]) {
+  const src = map.getSource('preview-markers') as mapboxgl.GeoJSONSource | undefined;
+  src?.setData({
+    type: 'FeatureCollection',
+    features: markers.map((m) => ({
+      type: 'Feature',
+      properties: { label: m.label, kind: m.kind },
+      geometry: { type: 'Point', coordinates: [m.lon, m.lat] },
+    })),
+  });
 }
 
 /** One map for one or many races: a course line per race, markers deduped by IMEI. */
@@ -156,34 +293,15 @@ export function MapView({ races, selected }: { races: RaceSnap[]; selected?: Map
           })),
         },
       });
-      map.addLayer({
-        id: `${mid}-dot`,
-        type: 'circle',
-        source: mid,
-        paint: {
-          'circle-radius': ['match', ['get', 'kind'], 'start', 6, 'finish', 6, 'custom', 5, 3.5],
-          'circle-color': ['match', ['get', 'kind'], 'start', '#1fa860', 'finish', '#e70518', 'custom', '#ffb02e', '#5b74e8'],
-          'circle-stroke-width': 1.5,
-          'circle-stroke-color': '#ffffff',
-        },
-      });
+      map.addLayer({ id: `${mid}-dot`, type: 'circle', source: mid, paint: MARKER_DOT_PAINT });
       map.addLayer({
         id: `${mid}-label`,
         type: 'symbol',
         source: mid,
-        layout: {
-          'text-field': ['get', 'label'],
-          'text-size': ['match', ['get', 'kind'], 'unit', 10, 12],
-          'text-offset': [0, 1.1],
-          'text-anchor': 'top',
-          'text-allow-overlap': false,
-        },
-        paint: {
-          'text-color': '#1a2340',
-          'text-halo-color': '#ffffff',
-          'text-halo-width': 1.6,
-        },
+        layout: MARKER_LABEL_LAYOUT,
+        paint: MARKER_LABEL_PAINT,
       });
+      addTimingLayer(map, `${mid}-timing`, mid);
       for (const c of (course.line as GeoJSON.Feature<GeoJSON.LineString>).geometry.coordinates) {
         bounds.extend(c as [number, number]);
       }

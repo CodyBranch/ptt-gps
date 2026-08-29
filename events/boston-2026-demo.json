@@ -119,22 +119,13 @@
       "id": "marathon",
       "name": "Marathon",
       "course": "courses/boston-marathon.kml",
-      "units": "miles",
-      "autoMarkers": true,
-      "markers": [
-        {
-          "at": 13.1,
-          "label": "Halfway"
-        }
-      ]
+      "units": "miles"
     },
     {
       "id": "wheelchair",
       "name": "Wheelchair",
       "course": "courses/boston-marathon.kml",
-      "units": "miles",
-      "autoMarkers": true,
-      "markers": []
+      "units": "miles"
     }
   ]
 }

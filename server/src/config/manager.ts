@@ -209,6 +209,55 @@ export function readCourseIn(eventsDir: string, file: string): string {
   return fs.readFileSync(p, 'utf8');
 }
 
+/**
+ * One-time lift of race-level `autoMarkers`/`markers` (where they used to live)
+ * into the course library, where they belong — the posts are a property of the
+ * course, not of whichever race is running on it this year. Only seeds courses
+ * that have not been configured yet, so it never overwrites later edits, and it
+ * strips the dead keys from the event file.
+ */
+export function migrateRaceMarkersToCourses(
+  eventsDir: string,
+  store: {
+    courseMarkersConfigured(file: string): boolean;
+    setCourseMarkers(file: string, patch: { auto?: boolean; units?: 'miles' | 'kilometers'; markers?: Array<{ at: number; label: string }> }): void;
+  },
+): void {
+  for (const f of fs.readdirSync(eventsDir)) {
+    if (!f.endsWith('.json')) continue;
+    const full = path.join(eventsDir, f);
+    let json: Record<string, unknown>;
+    try {
+      json = JSON.parse(fs.readFileSync(full, 'utf8'));
+    } catch {
+      continue;
+    }
+    let touched = false;
+    for (const race of (json.races as Array<Record<string, unknown>>) ?? []) {
+      const hasLegacy = 'markers' in race || 'autoMarkers' in race;
+      if (!hasLegacy) continue;
+      const course = typeof race.course === 'string' ? race.course.replace(/^\.\//, '') : undefined;
+      if (course && !store.courseMarkersConfigured(course)) {
+        const markers = Array.isArray(race.markers)
+          ? (race.markers as Array<{ at?: unknown; label?: unknown }>)
+              .filter((m) => Number.isFinite(Number(m?.at)))
+              .map((m) => ({ at: Number(m.at), label: String(m.label ?? '') }))
+          : [];
+        store.setCourseMarkers(course, {
+          auto: race.autoMarkers !== false,
+          units: race.units === 'kilometers' ? 'kilometers' : 'miles',
+          markers,
+        });
+        console.log(`[courses] migrated markers from ${f}:${String(race.id)} onto ${course}`);
+      }
+      delete race.markers;
+      delete race.autoMarkers;
+      touched = true;
+    }
+    if (touched) fs.writeFileSync(full, JSON.stringify(json, null, 2) + '\n');
+  }
+}
+
 /** Which events reference which tracker IMEIs (for the fleet page). */
 export function eventRosters(dir: string): Array<{ id: string; name: string; file: string; imeis: string[] }> {
   const out: Array<{ id: string; name: string; file: string; imeis: string[] }> = [];

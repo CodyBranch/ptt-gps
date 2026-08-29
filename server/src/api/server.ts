@@ -17,7 +17,7 @@ import {
   readCourseIn,
   type ConfigManager,
 } from '../config/manager.js';
-import { loadCourse } from '../engine/course.js';
+import { loadCourse, placeMarkers, locateOnCourse } from '../engine/course.js';
 import type { Forwarder } from '../ingest/forwarder.js';
 import type { FixGate } from '../ingest/hygiene.js';
 import type { FirebaseHub } from '../outputs/hub.js';
@@ -201,6 +201,9 @@ export function startApi(ctx: ServerContext, port: number): { httpServer: http.S
     }
   };
 
+  /** Store key for a course: engines hold resolved absolute paths. */
+  const courseKey = (coursePath: string): string => `courses/${path.basename(coursePath)}`;
+
   const eventApp = (req: express.Request): App => {
     const app = ctx.apps.get(req.params.eventId as string);
     if (!app) throw new Error(`Event "${req.params.eventId}" is not active`);
@@ -241,22 +244,9 @@ export function startApi(ctx: ServerContext, port: number): { httpServer: http.S
       const engine = eventApp(req).engines.get(req.params.raceId as string);
       if (!engine) return void res.status(404).json({ error: 'unknown race' });
       const { course, race } = engine;
-      // Course markers: start/finish + auto distance posts + custom entries,
-      // positioned on the line server-side so clients just draw them.
-      const markers: Array<{ at: number; label: string; kind: string; lat: number; lon: number }> = [];
-      const place = (at: number, label: string, kind: string) => {
-        const p = turf.along(course.line, Math.min(Math.max(at, 0), course.length), { units: course.units });
-        markers.push({ at, label, kind, lon: p.geometry.coordinates[0], lat: p.geometry.coordinates[1] });
-      };
-      place(0, 'START', 'start');
-      place(course.length, 'FINISH', 'finish');
-      if (race.autoMarkers) {
-        const unit = course.units === 'miles' ? 'mi' : 'km';
-        for (let d = 1; d < course.length; d++) place(d, `${d} ${unit}`, 'unit');
-      }
-      for (const m of race.markers ?? []) {
-        if (m.at <= course.length) place(m.at, m.label, 'custom');
-      }
+      // Markers belong to the course (shared across every event that uses it)
+      // and are positioned on the line server-side so clients just draw them.
+      const markers = placeMarkers(course, ctx.store.courseMarkers(courseKey(race.course)));
       res.json({ line: course.line, length: course.length, units: course.units, markers });
     } catch (err) {
       res.status(404).json({ error: (err as Error).message });
@@ -432,12 +422,16 @@ export function startApi(ctx: ServerContext, port: number): { httpServer: http.S
         if (!meta.has(c.file)) ctx.store.noteCourseSeen(c.file);
         const m = meta.get(c.file);
         const uses = usage.get(c.file) ?? [];
+        const mk = ctx.store.courseMarkers(c.file);
         return {
           ...c,
           label: m?.label ?? null,
           notes: m?.notes ?? null,
           archived: m?.archived === 1,
           createdMs: m?.created_ms ?? null,
+          autoMarkers: mk.auto,
+          markerUnits: mk.units,
+          markers: mk.markers,
           uses,
           eventCount: new Set(uses.map((u) => u.eventId)).size,
           inActiveEvent: uses.some((u) => loaded.has(u.eventId)),
@@ -456,6 +450,46 @@ export function startApi(ctx: ServerContext, port: number): { httpServer: http.S
       res.status(404).json({ ok: false, error: (err as Error).message });
     }
   });
+
+  /** Markers as configured on the course, placed on the line. */
+  ex.get('/api/courses/:file/markers', (req, res) => {
+    try {
+      const file = `courses/${path.basename(req.params.file as string)}`;
+      const course = loadCourse(path.join(ctx.eventsDir, file), 'miles');
+      const cfg = ctx.store.courseMarkers(file);
+      res.json({ ...cfg, placed: placeMarkers(course, cfg), lengthMi: course.length });
+    } catch (err) {
+      res.status(404).json({ ok: false, error: (err as Error).message });
+    }
+  });
+
+  ex.put(
+    '/api/courses/:file/markers',
+    auth.adminOnly,
+    act((req) => {
+      const file = `courses/${path.basename(req.params.file as string)}`;
+      const { auto, units, markers } = req.body ?? {};
+      ctx.store.setCourseMarkers(file, {
+        auto: typeof auto === 'boolean' ? auto : undefined,
+        units: units === 'miles' || units === 'kilometers' ? units : undefined,
+        markers: Array.isArray(markers) ? markers : undefined,
+      });
+      return ctx.store.courseMarkers(file);
+    }),
+  );
+
+  /** Click-to-place: where along the course is this point? */
+  ex.post(
+    '/api/courses/:file/locate',
+    auth.adminOnly,
+    act((req) => {
+      const file = `courses/${path.basename(req.params.file as string)}`;
+      const { lat, lon } = req.body ?? {};
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) throw new Error('lat and lon are required');
+      const units = ctx.store.courseMarkers(file).units;
+      return locateOnCourse(loadCourse(path.join(ctx.eventsDir, file), units), Number(lat), Number(lon));
+    }),
+  );
 
   ex.get('/api/courses/:file/download', auth.adminOnly, (req, res) => {
     try {

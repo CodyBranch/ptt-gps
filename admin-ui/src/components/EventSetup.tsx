@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import type { ConfirmRequest } from './Confirm';
 import type { CourseInfo, EventConfigT, FirebaseConn, FleetRow } from '../types';
@@ -24,7 +24,6 @@ export function EventSetup({
   const [fbConns, setFbConns] = useState<FirebaseConn[]>([]);
   const [dirty, setDirty] = useState(false);
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string }>();
-  const [markersOpen, setMarkersOpen] = useState<number | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const reload = () => {
@@ -376,10 +375,8 @@ export function EventSetup({
             <tbody>
               {cfg.races.map((race, i) => {
                 const k = courseFor(race.course);
-                const customMarkers = race.markers ?? [];
                 return (
-                  <Fragment key={i}>
-                  <tr>
+                  <tr key={i}>
                     <td>
                       <input value={race.id} onChange={(e) => edit((c) => (c.races[i].id = e.target.value))} />
                     </td>
@@ -410,13 +407,6 @@ export function EventSetup({
                     </td>
                     <td>
                       <button
-                        className={`mini${markersOpen === i ? ' on' : ''}`}
-                        title="Course markers"
-                        onClick={() => setMarkersOpen(markersOpen === i ? null : i)}
-                      >
-                        ⚑ {customMarkers.length > 0 ? customMarkers.length : ''}
-                      </button>{' '}
-                      <button
                         className="mini danger"
                         onClick={() =>
                           ask({
@@ -431,64 +421,6 @@ export function EventSetup({
                       </button>
                     </td>
                   </tr>
-                  {markersOpen === i && (
-                    <tr className="markers-row">
-                      <td colSpan={6}>
-                        <div className="markers-editor">
-                          <label className="markers-auto">
-                            <input
-                              type="checkbox"
-                              checked={race.autoMarkers ?? true}
-                              onChange={(e) => edit((c) => (c.races[i].autoMarkers = e.target.checked))}
-                            />
-                            Auto markers — start, finish and a post every whole{' '}
-                            {race.units === 'miles' ? 'mile' : 'km'}
-                          </label>
-                          <div className="markers-custom">
-                            <span className="hint">
-                              Custom markers (aid stations, timing mats…) at a distance along the course
-                              {k ? ` (0–${(race.units === 'miles' ? k.lengthMi : k.lengthKm).toFixed(2)} ${race.units === 'miles' ? 'mi' : 'km'})` : ''}:
-                            </span>
-                            {customMarkers.map((m, mi) => (
-                              <div className="marker-row" key={mi}>
-                                <input
-                                  className="marker-at"
-                                  type="number"
-                                  step="0.01"
-                                  min="0"
-                                  value={m.at}
-                                  onChange={(e) => edit((c) => (c.races[i].markers![mi].at = Number(e.target.value)))}
-                                />
-                                <input
-                                  className="marker-label"
-                                  placeholder="Label (e.g. Aid Station 1)"
-                                  value={m.label}
-                                  onChange={(e) => edit((c) => (c.races[i].markers![mi].label = e.target.value))}
-                                />
-                                <button
-                                  className="mini danger"
-                                  onClick={() => edit((c) => c.races[i].markers!.splice(mi, 1))}
-                                >
-                                  ✕
-                                </button>
-                              </div>
-                            ))}
-                            <button
-                              className="mini"
-                              onClick={() =>
-                                edit((c) => {
-                                  c.races[i].markers = [...(c.races[i].markers ?? []), { at: 0, label: '' }];
-                                })
-                              }
-                            >
-                              + Add marker
-                            </button>
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                  </Fragment>
                 );
               })}
             </tbody>
@@ -530,7 +462,11 @@ export function EventSetup({
           <button className="mini" onClick={() => fileRef.current?.click()}>
             ⬆ Upload KML course
           </button>
-          <p className="hint">Export from Google Earth as a single-path LineString. Length is measured on upload.</p>
+          <p className="hint">
+            Export from Google Earth as a single-path LineString. Length is measured on upload. Mile/km posts, aid
+            stations and other markers are set up per course on the Courses page — they carry across every event that
+            uses that course.
+          </p>
         </section>
       </div>
     </div>

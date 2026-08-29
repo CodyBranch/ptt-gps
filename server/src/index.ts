@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
-import { ConfigManager, listEvents } from './config/manager.js';
+import { ConfigManager, listEvents, migrateRaceMarkersToCourses } from './config/manager.js';
 import { App } from './app.js';
 import { Forwarder } from './ingest/forwarder.js';
 import { FixGate } from './ingest/hygiene.js';
@@ -249,6 +249,10 @@ const ctx: ServerContext = {
 
 const { broadcast } = startApi(ctx, Number(arg('api-port', '8080')));
 emitFn = broadcast;
+
+// Markers used to live on each race; they belong to the course, which is
+// shared. Lift any that are still in event files into the course library.
+migrateRaceMarkersToCourses(eventsDir, store);
 
 const available = listEvents(eventsDir).filter((e) => !e.error);
 let toLoad: string[] = [];

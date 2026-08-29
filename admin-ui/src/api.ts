@@ -1,3 +1,5 @@
+import type { Units } from './types';
+
 async function post(url: string, body?: unknown): Promise<void> {
   const res = await fetch(url, {
     method: 'POST',
@@ -78,6 +80,17 @@ export const api = {
 
   // Routes take the bare filename — avoids an encoded slash in the path.
   courseGeometry: (file: string) => getJson(`/api/courses/${encodeURIComponent(courseName(file))}/geometry`),
+  courseMarkers: (file: string) => getJson(`/api/courses/${encodeURIComponent(courseName(file))}/markers`),
+  saveCourseMarkers: (
+    file: string,
+    body: { auto?: boolean; units?: Units; markers?: Array<{ at: number; label: string; kind?: 'point' | 'post' | 'timing' }> },
+  ) => send(`/api/courses/${encodeURIComponent(courseName(file))}/markers`, 'PUT', body),
+  locateOnCourse: (file: string, lat: number, lon: number) =>
+    send(`/api/courses/${encodeURIComponent(courseName(file))}/locate`, 'POST', { lat, lon }) as Promise<{
+      at: number;
+      lat: number;
+      lon: number;
+    }>,
   updateCourse: (file: string, patch: { label?: string; notes?: string; archived?: boolean }) =>
     send(`/api/courses/${encodeURIComponent(courseName(file))}`, 'PUT', patch),
   renameCourse: (file: string, to: string) =>

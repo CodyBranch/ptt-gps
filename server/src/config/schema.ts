@@ -42,22 +42,18 @@ export const SnapSchema = z.object({
   fwdTolerance: z.number().positive().default(0.02),
 });
 
-export const RaceMarkerSchema = z.object({
-  /** Distance along the course, in the race's units. */
-  at: z.number().min(0),
-  label: z.string(),
-});
-
 export const RaceSchema = z.object({
   id: z.string(),
   name: z.string(),
   /** Path to a KML or GeoJSON course file, relative to the event file. */
   course: z.string(),
   units: Units.default('miles'),
-  /** Auto-generate distance posts every whole course unit + start/finish. */
-  autoMarkers: z.boolean().default(true),
-  /** Custom markers: aid stations, timing mats, turnarounds… */
-  markers: z.array(RaceMarkerSchema).default([]),
+  /**
+   * Course markers (mile/km posts, aid stations) belong to the course, not to
+   * the race — the same course is reused across events and the posts are the
+   * same every year. They live in the course library; older event files may
+   * still carry `autoMarkers`/`markers` keys, which are migrated then ignored.
+   */
   snap: SnapSchema.partial().optional(),
   /** Per-race overrides — exceptions only; normally inherited from the meet. */
   roles: z.array(RoleSchema).optional(),

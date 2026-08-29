@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import type { ConfirmRequest } from './Confirm';
 import type { CourseInfo, Units } from '../types';
-import { CoursePreview } from './MapView';
+import { CoursePreview, type CourseMarker } from './MapView';
+
+type MarkerEdit = { at: number; label: string; kind?: 'point' | 'post' | 'timing' };
 
 /**
  * The course library. A course outlives the event it was drawn for — the same
@@ -202,6 +204,63 @@ function CourseDialog({
   const [rename, setRename] = useState(course.file.replace('courses/', '').replace(/\.kml$/i, ''));
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string>();
+  // Markers belong to the course, so they are edited here and inherited by
+  // every event that uses it.
+  const [auto, setAuto] = useState(course.autoMarkers ?? true);
+  const [mUnits, setMUnits] = useState<Units>(course.markerUnits ?? 'miles');
+  const [marks, setMarks] = useState<MarkerEdit[]>(course.markers ?? []);
+  const [placed, setPlaced] = useState<CourseMarker[]>([]);
+  const [picking, setPicking] = useState(false);
+
+  const refreshPlaced = () =>
+    api
+      .courseMarkers(course.file)
+      .then((r: { placed: CourseMarker[] }) => setPlaced(r.placed ?? []))
+      .catch(console.error);
+  useEffect(() => {
+    refreshPlaced();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [course.file]);
+
+  const unitAbbr = mUnits === 'miles' ? 'mi' : 'km';
+  const courseLen = mUnits === 'miles' ? course.lengthMi : course.lengthKm;
+
+  /**
+   * Fill in a post at every whole mile/km. These become real rows you can
+   * rename or delete individually, so the generated set is switched off to
+   * avoid drawing each post twice.
+   */
+  const addEveryUnit = () => {
+    setMarks((prev) => {
+      const have = new Set(prev.map((m) => m.at));
+      const next = [...prev];
+      for (let d = 1; d < courseLen; d++) {
+        if (!have.has(d)) next.push({ at: d, label: `${d} ${unitAbbr}`, kind: 'post' });
+      }
+      return next.sort((a, b) => a.at - b.at);
+    });
+    setAuto(false);
+  };
+
+  // Functional updates: several rows can change before a re-render.
+  const setMark = (i: number, patch: Partial<MarkerEdit>) =>
+    setMarks((prev) => prev.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+  const dropMark = (i: number) => setMarks((prev) => prev.filter((_, j) => j !== i));
+  const addMark = (m: MarkerEdit) => setMarks((prev) => [...prev, m]);
+
+  /** Click the map to drop a marker at that point on the course. */
+  const pick = async (p: { lat: number; lon: number }) => {
+    if (!picking) return;
+    try {
+      const hit = await api.locateOnCourse(course.file, p.lat, p.lon);
+      setMarks((prev) =>
+        [...prev, { at: Number(hit.at.toFixed(2)), label: '', kind: 'point' as const }].sort((a, b) => a.at - b.at),
+      );
+      setPicking(false);
+    } catch (e) {
+      setErr((e as Error).message);
+    }
+  };
 
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
@@ -218,7 +277,13 @@ function CourseDialog({
   const saveMeta = () =>
     run(async () => {
       await api.updateCourse(course.file, { label, notes });
-      onMsg({ kind: 'ok', text: 'Course details saved.' });
+      await api.saveCourseMarkers(course.file, {
+        auto,
+        units: mUnits,
+        markers: marks.filter((m) => m.label.trim() !== '' || m.at > 0),
+      });
+      await refreshPlaced();
+      onMsg({ kind: 'ok', text: 'Course saved — markers apply to every event using it.' });
       onChanged(course.file);
     });
 
@@ -282,7 +347,7 @@ function CourseDialog({
           </div>
         </div>
 
-        <CoursePreview file={course.file} />
+        <CoursePreview file={course.file} markers={placed} onPick={pick} />
 
         <label className="dlg-field">
           Display name
@@ -297,6 +362,64 @@ function CourseDialog({
             placeholder="e.g. USATF certified MA-2024-017, measured 2024-01-12"
           />
         </label>
+
+        <div className="course-markers">
+          <span className="window-stat-label">Course markers</span>
+          <label className="markers-auto">
+            <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} />
+            Start, finish and a post every whole
+            <select value={mUnits} onChange={(e) => setMUnits(e.target.value as Units)}>
+              <option value="miles">mile</option>
+              <option value="kilometers">km</option>
+            </select>
+          </label>
+          <div className="marker-list">
+            {marks.map((m, i) => (
+              <div className="marker-row" key={i}>
+                <input
+                  className="marker-at"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={m.at}
+                  onChange={(e) => setMark(i, { at: Number(e.target.value) })}
+                />
+                <span className="dim">{unitAbbr}</span>
+                <input
+                  className="marker-label"
+                  placeholder="Label (e.g. Aid Station 1)"
+                  value={m.label}
+                  onChange={(e) => setMark(i, { label: e.target.value })}
+                />
+                <button
+                  className={`mini marker-timing ${m.kind === 'timing' ? 'on' : ''}`}
+                  title={m.kind === 'timing' ? 'Timing point — click to make it a plain marker' : 'Mark as a timing point'}
+                  onClick={() => setMark(i, { kind: m.kind === 'timing' ? 'point' : 'timing' })}
+                >
+                  ⏱
+                </button>
+                <button className="mini danger" onClick={() => dropMark(i)}>
+                  ✕
+                </button>
+              </div>
+              ))}
+            {marks.length === 0 && <p className="hint">No custom markers yet.</p>}
+          </div>
+          <div className="home-actions">
+            <button className="mini" onClick={() => addMark({ at: 0, label: '', kind: 'point' })}>
+              + Add marker
+            </button>
+            <button className="mini" onClick={addEveryUnit} title={`Add a row at every whole ${unitAbbr}`}>
+              ⊞ Every {mUnits === 'miles' ? 'mile' : 'km'}
+            </button>
+            <button className={`mini ${picking ? 'on' : ''}`} onClick={() => setPicking(!picking)}>
+              {picking ? '◎ Click the course…' : '📍 Place on map'}
+            </button>
+          </div>
+          <p className="hint">
+            ⏱ marks a timing point. Saved markers show on the race map for every event using this course.
+          </p>
+        </div>
 
         <div className="course-history">
           <span className="window-stat-label">Event history</span>

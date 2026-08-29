@@ -45,6 +45,71 @@ export function parseCourse(text: string, isKml: boolean, units: 'miles' | 'kilo
   return { line, length: turf.length(line, { units }), units };
 }
 
+export interface PlacedMarker {
+  /** Distance along the course, in the course's own units. */
+  at: number;
+  label: string;
+  kind: 'start' | 'finish' | 'unit' | 'custom' | 'timing';
+  lat: number;
+  lon: number;
+}
+
+const MI_PER_KM = 0.621371;
+const convert = (v: number, from: 'miles' | 'kilometers', to: 'miles' | 'kilometers') =>
+  from === to ? v : from === 'miles' ? v / MI_PER_KM : v * MI_PER_KM;
+
+/**
+ * Put a course's markers on the line: start, finish, whole-unit distance posts,
+ * and the custom entries (aid stations, timing mats). Markers are authored
+ * against the course in its own marker units — the posts are painted on the
+ * road, so they don't change because a race measures itself in kilometres —
+ * and are converted onto whatever units the caller's course is loaded in.
+ */
+export function placeMarkers(
+  course: Course,
+  cfg: {
+    auto: boolean;
+    units: 'miles' | 'kilometers';
+    markers: Array<{ at: number; label: string; kind?: 'point' | 'post' | 'timing' }>;
+  },
+): PlacedMarker[] {
+  const out: PlacedMarker[] = [];
+  const place = (at: number, label: string, kind: PlacedMarker['kind']) => {
+    const clamped = Math.min(Math.max(at, 0), course.length);
+    const p = turf.along(course.line, clamped, { units: course.units });
+    out.push({ at: clamped, label, kind, lon: p.geometry.coordinates[0], lat: p.geometry.coordinates[1] });
+  };
+
+  place(0, 'START', 'start');
+  place(course.length, 'FINISH', 'finish');
+
+  if (cfg.auto) {
+    const unit = cfg.units === 'miles' ? 'mi' : 'km';
+    const lengthInMarkerUnits = convert(course.length, course.units, cfg.units);
+    for (let d = 1; d < lengthInMarkerUnits; d++) {
+      place(convert(d, cfg.units, course.units), `${d} ${unit}`, 'unit');
+    }
+  }
+  for (const m of cfg.markers) {
+    const at = convert(m.at, cfg.units, course.units);
+    if (at <= course.length) {
+      place(at, m.label, m.kind === 'timing' ? 'timing' : m.kind === 'post' ? 'unit' : 'custom');
+    }
+  }
+  return out;
+}
+
+/** Distance along the course of the point nearest to a lat/lon — lets the
+ *  course editor place a marker by clicking the map. */
+export function locateOnCourse(course: Course, lat: number, lon: number): { at: number; lat: number; lon: number } {
+  const snapped = turf.nearestPointOnLine(course.line, turf.point([lon, lat]), { units: course.units });
+  return {
+    at: snapped.properties.location ?? 0,
+    lon: snapped.geometry.coordinates[0],
+    lat: snapped.geometry.coordinates[1],
+  };
+}
+
 function extractLine(features: Feature[]): Feature<LineString> | undefined {
   for (const f of features) {
     if (f.geometry?.type === 'LineString') return f as Feature<LineString>;

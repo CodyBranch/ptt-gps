@@ -3,6 +3,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Fix, Telemetry } from '../ingest/types.js';
 
+export interface CourseMarker {
+  /** Distance along the course, in the course's markerUnits. */
+  at: number;
+  label: string;
+  /** 'post' = a distance post (renders like a generated one), 'timing' = a
+   *  timing point/mat, 'point' = anything else (aid station, turnaround). */
+  kind?: 'point' | 'post' | 'timing';
+}
+
 export interface CourseMeta {
   file: string;
   label: string | null;
@@ -10,6 +19,13 @@ export interface CourseMeta {
   archived: number;
   created_ms: number;
   created_by: string | null;
+  /** Generate start/finish + a post every whole unit. */
+  auto_markers: number;
+  /** Unit the posts are measured and labelled in — a physical property of the
+   *  course (US road races have painted mile posts), not of any one race. */
+  marker_units: 'miles' | 'kilometers';
+  /** JSON array of CourseMarker. */
+  markers: string | null;
 }
 
 /**
@@ -175,6 +191,12 @@ export class Store {
       created_ms INTEGER NOT NULL,
       created_by TEXT
     )`);
+    const courseCols = this.db.prepare(`PRAGMA table_info(courses)`).all() as Array<{ name: string }>;
+    if (!courseCols.some((c) => c.name === 'auto_markers')) {
+      this.db.exec(`ALTER TABLE courses ADD COLUMN auto_markers INTEGER NOT NULL DEFAULT 1`);
+      this.db.exec(`ALTER TABLE courses ADD COLUMN marker_units TEXT NOT NULL DEFAULT 'miles'`);
+      this.db.exec(`ALTER TABLE courses ADD COLUMN markers TEXT`);
+    }
     if (!fleetCols.some((c) => c.name === 'owner_id')) {
       this.db.exec(`ALTER TABLE fleet ADD COLUMN owner_id INTEGER`);
       // migrate any free-text owners that existed briefly
@@ -403,10 +425,58 @@ export class Store {
   // --- course library metadata (geometry lives on disk) ---
 
   courseMeta(): Map<string, CourseMeta> {
-    const rows = this.db
-      .prepare(`SELECT file, label, notes, archived, created_ms, created_by FROM courses`)
-      .all() as CourseMeta[];
+    const rows = this.db.prepare(`SELECT * FROM courses`).all() as CourseMeta[];
     return new Map(rows.map((r) => [r.file, r]));
+  }
+
+  /** Markers belong to the course: the posts are painted on the road. */
+  courseMarkers(file: string): { auto: boolean; units: 'miles' | 'kilometers'; markers: CourseMarker[] } {
+    const row = this.db
+      .prepare(`SELECT auto_markers, marker_units, markers FROM courses WHERE file = ?`)
+      .get(file) as Pick<CourseMeta, 'auto_markers' | 'marker_units' | 'markers'> | undefined;
+    let markers: CourseMarker[] = [];
+    try {
+      markers = row?.markers ? (JSON.parse(row.markers) as CourseMarker[]) : [];
+    } catch {
+      markers = [];
+    }
+    return {
+      auto: row ? row.auto_markers === 1 : true,
+      units: row?.marker_units === 'kilometers' ? 'kilometers' : 'miles',
+      markers,
+    };
+  }
+
+  setCourseMarkers(
+    file: string,
+    patch: { auto?: boolean; units?: 'miles' | 'kilometers'; markers?: CourseMarker[] },
+  ): void {
+    this.noteCourseSeen(file);
+    if (patch.auto !== undefined) {
+      this.db.prepare(`UPDATE courses SET auto_markers = ? WHERE file = ?`).run(patch.auto ? 1 : 0, file);
+    }
+    if (patch.units !== undefined) {
+      this.db.prepare(`UPDATE courses SET marker_units = ? WHERE file = ?`).run(patch.units, file);
+    }
+    if (patch.markers !== undefined) {
+      const clean = patch.markers
+        .filter((m) => Number.isFinite(m.at) && m.at >= 0)
+        .map((m) => ({
+          at: Number(m.at),
+          label: String(m.label ?? '').slice(0, 60),
+          kind: m.kind === 'timing' ? ('timing' as const) : m.kind === 'post' ? ('post' as const) : ('point' as const),
+        }))
+        .sort((a, b) => a.at - b.at);
+      this.db.prepare(`UPDATE courses SET markers = ? WHERE file = ?`).run(JSON.stringify(clean), file);
+    }
+  }
+
+  /** True once a course has had its markers configured (or explicitly cleared). */
+  courseMarkersConfigured(file: string): boolean {
+    const row = this.db.prepare(`SELECT markers FROM courses WHERE file = ?`).get(file) as
+      | { markers: string | null }
+      | undefined;
+    return !!row && row.markers !== null;
   }
 
   /** First sighting of a course file records when it entered the library. */
