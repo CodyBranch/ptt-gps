@@ -62,12 +62,32 @@ export function startApi(holder: AppHolder, port: number): { httpServer: http.Se
   const auth = new AuthService(app.store);
 
   io.use((socket, next) => {
+    // Machine feeds (e.g. the NYC split-time source) authenticate with the
+    // ingest token: socket.io `auth: { token }` or `?token=` on the query.
+    const t = (socket.handshake.auth as Record<string, unknown> | undefined)?.token ?? socket.handshake.query?.token;
+    if (typeof t === 'string' && auth.ingestTokenValid(t)) {
+      socket.data.ingest = true;
+      return next();
+    }
     const user = auth.check(auth.tokenFromRequest(socket.handshake));
     if (!user) return next(new Error('not authenticated'));
+    socket.data.role = user.role;
     next();
   });
   io.on('connection', (socket) => {
-    socket.emit('snapshot', app.snapshot());
+    if (socket.data.ingest) {
+      console.log('[splits] external feed connected');
+      socket.on('disconnect', () => console.log('[splits] external feed disconnected'));
+    } else {
+      socket.emit('snapshot', app.snapshot());
+    }
+    // Legacy NYC event name and payload: { tracker, distance, raceTime }.
+    // Accepted from the ingest token or any staff/admin session.
+    socket.on('raceTimeUpdate', (data) => {
+      if (socket.data.ingest || (socket.data.role && socket.data.role !== 'viewer')) {
+        app.onSimulatedDistance(data ?? {});
+      }
+    });
   });
 
   // --- unauthenticated: first-run bootstrap ---
@@ -122,6 +142,20 @@ export function startApi(holder: AppHolder, port: number): { httpServer: http.Se
 
   ex.get('/api/viewer-enabled', (_req, res) => {
     res.json({ enabled: auth.viewerPinEnabled() });
+  });
+
+  // REST alternative for the split feed: X-Ingest-Token header (or an
+  // operator session). Same payload as the socket event.
+  ex.post('/api/splits', (req, res) => {
+    const headerToken = req.headers['x-ingest-token'];
+    const viaToken = typeof headerToken === 'string' && auth.ingestTokenValid(headerToken);
+    const ctx = viaToken ? null : auth.check(auth.tokenFromRequest(req));
+    if (!viaToken && (!ctx || ctx.role === 'viewer')) {
+      return void res.status(401).json({ ok: false, error: 'ingest token or operator session required' });
+    }
+    const updates = Array.isArray(req.body) ? req.body : [req.body];
+    for (const u of updates) app.onSimulatedDistance(u ?? {});
+    res.json({ ok: true, accepted: updates.length });
   });
 
   ex.post('/api/logout', (req, res) => {
@@ -286,6 +320,16 @@ export function startApi(holder: AppHolder, port: number): { httpServer: http.Se
       app.setPublishing(!!req.body.enabled, (req as OpRequest).operator);
     }),
   );
+
+  // --- split feed token management ---
+
+  ex.get('/api/ingest-token', auth.adminOnly, (_req, res) => {
+    res.json({ token: auth.ingestToken() ?? null });
+  });
+
+  ex.post('/api/ingest-token', auth.adminOnly, (_req, res) => {
+    res.json({ ok: true, token: auth.regenerateIngestToken() });
+  });
 
   // --- simulation: export package + run the sim engine against our own listener ---
 

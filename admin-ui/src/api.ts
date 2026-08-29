@@ -99,6 +99,19 @@ export const api = {
     if (!res.ok || json.ok === false) throw new Error(json.error ?? `HTTP ${res.status}`);
   },
 
+  ingestToken: async (): Promise<string | null> => {
+    const res = await fetch('/api/ingest-token');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return (await res.json()).token;
+  },
+
+  regenerateIngestToken: async (): Promise<string> => {
+    const res = await fetch('/api/ingest-token', { method: 'POST' });
+    const json = await res.json();
+    if (!res.ok || json.ok === false) throw new Error(json.error ?? `HTTP ${res.status}`);
+    return json.token;
+  },
+
   simStatus: async () => {
     const res = await fetch('/api/sim');
     if (!res.ok) throw new Error(`HTTP ${res.status}`);

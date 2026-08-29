@@ -1,5 +1,5 @@
 import { toDisplay, unitAbbr } from '../api';
-import type { RaceSnap, TrackerPub, Units } from '../types';
+import type { RaceSnap, SimulatedDistance, TrackerPub, Units } from '../types';
 import type { ConfirmRequest } from './Confirm';
 import { BatteryBar, GpsChip } from './Health';
 
@@ -39,6 +39,7 @@ export function RolesPanel({
   displayUnits,
   lastSeen,
   intervalS,
+  simulated,
   readonly,
   ask,
   onActivate,
@@ -47,6 +48,7 @@ export function RolesPanel({
   displayUnits: Units;
   lastSeen: Record<string, number>;
   intervalS: number;
+  simulated?: Record<string, SimulatedDistance>;
   readonly?: boolean;
   ask: (req: ConfirmRequest) => void;
   onActivate: (roleKey: string, imei: string) => void;
@@ -70,6 +72,22 @@ export function RolesPanel({
             {activeStale && role.trackers.length > 1 && (
               <div className="failover-hint">Active tracker stale — switch to backup?</div>
             )}
+            {(() => {
+              // Split-time feed entry for this role: keyed by role key, the
+              // active tracker's IMEI, or the role's Firebase cmd number.
+              const sim =
+                simulated?.[role.key] ??
+                simulated?.[role.activeImei] ??
+                (role.cmd !== undefined ? simulated?.[String(role.cmd)] : undefined);
+              if (!sim) return null;
+              const ageS = Math.round((Date.now() - sim.tMs) / 1000);
+              return (
+                <div className="splits-line" title="Simulated distance from the external split-time feed">
+                  ⏱ splits: {sim.distance.toFixed(2)}
+                  {sim.raceTime ? ` @ ${sim.raceTime}` : ''} · {fmtAge(ageS)} ago
+                </div>
+              );
+            })()}
             {role.trackers.map((imei) => {
               const t = byImei.get(imei);
               const age = packetAgeS(imei, lastSeen, t);

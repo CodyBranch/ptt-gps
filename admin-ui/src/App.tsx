@@ -11,7 +11,7 @@ import { SetupView } from './components/SetupView';
 import { SimPanel, type SimProgress } from './components/SimPanel';
 import { TrackerTable } from './components/TrackerTable';
 import { WindowDialog } from './components/WindowDialog';
-import type { RaceSnap, Snapshot, TrackerPub, Units } from './types';
+import type { RaceSnap, SimulatedDistance, Snapshot, TrackerPub, Units } from './types';
 
 interface State {
   snapshot?: Snapshot;
@@ -26,6 +26,7 @@ type Action =
   | { type: 'tracker'; raceId: string; state: TrackerPub; slice: [number, number][]; health: TrackerPub['health'] }
   | { type: 'seen'; imei: string; ms: number }
   | { type: 'publishing'; enabled: boolean }
+  | { type: 'simulated'; tracker: string; entry: SimulatedDistance }
   | { type: 'connected'; connected: boolean };
 
 function reducer(state: State, action: Action): State {
@@ -37,6 +38,16 @@ function reducer(state: State, action: Action): State {
     case 'publishing':
       return state.snapshot
         ? { ...state, snapshot: { ...state.snapshot, publishEnabled: action.enabled } }
+        : state;
+    case 'simulated':
+      return state.snapshot
+        ? {
+            ...state,
+            snapshot: {
+              ...state.snapshot,
+              simulated: { ...state.snapshot.simulated, [action.tracker]: action.entry },
+            },
+          }
         : state;
     case 'race': {
       if (!state.snapshot) return state;
@@ -131,6 +142,9 @@ export default function App() {
     });
     socket.on('publishing', (p: { enabled: boolean }) => dispatch({ type: 'publishing', enabled: p.enabled }));
     socket.on('sim', (p: SimProgress) => setSimProgress(p));
+    socket.on('simulatedDistance', (d: { tracker: string; distance: number; raceTime?: string; tMs: number }) =>
+      dispatch({ type: 'simulated', tracker: d.tracker, entry: { distance: d.distance, raceTime: d.raceTime, tMs: d.tMs } }),
+    );
     const t = setInterval(() => tick(), 1000); // refresh fix-age displays
     return () => {
       socket.close();
@@ -169,6 +183,7 @@ export default function App() {
 
   /** The per-race operations block: roles + tracker table wired to one race. */
   const intervalS = state.snapshot.event.reportIntervalS || 10;
+  const snapshotSimulated = state.snapshot.simulated;
   const racePanels = (r: RaceSnap) => (
     <>
       <RolesPanel
@@ -176,6 +191,7 @@ export default function App() {
         displayUnits={displayUnits}
         lastSeen={state.lastSeen}
         intervalS={intervalS}
+        simulated={snapshotSimulated}
         readonly={viewer}
         ask={ask}
         onActivate={(roleKey, imei) => api.setActive(r.raceId, roleKey, imei).catch(oops('Failover failed'))}

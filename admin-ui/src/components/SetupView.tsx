@@ -592,6 +592,11 @@ export function SetupView({ ask, onSaved }: { ask: (req: ConfirmRequest) => void
         </section>
 
         <section>
+          <h3>Split feed (external)</h3>
+          <SplitFeedPanel onMsg={setMsg} ask={ask} />
+        </section>
+
+        <section>
           <h3>Remote access (ngrok)</h3>
           <RemoteAccessPanel onMsg={setMsg} ask={ask} />
         </section>
@@ -915,6 +920,78 @@ function FirebasePanel({
           </div>
         </>
       )}
+    </>
+  );
+}
+
+function SplitFeedPanel({
+  onMsg,
+  ask,
+}: {
+  onMsg: (m: { kind: 'ok' | 'err'; text: string }) => void;
+  ask: (req: ConfirmRequest) => void;
+}) {
+  const [token, setToken] = useState<string | null>(null);
+  const [show, setShow] = useState(false);
+
+  useEffect(() => {
+    api.ingestToken().then(setToken).catch(console.error);
+  }, []);
+
+  const regenerate = () =>
+    ask({
+      title: token ? 'Regenerate the split feed token?' : 'Enable the split feed?',
+      body: token
+        ? 'The current token stops working immediately — the external source must be updated.'
+        : 'Generates a token the external split-time system uses to authenticate.',
+      confirmLabel: token ? 'Regenerate' : 'Generate token',
+      danger: !!token,
+      onConfirm: async () => {
+        try {
+          setToken(await api.regenerateIngestToken());
+          setShow(true);
+          onMsg({ kind: 'ok', text: 'Split feed token generated.' });
+        } catch (err) {
+          onMsg({ kind: 'err', text: (err as Error).message });
+        }
+      },
+    });
+
+  return (
+    <>
+      <p className="hint">
+        Simulated distances computed from split times by an external system (the NYC setup). Same
+        wire format as the legacy server: socket.io event <span className="mono">raceTimeUpdate</span>{' '}
+        with <span className="mono">{'{ tracker, distance, raceTime }'}</span> — rebroadcast to all
+        consoles as <span className="mono">simulatedDistance</span> and shown on the role cards.
+        Key <span className="mono">tracker</span> by role key, IMEI, or map cmd number.
+      </p>
+      <div className="form-row">
+        <label>
+          Feed token
+          <input
+            readOnly
+            type={show ? 'text' : 'password'}
+            value={token ?? ''}
+            placeholder="not generated — feed disabled"
+            onFocus={(e) => e.target.select()}
+          />
+        </label>
+        {token && (
+          <button className="mini self-end" onClick={() => setShow(!show)}>
+            {show ? 'Hide' : 'Show'}
+          </button>
+        )}
+        <button className="mini self-end" onClick={regenerate}>
+          {token ? 'Regenerate' : 'Generate'}
+        </button>
+      </div>
+      <p className="hint">
+        Connect: <span className="mono">io('http://&lt;server&gt;:8080', {'{ auth: { token } }'})</span>{' '}
+        then emit <span className="mono">raceTimeUpdate</span> · or HTTP{' '}
+        <span className="mono">POST /api/splits</span> with header{' '}
+        <span className="mono">X-Ingest-Token</span> (single object or array).
+      </p>
     </>
   );
 }

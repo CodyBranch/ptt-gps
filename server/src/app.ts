@@ -34,6 +34,13 @@ export class App {
    * console's Age column works during pre-race checks too.
    */
   readonly lastSeen = new Map<string, number>();
+  /**
+   * Split-time simulated distances from an external source (legacy NYC
+   * raceTimeUpdate feed), keyed by whatever the source calls the tracker —
+   * an IMEI, a role key, or its own id. Rebroadcast as 'simulatedDistance'
+   * (legacy event name) and shown in the console alongside GPS distances.
+   */
+  readonly simulated = new Map<string, { distance: number; raceTime?: string; tMs: number }>();
   private out: AppEvents;
 
   constructor(cfg: EventConfig, store: Store, out: AppEvents, hub?: FirebaseHub) {
@@ -115,6 +122,29 @@ export class App {
     });
     if (!gate.ok) return;
     for (const engine of this.engines.values()) engine.onFix(fix);
+  }
+
+  /** Ingest one split-based distance update from the external feed. */
+  onSimulatedDistance(data: { tracker?: unknown; distance?: unknown; raceTime?: unknown }): void {
+    const tracker = String(data.tracker ?? '').trim();
+    const distance = Number(data.distance);
+    if (!tracker || !Number.isFinite(distance)) return; // malformed — drop silently, feed is bursty
+    const raceTime = data.raceTime !== undefined ? String(data.raceTime) : undefined;
+    const entry = { distance, raceTime, tMs: Date.now() };
+    this.simulated.set(tracker, entry);
+    this.store.recordTelemetry({
+      type: 'split-distance',
+      imei: /^\d{15}$/.test(tracker) ? tracker : undefined,
+      detail: { tracker, distance, raceTime },
+      source: 'splits',
+      raw: JSON.stringify(data),
+    });
+    for (const sessionId of this.sessions.values()) {
+      this.store.addSessionEvent(sessionId, 'split-distance', { tracker, distance, raceTime });
+    }
+    // Legacy-compatible rebroadcast: pages listening for 'simulatedDistance'
+    // keep working with the same payload shape.
+    this.out.emit('simulatedDistance', { tracker, distance, raceTime, tMs: entry.tMs });
   }
 
   onTelemetry(t: Telemetry): void {
@@ -263,6 +293,7 @@ export class App {
       races: this.cfg.races.map((r) => this.raceSnapshot(r.id)),
       lastSeen: Object.fromEntries(this.lastSeen),
       publishEnabled: this.publishEnabled,
+      simulated: Object.fromEntries(this.simulated),
     };
   }
 }

@@ -139,6 +139,14 @@ export interface Snapshot {
   lastSeen: Record<string, number>;
   /** Master output switch — false = nothing is pushed to Firebase/outputs. */
   publishEnabled: boolean;
+  /** Split-time distances from the external feed, keyed by tracker/role id. */
+  simulated: Record<string, SimulatedDistance>;
+}
+
+export interface SimulatedDistance {
+  distance: number;
+  raceTime?: string;
+  tMs: number;
 }
 
 export interface FirebaseConn {

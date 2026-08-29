@@ -124,6 +124,26 @@ export class AuthService {
     return this.store.getSetting(VIEWER_PIN_KEY) !== undefined;
   }
 
+  /**
+   * Machine token for external data feeds (e.g. the NYC split-time distance
+   * source). Compared in constant time; managed by admins in Setup.
+   */
+  ingestTokenValid(token: string): boolean {
+    const stored = this.store.getSetting('ingest-token');
+    if (!stored || token.length !== stored.length) return false;
+    return crypto.timingSafeEqual(Buffer.from(token), Buffer.from(stored));
+  }
+
+  ingestToken(): string | undefined {
+    return this.store.getSetting('ingest-token');
+  }
+
+  regenerateIngestToken(): string {
+    const token = crypto.randomBytes(24).toString('hex');
+    this.store.setSetting('ingest-token', token);
+    return token;
+  }
+
   /** Set (or clear with null) the viewer PIN; existing viewer sessions are revoked. */
   setViewerPin(pin: string | null): void {
     if (pin === null) this.store.deleteSetting(VIEWER_PIN_KEY);
