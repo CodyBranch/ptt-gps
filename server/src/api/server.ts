@@ -309,14 +309,40 @@ export function startApi(holder: AppHolder, port: number): { httpServer: http.Se
     // in the UI.
     const rosters = eventRosters(holder.eventsDir);
     const activeId = holder.manager.raw.id;
+    const issueCounts = app.store.openIssueCounts();
     const rows = (app.store.listFleet() as Array<Record<string, unknown>>).map((f) => ({
       ...f,
       events: rosters
         .filter((r) => r.imeis.includes(f.imei as string))
         .map((r) => ({ id: r.id, name: r.name, active: r.id === activeId })),
+      openIssues: issueCounts.get(f.imei as string) ?? 0,
     }));
     res.json(rows);
   });
+
+  // Device history: assignment log + issue log. Logging/resolving issues is a
+  // staff-level action (crew in the field), not admin-only.
+  ex.get('/api/fleet/:imei/history', (req, res) => {
+    res.json({
+      assignments: app.store.listAssignments(req.params.imei as string),
+      issues: app.store.listIssues(req.params.imei as string),
+    });
+  });
+
+  ex.post(
+    '/api/fleet/:imei/issues',
+    act((req: OpRequest) => {
+      const id = app.store.addIssue(req.params.imei as string, String(req.body?.text ?? ''), String(req.body?.severity ?? 'issue'), req.operator);
+      return { id };
+    }),
+  );
+
+  ex.post(
+    '/api/fleet/issues/:id/resolve',
+    act((req: OpRequest) => {
+      app.store.resolveIssue(Number(req.params.id), req.operator);
+    }),
+  );
 
   ex.get('/api/owners', (_req, res) => {
     res.json(app.store.listOwners());
@@ -591,10 +617,16 @@ export function startApi(holder: AppHolder, port: number): { httpServer: http.Se
   ex.post(
     '/api/events',
     auth.adminOnly,
-    act((req) => {
+    act((req: OpRequest) => {
       const { id, name, meetId, copyFromFile } = req.body ?? {};
       if (!name || typeof name !== 'string') throw new Error('Event name is required');
-      return { file: createEvent(holder.eventsDir, { id: id || name, name, meetId: Number(meetId) || 0, copyFromFile }) };
+      const file = createEvent(holder.eventsDir, { id: id || name, name, meetId: Number(meetId) || 0, copyFromFile });
+      // A copied event inherits a roster — log those as assignments too.
+      const roster = eventRosters(holder.eventsDir).find((r) => r.file === file);
+      for (const imei of roster?.imeis ?? []) {
+        app.store.recordAssignment(imei, roster!.id, roster!.name, 'added', req.operator);
+      }
+      return { file };
     }),
   );
 
@@ -619,9 +651,19 @@ export function startApi(holder: AppHolder, port: number): { httpServer: http.Se
   ex.put(
     '/api/config',
     auth.adminOnly,
-    act((req) => {
+    act((req: OpRequest) => {
       guardIdle();
+      const before = new Set(holder.manager.raw.trackers.map((t) => t.imei));
       holder.rebuild(req.body);
+      // Roster diff → device assignment history
+      const raw = holder.manager.raw;
+      const after = new Set(raw.trackers.map((t) => t.imei));
+      for (const imei of after) {
+        if (!before.has(imei)) app.store.recordAssignment(imei, raw.id, raw.name, 'added', req.operator);
+      }
+      for (const imei of before) {
+        if (!after.has(imei)) app.store.recordAssignment(imei, raw.id, raw.name, 'removed', req.operator);
+      }
       io.emit('snapshot', holder.app.snapshot());
     }),
   );

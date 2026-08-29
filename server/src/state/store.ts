@@ -123,6 +123,31 @@ export class Store {
     if (!fleetCols.some((c) => c.name === 'owner')) {
       this.db.exec(`ALTER TABLE fleet ADD COLUMN owner TEXT`);
     }
+    // Device history: every event-roster assignment change, and an issue log
+    // (broken antennas, flaky batteries) with open/resolved state.
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS device_assignments (
+        id INTEGER PRIMARY KEY,
+        imei TEXT NOT NULL,
+        event_id TEXT NOT NULL,
+        event_name TEXT,
+        action TEXT NOT NULL,
+        t_ms INTEGER NOT NULL,
+        by TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_assign_imei ON device_assignments(imei, t_ms);
+      CREATE TABLE IF NOT EXISTS device_issues (
+        id INTEGER PRIMARY KEY,
+        imei TEXT NOT NULL,
+        t_ms INTEGER NOT NULL,
+        by TEXT,
+        severity TEXT NOT NULL DEFAULT 'issue',
+        text TEXT NOT NULL,
+        resolved_ms INTEGER,
+        resolved_by TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_issues_imei ON device_issues(imei, t_ms);
+    `);
     // Owners are a table (case-insensitive unique) so "PTT" / "Ptt" /
     // "PrimeTime" can't drift apart; fleet links by owner_id.
     this.db.exec(`CREATE TABLE IF NOT EXISTS owners (
@@ -283,6 +308,51 @@ export class Store {
 
   deleteFirebaseConnection(name: string): boolean {
     return this.db.prepare(`DELETE FROM firebase_connections WHERE name = ?`).run(name).changes > 0;
+  }
+
+  // --- device history: event assignments + issue log ---
+
+  recordAssignment(imei: string, eventId: string, eventName: string, action: 'added' | 'removed', by?: string): void {
+    this.db
+      .prepare(`INSERT INTO device_assignments (imei, event_id, event_name, action, t_ms, by) VALUES (?, ?, ?, ?, ?, ?)`)
+      .run(imei, eventId, eventName, action, Date.now(), by ?? null);
+  }
+
+  listAssignments(imei: string, limit = 100): unknown[] {
+    return this.db
+      .prepare(`SELECT * FROM device_assignments WHERE imei = ? ORDER BY t_ms DESC LIMIT ?`)
+      .all(imei, limit);
+  }
+
+  addIssue(imei: string, text: string, severity: string, by?: string): number {
+    const clean = text.trim();
+    if (!clean) throw new Error('Issue text is required');
+    const sev = ['note', 'issue', 'fault'].includes(severity) ? severity : 'issue';
+    const res = this.db
+      .prepare(`INSERT INTO device_issues (imei, t_ms, by, severity, text) VALUES (?, ?, ?, ?, ?)`)
+      .run(imei, Date.now(), by ?? null, sev, clean);
+    return Number(res.lastInsertRowid);
+  }
+
+  resolveIssue(id: number, by?: string): void {
+    const changes = this.db
+      .prepare(`UPDATE device_issues SET resolved_ms = ?, resolved_by = ? WHERE id = ? AND resolved_ms IS NULL`)
+      .run(Date.now(), by ?? null, id).changes;
+    if (changes === 0) throw new Error('Issue not found or already resolved');
+  }
+
+  listIssues(imei: string, limit = 100): unknown[] {
+    return this.db
+      .prepare(`SELECT * FROM device_issues WHERE imei = ? ORDER BY resolved_ms IS NOT NULL, t_ms DESC LIMIT ?`)
+      .all(imei, limit);
+  }
+
+  /** Open-issue counts for fleet badges, one query. */
+  openIssueCounts(): Map<string, number> {
+    const rows = this.db
+      .prepare(`SELECT imei, COUNT(*) c FROM device_issues WHERE resolved_ms IS NULL GROUP BY imei`)
+      .all() as Array<{ imei: string; c: number }>;
+    return new Map(rows.map((r) => [r.imei, r.c]));
   }
 
   // --- device owners (normalized) ---

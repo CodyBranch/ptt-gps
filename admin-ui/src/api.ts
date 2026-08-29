@@ -110,6 +110,28 @@ export const api = {
     if (!res.ok || json.ok === false) throw new Error(json.error ?? `HTTP ${res.status}`);
   },
 
+  fleetHistory: async (imei: string) => {
+    const res = await fetch(`/api/fleet/${imei}/history`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  },
+
+  addIssue: async (imei: string, text: string, severity: 'note' | 'issue' | 'fault') => {
+    const res = await fetch(`/api/fleet/${imei}/issues`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, severity }),
+    });
+    const json = await res.json();
+    if (!res.ok || json.ok === false) throw new Error(json.error ?? `HTTP ${res.status}`);
+  },
+
+  resolveIssue: async (id: number) => {
+    const res = await fetch(`/api/fleet/issues/${id}/resolve`, { method: 'POST' });
+    const json = await res.json();
+    if (!res.ok || json.ok === false) throw new Error(json.error ?? `HTTP ${res.status}`);
+  },
+
   deleteFleet: async (imei: string) => {
     const res = await fetch(`/api/fleet/${imei}`, { method: 'DELETE' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);

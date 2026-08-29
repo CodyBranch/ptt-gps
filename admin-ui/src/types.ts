@@ -107,6 +107,28 @@ export interface FleetRow {
   last_lat: number | null;
   last_lon: number | null;
   events: Array<{ id: string; name: string; active: boolean }>;
+  openIssues: number;
+}
+
+export interface DeviceAssignment {
+  id: number;
+  imei: string;
+  event_id: string;
+  event_name: string | null;
+  action: 'added' | 'removed';
+  t_ms: number;
+  by: string | null;
+}
+
+export interface DeviceIssue {
+  id: number;
+  imei: string;
+  t_ms: number;
+  by: string | null;
+  severity: 'note' | 'issue' | 'fault';
+  text: string;
+  resolved_ms: number | null;
+  resolved_by: string | null;
 }
 
 export interface DeviceRow {

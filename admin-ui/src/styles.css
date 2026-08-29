@@ -310,6 +310,31 @@ a.export-link:hover { border-color: var(--dim); }
 }
 .event-badge.active { color: var(--ok); border-color: var(--ok); }
 .multi-event-warn { color: var(--warn); font-weight: 800; cursor: help; }
+.fleet-actions { white-space: nowrap; }
+.fleet-actions .mini { margin-right: 4px; }
+button.mini.has-issues { border-color: var(--warn); color: var(--warn); font-weight: 700; }
+.dialog-history { width: 560px; max-width: calc(100vw - 32px); max-height: 84vh; overflow-y: auto; }
+.dialog-history h4 { margin: 14px 0 6px; color: var(--dim); font-size: 12px; text-transform: uppercase; }
+.issue-row {
+  display: flex; align-items: center; gap: 10px; padding: 5px 0; font-size: 13px;
+  border-bottom: 1px solid var(--border);
+}
+.issue-row.resolved { opacity: 0.55; }
+.issue-text { flex: 1; }
+.issue-sev {
+  font-size: 10px; font-weight: 800; text-transform: uppercase; border-radius: 3px; padding: 1px 6px;
+}
+.issue-sev.note { background: var(--panel2); color: var(--dim); }
+.issue-sev.issue { background: rgba(255, 176, 46, 0.18); color: var(--warn); }
+.issue-sev.fault { background: rgba(231, 5, 24, 0.2); color: var(--bad); }
+.assign-action { font-weight: 800; width: 16px; text-align: center; }
+.assign-action.added { color: var(--ok); }
+.assign-action.removed { color: var(--bad); }
+
+.new-device-form { border: 1px dashed var(--border); border-radius: 8px; padding: 10px 12px; margin-top: 12px; }
+.new-device-form h4 { margin-top: 0 !important; }
+.check-inline { flex-direction: row !important; align-items: center; gap: 8px !important; align-self: flex-end; padding-bottom: 8px; white-space: nowrap; }
+.check-inline input { width: auto !important; }
 .owner-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .owner-chips .w-owner { width: 110px; }
 .course-dist { white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--accent); font-weight: 600; }

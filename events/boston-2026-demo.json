@@ -3,6 +3,7 @@
   "name": "Boston Marathon 2026 (demo)",
   "meetId": 9999,
   "outputUnits": "miles",
+  "reportIntervalS": 10,
   "listeners": [
     {
       "name": "queclink",
