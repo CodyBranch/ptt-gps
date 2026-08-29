@@ -20,6 +20,12 @@ export function WindowDialog({
   const [error, setError] = useState<string>();
   const [outsideAck, setOutsideAck] = useState(false);
   const unit = race.units === 'miles' ? 'mi' : 'km';
+  const held = tracker.window.mode === 'clamped';
+
+  const clearFeedback = () => {
+    setError(undefined);
+    setOutsideAck(false);
+  };
 
   const outsideZone = () => {
     const s = Number(start);
@@ -38,7 +44,7 @@ export function WindowDialog({
     if (s < 0 || e > race.courseLength) return setError(`Must be within 0–${race.courseLength.toFixed(2)} ${unit}.`);
     if (outsideZone() && !outsideAck) {
       setError(
-        `Last snapped position (${tracker.distance!.toFixed(2)} ${unit}) is outside this zone — press again to set anyway.`,
+        `Last snapped position (${tracker.distance!.toFixed(2)} ${unit}) is outside this range — press again to set anyway.`,
       );
       setOutsideAck(true);
       return;
@@ -48,13 +54,31 @@ export function WindowDialog({
 
   return (
     <div className="dialog-backdrop" onClick={onClose}>
-      <div className="dialog" onClick={(e) => e.stopPropagation()}>
-        <h3>Snap window — {tracker.label}</h3>
-        <p className="dialog-sub">
-          Course 0–{race.courseLength.toFixed(2)} {unit} · current window {tracker.window.min.toFixed(2)}–
-          {tracker.window.max.toFixed(2)}
-          {tracker.window.mode === 'clamped' ? ' (HELD)' : ''}
-        </p>
+      <div className="dialog dialog-window" onClick={(e) => e.stopPropagation()}>
+        <h3>
+          Snap window <span className="dialog-subject">{tracker.label}</span>
+          {held && <span className="clamp-badge">HELD</span>}
+        </h3>
+
+        <div className="window-stats">
+          <div className="window-stat">
+            <span className="window-stat-label">Course</span>
+            <span className="window-stat-value">0 – {race.courseLength.toFixed(2)} {unit}</span>
+          </div>
+          <div className="window-stat">
+            <span className="window-stat-label">Current window</span>
+            <span className="window-stat-value">
+              {tracker.window.min.toFixed(2)} – {tracker.window.max.toFixed(2)} {unit}
+            </span>
+          </div>
+          <div className="window-stat">
+            <span className="window-stat-label">Last snapped</span>
+            <span className="window-stat-value">
+              {tracker.distance !== undefined ? `${tracker.distance.toFixed(2)} ${unit}` : '—'}
+            </span>
+          </div>
+        </div>
+
         <div className="dialog-row">
           <label>
             Start ({unit})
@@ -62,10 +86,10 @@ export function WindowDialog({
               value={start}
               onChange={(e) => {
                 setStart(e.target.value);
-                setError(undefined);
-                setOutsideAck(false);
+                clearFeedback();
               }}
               inputMode="decimal"
+              autoFocus
             />
           </label>
           <label>
@@ -74,20 +98,31 @@ export function WindowDialog({
               value={end}
               onChange={(e) => {
                 setEnd(e.target.value);
-                setError(undefined);
-                setOutsideAck(false);
+                clearFeedback();
               }}
               inputMode="decimal"
             />
           </label>
         </div>
+
+        <div className="mode-picker">
+          <button className={!latch ? 'on' : ''} onClick={() => { setLatch(false); clearFeedback(); }}>
+            One-shot reset
+          </button>
+          <button className={latch ? 'on' : ''} onClick={() => { setLatch(true); clearFeedback(); }}>
+            Hold to zone
+          </button>
+        </div>
+        <p className="mode-hint">
+          {latch
+            ? 'The window stays locked inside these bounds until released — for overlap trouble or an untrusted tracker.'
+            : 'Snaps the next fix inside this range, then normal auto-advance resumes.'}
+        </p>
+
         {error && <p className="dialog-error">{error}</p>}
-        <label className="dialog-check">
-          <input type="checkbox" checked={latch} onChange={(e) => setLatch(e.target.checked)} />
-          Hold to zone (window cannot leave these bounds until released)
-        </label>
+
         <div className="dialog-actions">
-          {tracker.window.mode === 'clamped' && (
+          {held && (
             <button className="mini" onClick={onRelease}>
               Release hold
             </button>
@@ -97,7 +132,7 @@ export function WindowDialog({
             Cancel
           </button>
           <button className="mini primary" onClick={submit}>
-            {latch ? 'Set & hold' : 'Reset window'}
+            {outsideAck ? 'Set anyway' : latch ? 'Set & hold' : 'Reset window'}
           </button>
         </div>
       </div>
