@@ -11,6 +11,7 @@ export interface SimProgress {
   timescale?: number;
   endReason?: string;
   trackers: Array<{ imei: string; label: string; distanceMi: number; battery: number; done: boolean }>;
+  targets?: Array<{ host: string; port: number; connected: boolean; error?: string }>;
 }
 
 /**
@@ -34,6 +35,7 @@ export function SimPanel({
   const [timescale, setTimescale] = useState('10');
   const [intervalS, setIntervalS] = useState(String(snapshot.event.reportIntervalS || 10));
   const [jitterM, setJitterM] = useState('8');
+  const [extraTargets, setExtraTargets] = useState('');
   const [paces, setPaces] = useState<Record<string, string>>({});
   const [status, setStatus] = useState<SimProgress>();
 
@@ -58,6 +60,7 @@ export function SimPanel({
           intervalS: Number(intervalS) || 10,
           jitterM: Number(jitterM) || 0,
           paces: paceMap,
+          extraTargets,
         });
         onMsg({ kind: 'ok', text: 'Simulation started — arm/start the race to watch it track.' });
       } catch (err) {
@@ -128,6 +131,27 @@ export function SimPanel({
           <input value={jitterM} inputMode="numeric" onChange={(e) => setJitterM(e.target.value)} disabled={live?.running} />
         </label>
       </div>
+      <div className="form-row">
+        <label>
+          Also send pings to (host:port, comma-separated — e.g. the legacy server)
+          <input
+            value={extraTargets}
+            onChange={(e) => setExtraTargets(e.target.value)}
+            placeholder="23.99.178.28:1010, 192.168.1.50:1000"
+            disabled={live?.running}
+          />
+        </label>
+      </div>
+      {live?.targets && live.targets.length > 0 && (
+        <div className="sim-targets">
+          {live.targets.map((t) => (
+            <span key={`${t.host}:${t.port}`} className={`sim-target ${t.connected ? 'ok' : 'bad'}`}>
+              {t.connected ? '●' : '○'} {t.host}:{t.port}
+              {t.error && !t.connected ? ` — ${t.error}` : ''}
+            </span>
+          ))}
+        </div>
+      )}
 
       <table className="setup-table">
         <thead>

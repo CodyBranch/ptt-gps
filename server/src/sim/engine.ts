@@ -26,9 +26,18 @@ export interface SimTrackerCfg {
   battery?: number;
 }
 
-export interface SimOptions {
+export interface SimTarget {
   host: string;
   port: number;
+}
+
+export interface SimOptions {
+  /**
+   * Every system that receives the simulated pings — the same frames go to
+   * all targets, so e.g. the new server and the legacy stack can be tested
+   * side by side from one simulated race.
+   */
+  targets: SimTarget[];
   /** Course path as [lon, lat] pairs. */
   courseCoords: [number, number][];
   trackers: SimTrackerCfg[];
@@ -38,6 +47,11 @@ export interface SimOptions {
   timescale: number;
   /** GPS noise in meters. */
   jitterM: number;
+}
+
+export interface SimTargetStatus extends SimTarget {
+  connected: boolean;
+  error?: string;
 }
 
 export interface SimTrackerProgress {
@@ -56,6 +70,7 @@ export interface SimProgress {
   courseMi: number;
   timescale: number;
   trackers: SimTrackerProgress[];
+  targets: SimTargetStatus[];
   error?: string;
 }
 
@@ -66,9 +81,16 @@ interface SimTrackerState extends SimTrackerCfg {
   lastSentMs: number;
 }
 
+interface TargetConn {
+  target: SimTarget;
+  sock?: net.Socket;
+  connected: boolean;
+  error?: string;
+}
+
 export class SimEngine {
   private opts: SimOptions;
-  private sock?: net.Socket;
+  private conns: TargetConn[] = [];
   private timer?: NodeJS.Timeout;
   private line: ReturnType<typeof turf.lineString>;
   private courseMi: number;
@@ -95,30 +117,52 @@ export class SimEngine {
     }));
   }
 
-  start(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const sock = net.connect(this.opts.port, this.opts.host, () => {
-        this.sock = sock;
-        this.startedAtMs = Date.now();
-        // Tick fast enough for the fastest cadence, but never stamp two packets
-        // for one tracker in the same second.
-        const tickMs = Math.max(250, Math.min(1000, (this.opts.intervalS * 1000) / this.opts.timescale));
-        this.timer = setInterval(() => this.tick(), tickMs);
-        resolve();
-      });
-      sock.on('error', (err) => {
-        this.lastError = err.message;
-        if (!this.sock) reject(err);
-        else this.stop('connection lost');
-      });
-      sock.on('close', () => {
-        if (this.timer) this.stop('connection closed');
-      });
-    });
+  /** Connect to every target; runs as long as at least one stays connected. */
+  async start(): Promise<void> {
+    this.conns = this.opts.targets.map((target) => ({ target, connected: false }));
+    await Promise.all(
+      this.conns.map(
+        (c) =>
+          new Promise<void>((resolve) => {
+            const sock = net.connect(c.target.port, c.target.host, () => {
+              c.sock = sock;
+              c.connected = true;
+              resolve();
+            });
+            sock.setTimeout(6000, () => {
+              if (!c.connected) {
+                c.error = 'connect timeout';
+                sock.destroy();
+                resolve();
+              }
+            });
+            sock.on('error', (err) => {
+              c.error = err.message;
+              c.connected = false;
+              resolve();
+              if (this.timer && !this.conns.some((x) => x.connected)) this.stop('all targets lost');
+            });
+            sock.on('close', () => {
+              c.connected = false;
+              if (this.timer && !this.conns.some((x) => x.connected)) this.stop('all targets lost');
+            });
+          }),
+      ),
+    );
+    const up = this.conns.filter((c) => c.connected);
+    if (up.length === 0) {
+      const detail = this.conns.map((c) => `${c.target.host}:${c.target.port} (${c.error ?? 'failed'})`).join(', ');
+      throw new Error(`No target reachable: ${detail}`);
+    }
+    this.startedAtMs = Date.now();
+    // Tick fast enough for the fastest cadence, but never stamp two packets
+    // for one tracker in the same second.
+    const tickMs = Math.max(250, Math.min(1000, (this.opts.intervalS * 1000) / this.opts.timescale));
+    this.timer = setInterval(() => this.tick(), tickMs);
   }
 
   private tick(): void {
-    if (!this.sock || this.startedAtMs === null) return;
+    if (this.startedAtMs === null) return;
     const now = Date.now();
     const simHrs = ((now - this.startedAtMs) / 3600_000) * this.opts.timescale;
     const minGapMs = Math.max(1000, (this.opts.intervalS * 1000) / this.opts.timescale);
@@ -145,7 +189,9 @@ export class SimEngine {
         `+RESP:GTFRI,F50A01,${s.imei},,0,0,1,1,${speedKmh},90,10.0,` +
         `${lon.toFixed(6)},${lat.toFixed(6)},${ts},0310,0410,9909,06F23911,,` +
         `${Math.round(s.battery)},${ts},${s.count.toString(16).toUpperCase().padStart(4, '0')}$`;
-      this.sock.write(frame);
+      for (const c of this.conns) {
+        if (c.connected && c.sock) c.sock.write(frame);
+      }
     }
 
     this.onProgress?.(this.status());
@@ -157,9 +203,12 @@ export class SimEngine {
       clearInterval(this.timer);
       this.timer = undefined;
     }
-    this.sock?.end();
-    this.sock?.destroy();
-    this.sock = undefined;
+    for (const c of this.conns) {
+      c.sock?.end();
+      c.sock?.destroy();
+      c.sock = undefined;
+      c.connected = false;
+    }
     const wasRunning = this.startedAtMs !== null;
     this.startedAtMs = null;
     if (wasRunning) this.onEnd?.(reason);
@@ -185,6 +234,7 @@ export class SimEngine {
         battery: Math.round(s.battery),
         done: s.distanceMi >= this.courseMi - 1e-6,
       })),
+      targets: this.conns.map((c) => ({ ...c.target, connected: c.connected, error: c.error })),
       error: this.lastError,
     };
   }

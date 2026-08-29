@@ -7,6 +7,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import type { App } from '../app.js';
 import { listEvents, createEvent, type ConfigManager } from '../config/manager.js';
 import { loadCourse } from '../engine/course.js';
+import type { Forwarder } from '../ingest/forwarder.js';
 import type { FirebaseHub } from '../outputs/hub.js';
 import { resolveRace } from '../config/schema.js';
 import { SimEngine, type SimTrackerCfg } from '../sim/engine.js';
@@ -20,6 +21,7 @@ export interface AppHolder {
   readonly manager: ConfigManager;
   eventsDir: string;
   hub: FirebaseHub;
+  forwarder: Forwarder;
   /** Switch the running server to another event file in eventsDir. */
   activateEvent: (file: string) => void;
 }
@@ -331,6 +333,29 @@ export function startApi(holder: AppHolder, port: number): { httpServer: http.Se
     }),
   );
 
+  // --- live ping forwarding (mirror raw tracker frames to other systems) ---
+
+  ex.get('/api/forwards', auth.adminOnly, (_req, res) => {
+    res.json(holder.forwarder.status());
+  });
+
+  ex.put(
+    '/api/forwards',
+    auth.adminOnly,
+    act((req) => {
+      const targets = req.body?.targets;
+      if (!Array.isArray(targets)) throw new Error('targets array required');
+      holder.forwarder.setTargets(
+        targets.map((t: Record<string, unknown>) => ({
+          host: String(t.host ?? '').trim(),
+          port: Number(t.port),
+          enabled: !!t.enabled,
+        })),
+      );
+      return holder.forwarder.status();
+    }),
+  );
+
   // --- split feed token management ---
 
   ex.get('/api/ingest-token', auth.adminOnly, (_req, res) => {
@@ -366,7 +391,7 @@ export function startApi(holder: AppHolder, port: number): { httpServer: http.Se
   ex.post('/api/sim/start', auth.adminOnly, (req, res) => {
     try {
       if (sim?.running) throw new Error('A simulation is already running — stop it first');
-      const { raceId, timescale, intervalS, jitterM, paces } = req.body ?? {};
+      const { raceId, timescale, intervalS, jitterM, paces, extraTargets } = req.body ?? {};
       const engine = app.engines.get(String(raceId));
       if (!engine) throw new Error('unknown race');
       const race = engine.race;
@@ -389,10 +414,19 @@ export function startApi(holder: AppHolder, port: number): { httpServer: http.Se
         roleIdx++;
       }
       const port = holder.manager.resolved().listeners[0]?.port ?? 1000;
+      // Extra targets: "host:port, host:port" — the same pings also go to
+      // other systems (legacy stack, partner ingest) for side-by-side tests.
+      const targets = [{ host: '127.0.0.1', port }];
+      if (typeof extraTargets === 'string' && extraTargets.trim()) {
+        for (const part of extraTargets.split(',')) {
+          const m = part.trim().match(/^(.+):(\d+)$/);
+          if (!m) throw new Error(`Extra target "${part.trim()}" must be host:port`);
+          targets.push({ host: m[1], port: Number(m[2]) });
+        }
+      }
       sim = new SimEngine(
         {
-          host: '127.0.0.1',
-          port,
+          targets,
           courseCoords: engine.course.line.geometry.coordinates as [number, number][],
           trackers: sims,
           intervalS: Math.max(1, Number(intervalS) || holder.manager.raw.reportIntervalS || 10),
@@ -411,7 +445,7 @@ export function startApi(holder: AppHolder, port: number): { httpServer: http.Se
         .then(() => res.json({ ok: true, result: sim!.status() }))
         .catch((err: Error) => {
           sim = null;
-          res.status(400).json({ ok: false, error: `Cannot reach listener on 127.0.0.1:${port}: ${err.message}` });
+          res.status(400).json({ ok: false, error: err.message });
         });
     } catch (err) {
       res.status(400).json({ ok: false, error: (err as Error).message });

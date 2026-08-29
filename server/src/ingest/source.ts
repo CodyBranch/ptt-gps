@@ -8,7 +8,8 @@ export interface SourceEvents {
   onFix: (fix: Fix) => void;
   onTelemetry: (t: Telemetry) => void;
   onConnection: (event: 'connect' | 'close' | 'error', ip: string, source: string) => void;
-  onRawFrame?: (raw: string, source: string, ip: string) => void;
+  /** Raw frame exactly as received — ASCII text or original binary bytes. */
+  onRawFrame?: (raw: string | Buffer, source: string, ip: string) => void;
 }
 
 export interface ListenerConfig {
@@ -38,11 +39,12 @@ export function startListener(cfg: ListenerConfig, events: SourceEvents): net.Se
             if (fix) events.onFix(fix);
             if (telemetry) events.onTelemetry(telemetry);
           } else if (frame.kind === 'binary') {
-            events.onRawFrame?.(frame.bytes.toString('hex'), cfg.name, ip);
+            events.onRawFrame?.(frame.bytes, cfg.name, ip);
             const { fixes, telemetry } = parseBinaryFrame(frame.bytes, cfg.name, receivedAtMs);
             fixes.forEach(events.onFix);
             telemetry.forEach(events.onTelemetry);
           } else {
+            events.onRawFrame?.(frame.bytes, cfg.name, ip);
             events.onTelemetry(parseHeartbeat(frame.bytes, cfg.name, receivedAtMs));
           }
         } catch (err) {

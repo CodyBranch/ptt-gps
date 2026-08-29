@@ -592,6 +592,11 @@ export function SetupView({ ask, onSaved }: { ask: (req: ConfirmRequest) => void
         </section>
 
         <section>
+          <h3>Ping forwarding</h3>
+          <ForwardsPanel onMsg={setMsg} ask={ask} />
+        </section>
+
+        <section>
           <h3>Split feed (external)</h3>
           <SplitFeedPanel onMsg={setMsg} ask={ask} />
         </section>
@@ -920,6 +925,120 @@ function FirebasePanel({
           </div>
         </>
       )}
+    </>
+  );
+}
+
+interface ForwardRow {
+  host: string;
+  port: number;
+  enabled: boolean;
+  connected?: boolean;
+  sent?: number;
+  dropped?: number;
+  error?: string;
+}
+
+function ForwardsPanel({
+  onMsg,
+  ask,
+}: {
+  onMsg: (m: { kind: 'ok' | 'err'; text: string }) => void;
+  ask: (req: ConfirmRequest) => void;
+}) {
+  const [rows, setRows] = useState<ForwardRow[]>([]);
+  const [newHost, setNewHost] = useState('');
+  const [newPort, setNewPort] = useState('');
+
+  const refresh = () => api.forwards().then(setRows).catch(console.error);
+  useEffect(() => {
+    refresh();
+    const t = setInterval(refresh, 5000);
+    return () => clearInterval(t);
+  }, []);
+
+  const save = async (targets: ForwardRow[]) => {
+    try {
+      setRows(await api.setForwards(targets.map((t) => ({ host: t.host, port: t.port, enabled: t.enabled }))));
+      onMsg({ kind: 'ok', text: 'Forward targets updated.' });
+    } catch (err) {
+      onMsg({ kind: 'err', text: (err as Error).message });
+    }
+  };
+
+  return (
+    <>
+      <p className="hint">
+        Mirrors every raw tracker frame — live pings and simulations alike — to other systems in
+        real time (the legacy server for a parallel run, a partner's ingest…). One-way, byte for
+        byte; a down target is skipped and counted, never blocks ingest; reconnects automatically.
+      </p>
+      <table className="setup-table">
+        <thead>
+          <tr><th>Target</th><th>Status</th><th>Sent</th><th>Dropped</th><th>On</th><th></th></tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr key={`${r.host}:${r.port}`}>
+              <td className="mono">{r.host}:{r.port}</td>
+              <td>
+                {r.enabled ? (
+                  <span className={r.connected ? 'fwd-ok' : 'fwd-bad'}>
+                    {r.connected ? '● connected' : `○ ${r.error ?? 'connecting…'}`}
+                  </span>
+                ) : (
+                  <span className="dim">off</span>
+                )}
+              </td>
+              <td className="num">{r.sent ?? 0}</td>
+              <td className={`num ${(r.dropped ?? 0) > 0 ? 'warn' : ''}`}>{r.dropped ?? 0}</td>
+              <td className="center">
+                <input
+                  type="checkbox"
+                  checked={r.enabled}
+                  onChange={(e) => save(rows.map((x, j) => (j === i ? { ...x, enabled: e.target.checked } : x)))}
+                />
+              </td>
+              <td>
+                <button
+                  className="mini danger"
+                  onClick={() =>
+                    ask({
+                      title: `Remove forward to ${r.host}:${r.port}?`,
+                      confirmLabel: 'Remove',
+                      danger: true,
+                      onConfirm: () => save(rows.filter((_, j) => j !== i)),
+                    })
+                  }
+                >
+                  ✕
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="form-row">
+        <label>
+          Host
+          <input value={newHost} onChange={(e) => setNewHost(e.target.value.trim())} placeholder="23.99.178.28" />
+        </label>
+        <label>
+          Port
+          <input className="w-num" value={newPort} inputMode="numeric" onChange={(e) => setNewPort(e.target.value)} placeholder="1010" />
+        </label>
+        <button
+          className="mini self-end"
+          disabled={!newHost || !(Number(newPort) > 0)}
+          onClick={() => {
+            save([...rows, { host: newHost, port: Number(newPort), enabled: true }]);
+            setNewHost('');
+            setNewPort('');
+          }}
+        >
+          + Add forward
+        </button>
+      </div>
     </>
   );
 }

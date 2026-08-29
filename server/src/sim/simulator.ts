@@ -60,6 +60,12 @@ const race = cfg.races.find((r) => r.id === raceId) ?? usage(`Unknown race "${ra
 
 const host = arg('host', '127.0.0.1')!;
 const port = Number(arg('port', String(cfg.listeners[0]?.port ?? 1000)));
+// --also "host:port,host:port" mirrors the same pings to additional systems.
+const targets = [{ host, port }];
+for (const part of (arg('also') ?? '').split(',')) {
+  const m = part.trim().match(/^(.+):(\d+)$/);
+  if (m) targets.push({ host: m[1], port: Number(m[2]) });
+}
 const paceMph = Number(arg('pace', '12'));
 const intervalS = Number(arg('interval', String(cfg.reportIntervalS ?? 10)));
 const timescale = Number(arg('timescale', '5'));
@@ -79,7 +85,7 @@ for (const role of roles) {
 if (sims.length === 0) usage('Race has no role-assigned trackers to simulate');
 
 const engine = new SimEngine(
-  { host, port, courseCoords: courseCoordsFor(race.course), trackers: sims, intervalS, timescale, jitterM },
+  { targets, courseCoords: courseCoordsFor(race.course), trackers: sims, intervalS, timescale, jitterM },
   {
     onProgress: (() => {
       let lastLog = 0;
@@ -97,7 +103,9 @@ const engine = new SimEngine(
   },
 );
 
-console.log(`[sim] ${cfg.name} / ${race.name}: ${sims.length} trackers → ${host}:${port} · x${timescale} · interval ${intervalS}s · jitter ${jitterM}m`);
+console.log(
+  `[sim] ${cfg.name} / ${race.name}: ${sims.length} trackers → ${targets.map((t) => `${t.host}:${t.port}`).join(' + ')} · x${timescale} · interval ${intervalS}s · jitter ${jitterM}m`,
+);
 engine.start().catch((err) => {
   console.error('[sim] connection failed:', err.message);
   process.exit(1);

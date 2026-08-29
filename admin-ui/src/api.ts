@@ -121,7 +121,24 @@ export const api = {
     return res.json();
   },
 
-  simStart: async (opts: { raceId: string; timescale: number; intervalS: number; jitterM: number; paces: Record<string, number> }) => {
+  forwards: async () => {
+    const res = await fetch('/api/forwards');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  },
+
+  setForwards: async (targets: Array<{ host: string; port: number; enabled: boolean }>) => {
+    const res = await fetch('/api/forwards', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targets }),
+    });
+    const json = await res.json();
+    if (!res.ok || json.ok === false) throw new Error(json.error ?? `HTTP ${res.status}`);
+    return json.result;
+  },
+
+  simStart: async (opts: { raceId: string; timescale: number; intervalS: number; jitterM: number; paces: Record<string, number>; extraTargets?: string }) => {
     const res = await fetch('/api/sim/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

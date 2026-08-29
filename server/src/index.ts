@@ -3,6 +3,7 @@ import net from 'node:net';
 import path from 'node:path';
 import { ConfigManager, listEvents } from './config/manager.js';
 import { App } from './app.js';
+import { Forwarder } from './ingest/forwarder.js';
 import { FirebaseHub } from './outputs/hub.js';
 import { Store } from './state/store.js';
 import { startApi, type AppHolder } from './api/server.js';
@@ -50,11 +51,13 @@ store.setSetting('active-event', eventFile);
 
 const dbPath = arg('db', 'data/ptt.db')!;
 const hub = new FirebaseHub(store, path.dirname(path.resolve(dbPath)));
+const forwarder = new Forwarder(store);
 
 const holder: AppHolder = {
   app: new App(manager.resolved(), store, out, hub),
   eventsDir,
   hub,
+  forwarder,
   get manager() {
     return manager;
   },
@@ -98,6 +101,7 @@ function syncListeners(listeners: Array<{ name: string; port: number }>): void {
     const srv = startListener(listener, {
       onFix: (fix) => holder.app.onFix(fix),
       onTelemetry: (t) => holder.app.onTelemetry(t),
+      onRawFrame: (raw) => forwarder.write(raw),
       onConnection: (event, ip, source) => {
         console.log(`[${source}] ${ip} ${event}`);
         io.emit('connection', { event, ip, source, tMs: Date.now() });
