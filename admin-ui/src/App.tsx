@@ -101,8 +101,13 @@ export default function App() {
     }
   });
   const [confirm, setConfirm] = useState<ConfirmRequest>();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [, tick] = useReducer((n: number) => n + 1, 0);
   const ask = (req: ConfirmRequest) => setConfirm(req);
+  const go = (p: Page) => {
+    setPage(p);
+    setSidebarOpen(false);
+  };
   const oops = (title: string) => (err: unknown) =>
     ask({ title, body: err instanceof Error ? err.message : String(err), alertOnly: true, onConfirm: () => {} });
 
@@ -278,63 +283,77 @@ export default function App() {
 
   return (
     <div className="app">
-      <header>
-        <div className="brand">
+      <button className="sidebar-hamburger" onClick={() => setSidebarOpen(!sidebarOpen)} title="Menu">
+        ☰
+      </button>
+      {sidebarOpen && <div className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} />}
+      <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
+        <div className="sidebar-brand">
           <img className="brand-logo" src="/img/PRIMETIME.png" alt="Primetime" />
           {viewer && <span className="viewer-badge">VIEW ONLY</span>}
-          <span className={`conn ${state.connected ? 'ok' : 'bad'}`}>
-            {state.connected ? '● server' : '○ disconnected'}
-          </span>
-          <span className="whoami">
-            {auth.username} <span className={`role-badge ${auth.role}`}>{auth.role}</span> ·{' '}
-            <button className="linklike" onClick={logout}>
-              sign out
-            </button>
-          </span>
         </div>
-        <nav className="race-tabs">
+        <nav className="sidebar-nav">
           {!viewer && (
-            <button className={page === 'home' ? 'active' : ''} onClick={() => setPage('home')}>
-              ⌂ Home
+            <button className={`side-item ${page === 'home' ? 'active' : ''}`} onClick={() => go('home')}>
+              <span className="side-icon">⌂</span> Home
             </button>
           )}
+          <div className="side-section">Events</div>
+          {events.length === 0 && <div className="side-empty">none active</div>}
           {events.map((e) => {
             const live = e.races.some((r) => r.status === 'live');
             const armed = e.races.some((r) => r.status === 'armed');
             return (
               <button
                 key={e.event.id}
-                className={`event-chip ${page === 'event' && ev?.event.id === e.event.id ? 'active' : ''}`}
-                onClick={() => openEvent(e.event.id, eventTab === 'setup' ? 'all' : eventTab)}
+                className={`side-item side-event ${page === 'event' && ev?.event.id === e.event.id ? 'active' : ''}`}
+                title={e.event.name}
+                onClick={() => {
+                  openEvent(e.event.id, eventTab === 'setup' ? 'all' : eventTab);
+                  setSidebarOpen(false);
+                }}
               >
-                {e.event.name}
                 <span className={`status-dot ${live ? 'live' : armed ? 'armed' : 'scheduled'}`} />
+                <span className="side-event-name">{e.event.name}</span>
+                {!e.publishEnabled && <span className="side-off">⛔</span>}
               </button>
             );
           })}
           {!viewer && admin && (
             <>
-              <button className={page === 'events' ? 'active' : ''} onClick={() => setPage('events')}>
-                ☰ Events
+              <div className="side-section">Manage</div>
+              <button className={`side-item ${page === 'events' ? 'active' : ''}`} onClick={() => go('events')}>
+                <span className="side-icon">☰</span> Events
               </button>
-              <button className={page === 'fleet' ? 'active' : ''} onClick={() => setPage('fleet')}>
-                🚐 Fleet
+              <button className={`side-item ${page === 'fleet' ? 'active' : ''}`} onClick={() => go('fleet')}>
+                <span className="side-icon">🚐</span> Fleet
               </button>
-              <button className={page === 'system' ? 'active' : ''} onClick={() => setPage('system')}>
-                ⚙ System
+              <button className={`side-item ${page === 'system' ? 'active' : ''}`} onClick={() => go('system')}>
+                <span className="side-icon">⚙</span> System
               </button>
-              <button className={page === 'sim' ? 'active' : ''} onClick={() => setPage('sim')}>
-                🧪 Sim
+              <button className={`side-item ${page === 'sim' ? 'active' : ''}`} onClick={() => go('sim')}>
+                <span className="side-icon">🧪</span> Sim
                 {simProgress?.running && <span className="status-dot live" />}
               </button>
             </>
           )}
         </nav>
-        <button className="mini units-toggle" onClick={toggleUnits} title="Display units (does not change published output)">
-          {displayUnits === 'miles' ? 'mi' : 'km'}
-        </button>
-      </header>
+        <div className="sidebar-footer">
+          <button className="mini units-toggle" onClick={toggleUnits} title="Display units (does not change published output)">
+            {displayUnits === 'miles' ? 'mi' : 'km'}
+          </button>
+          <div className="sidebar-user">
+            <span className={`conn ${state.connected ? 'ok' : 'bad'}`}>{state.connected ? '●' : '○'}</span>
+            <span className="sidebar-username">{auth.username}</span>
+            <span className={`role-badge ${auth.role}`}>{auth.role}</span>
+          </div>
+          <button className="linklike" onClick={logout}>
+            sign out
+          </button>
+        </div>
+      </aside>
 
+      <div className="content">
       {page === 'event' && ev && (
         <nav className="event-subnav">
           {ev.races.length > 1 && (
@@ -418,6 +437,7 @@ export default function App() {
       ) : (
         eventRaceView()
       )}
+      </div>
 
       {confirm && <ConfirmDialog req={confirm} onClose={() => setConfirm(undefined)} />}
       {dialogRace && dialogTracker && (
