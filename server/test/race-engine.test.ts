@@ -178,6 +178,45 @@ describe('RaceEngine', () => {
     expect(events.filter((e) => e.type === 'distance-source')).toHaveLength(2);
   });
 
+  it('reset returns every tracker to the start line', () => {
+    const { engine, events } = makeEngine();
+    engine.setStatus('armed');
+    engine.setStatus('live');
+    // two fixes so the window has actually advanced off the start
+    engine.onFix(fixAt(engine, LEAD_A, 0.8, T0));
+    engine.onFix(fixAt(engine, LEAD_A, 1.2, T0 + 10_000));
+    engine.onFix(fixAt(engine, LEAD_B, 0.7, T0));
+    // hold a tracker to a zone, as an operator would mid-race
+    engine.setWindow(LEAD_B, 0.5, 2, true, 'op');
+
+    const before = engine.trackers.get(LEAD_A)!;
+    expect(before.distance).toBeCloseTo(1.2, 1);
+    expect(before.window.min).toBeGreaterThan(0);
+    expect(engine.trackers.get(LEAD_B)!.window.mode).toBe('clamped');
+
+    engine.resetTrackers('op');
+
+    for (const imei of [LEAD_A, LEAD_B]) {
+      const t = engine.trackers.get(imei)!;
+      expect(t.distance).toBeUndefined();
+      expect(t.speedCalMph).toBeUndefined();
+      expect(t.window.min).toBe(0); // back to the initial 0..initialMax slice
+      expect(t.window.mode).toBe('auto'); // latched zone released
+    }
+    expect(events.some((e) => e.type === 'race-reset')).toBe(true);
+  });
+
+  it('a tracker that reset is re-snapped from the start, not from its old distance', () => {
+    const { engine } = makeEngine();
+    engine.setStatus('armed');
+    engine.onFix(fixAt(engine, LEAD_A, 0.8, T0));
+    engine.resetTrackers();
+    // a fix near the start would previously be dragged forward by the stale
+    // distance and the advanced window
+    engine.onFix(fixAt(engine, LEAD_A, 0.2, T0 + 10_000));
+    expect(engine.trackers.get(LEAD_A)!.distance).toBeCloseTo(0.2, 1);
+  });
+
   it('rejects switching source on an unknown role', () => {
     const { engine } = makeEngine();
     expect(() => engine.setSource('nope', 'splits')).toThrow(/Unknown role/);

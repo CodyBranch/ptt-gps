@@ -185,6 +185,32 @@ export class RaceEngine {
     this.hooks.onTrackerUpdate(this.race.id, state);
   }
 
+  /**
+   * Back to the line: every tracker returns to the state it had before the
+   * race ran — no distance, the initial 0..initialMax window, and any latched
+   * zone released. Without this a reset kept each tracker's last distance and
+   * an advanced window, so a re-run would start mid-course and the stale
+   * distance would forward-bias the first snap.
+   *
+   * The last raw fix is kept: the vehicle is still wherever it is, and
+   * resetting the race says nothing about where the device is parked. Role
+   * failover choices and GPS/splits sources are also left alone — those are
+   * decisions about which hardware to trust, and the hardware has not changed.
+   */
+  resetTrackers(by?: string): void {
+    for (const state of this.trackers.values()) {
+      state.window = initialWindow(this.snap, this.course.length);
+      state.distance = undefined;
+      state.offCourse = undefined;
+      state.suspect = undefined;
+      state.pathLat = undefined;
+      state.pathLon = undefined;
+      state.speedCalMph = undefined;
+      this.hooks.onTrackerUpdate(this.race.id, state);
+    }
+    this.hooks.onSessionEvent(this.race.id, 'race-reset', { by });
+  }
+
   releaseClamp(imei: string, by?: string): void {
     const state = this.trackers.get(imei);
     if (!state) throw new Error(`Tracker ${imei} not in race ${this.race.id}`);

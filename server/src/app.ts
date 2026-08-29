@@ -198,9 +198,24 @@ export class App {
         }
         break;
       }
-      case 'reset':
+      case 'reset': {
+        // Status change and the reset itself are logged first, while the
+        // session is still open, so the timeline records how the race ended.
         engine.setStatus('scheduled', by);
+        engine.resetTrackers(by);
+        // Resetting a live race has to close its session out the way finish
+        // does, or the session stays open forever and showDistance never drops.
+        const sessionId = this.sessions.get(raceId);
+        if (sessionId !== undefined) {
+          this.store.endSession(sessionId, atMs ?? Date.now());
+          this.sessions.delete(raceId);
+        }
+        if (this.sessions.size === 0 && this.publishEnabled) {
+          this.publishContextSession = sessionId ?? null;
+          for (const p of this.publishers) p.showDistance(this.cfg.meetId, false);
+        }
         break;
+      }
     }
     this.out.emit('race', this.raceSnapshot(raceId));
     return engine.status;
