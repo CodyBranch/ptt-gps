@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useReducer, useState } from 'react';
+import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
 import { api } from './api';
 import { ConfirmDialog, type ConfirmRequest } from './components/Confirm';
@@ -103,6 +103,8 @@ export default function App() {
   const [confirm, setConfirm] = useState<ConfirmRequest>();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [pwDialog, setPwDialog] = useState(false);
+  const [accountMenu, setAccountMenu] = useState(false);
+  const accountRef = useRef<HTMLDivElement>(null);
   const [, tick] = useReducer((n: number) => n + 1, 0);
   const ask = (req: ConfirmRequest) => setConfirm(req);
   const go = (p: Page) => {
@@ -128,6 +130,23 @@ export default function App() {
       },
     });
   };
+
+  // Account menu closes on an outside click or Escape, like the other popovers.
+  useEffect(() => {
+    if (!accountMenu) return;
+    const onDown = (e: MouseEvent) => {
+      if (!accountRef.current?.contains(e.target as Node)) setAccountMenu(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setAccountMenu(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [accountMenu]);
 
   useEffect(() => {
     fetch('/api/me')
@@ -339,23 +358,53 @@ export default function App() {
             </>
           )}
         </nav>
-        <div className="sidebar-footer">
-          <button className="mini units-toggle" onClick={toggleUnits} title="Display units (does not change published output)">
-            {displayUnits === 'miles' ? 'mi' : 'km'}
-          </button>
-          <div className="sidebar-user">
-            <span className={`conn ${state.connected ? 'ok' : 'bad'}`}>{state.connected ? '●' : '○'}</span>
-            <span className="sidebar-username">{auth.username}</span>
-            <span className={`role-badge ${auth.role}`}>{auth.role}</span>
-          </div>
-          <div className="sidebar-links">
-            {!viewer && (
-              <button className="linklike" onClick={() => setPwDialog(true)}>
-                change password
+        <div className="sidebar-footer" ref={accountRef}>
+          {accountMenu && (
+            <div className="account-menu">
+              <div className="account-menu-head">
+                <span className="account-menu-name">{auth.username}</span>
+                <span className={`role-badge ${auth.role}`}>{auth.role}</span>
+              </div>
+              {!viewer && (
+                <button
+                  onClick={() => {
+                    setAccountMenu(false);
+                    setPwDialog(true);
+                  }}
+                >
+                  <span className="account-menu-icon">🔑</span> Change password
+                </button>
+              )}
+              <button
+                className="danger"
+                onClick={() => {
+                  setAccountMenu(false);
+                  logout();
+                }}
+              >
+                <span className="account-menu-icon">⏻</span> Sign out
               </button>
-            )}
-            <button className="linklike" onClick={logout}>
-              sign out
+            </div>
+          )}
+          <div className="account-row">
+            <button
+              className={`account-btn ${accountMenu ? 'open' : ''}`}
+              onClick={() => setAccountMenu(!accountMenu)}
+              title={state.connected ? 'Connected to the server' : 'Disconnected — reconnecting'}
+            >
+              <span className="avatar">
+                {auth.username.charAt(0).toUpperCase()}
+                <span className={`avatar-conn ${state.connected ? 'ok' : 'bad'}`} />
+              </span>
+              <span className="account-name">{auth.username}</span>
+              <span className="account-caret">▴</span>
+            </button>
+            <button
+              className="mini units-toggle"
+              onClick={toggleUnits}
+              title="Display units (does not change published output)"
+            >
+              {displayUnits === 'miles' ? 'mi' : 'km'}
             </button>
           </div>
         </div>
