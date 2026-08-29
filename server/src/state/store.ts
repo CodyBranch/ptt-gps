@@ -3,6 +3,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Fix, Telemetry } from '../ingest/types.js';
 
+export interface CourseMeta {
+  file: string;
+  label: string | null;
+  notes: string | null;
+  archived: number;
+  created_ms: number;
+  created_by: string | null;
+}
+
 /**
  * SQLite store: device registry + full fix history + race sessions.
  * Replaces the legacy CouchDB `devices` db and the flat per-IMEI log files.
@@ -153,6 +162,18 @@ export class Store {
     this.db.exec(`CREATE TABLE IF NOT EXISTS owners (
       id INTEGER PRIMARY KEY,
       name TEXT NOT NULL UNIQUE COLLATE NOCASE
+    )`);
+    // Course metadata. The KML/GeoJSON on disk stays the source of truth for
+    // geometry; this holds the librarian's notes — a course outlives the events
+    // that use it, so where it came from and whether it is certified matters
+    // years later.
+    this.db.exec(`CREATE TABLE IF NOT EXISTS courses (
+      file TEXT PRIMARY KEY,
+      label TEXT,
+      notes TEXT,
+      archived INTEGER NOT NULL DEFAULT 0,
+      created_ms INTEGER NOT NULL,
+      created_by TEXT
     )`);
     if (!fleetCols.some((c) => c.name === 'owner_id')) {
       this.db.exec(`ALTER TABLE fleet ADD COLUMN owner_id INTEGER`);
@@ -377,6 +398,39 @@ export class Store {
     const inUse = (this.db.prepare(`SELECT COUNT(*) c FROM fleet WHERE owner_id = ?`).get(id) as { c: number }).c;
     if (inUse > 0) throw new Error(`Owner is linked to ${inUse} device(s) — unlink them first`);
     if (this.db.prepare(`DELETE FROM owners WHERE id = ?`).run(id).changes === 0) throw new Error('Unknown owner');
+  }
+
+  // --- course library metadata (geometry lives on disk) ---
+
+  courseMeta(): Map<string, CourseMeta> {
+    const rows = this.db
+      .prepare(`SELECT file, label, notes, archived, created_ms, created_by FROM courses`)
+      .all() as CourseMeta[];
+    return new Map(rows.map((r) => [r.file, r]));
+  }
+
+  /** First sighting of a course file records when it entered the library. */
+  noteCourseSeen(file: string, by?: string): void {
+    this.db
+      .prepare(`INSERT INTO courses (file, created_ms, created_by) VALUES (?, ?, ?) ON CONFLICT(file) DO NOTHING`)
+      .run(file, Date.now(), by ?? null);
+  }
+
+  updateCourseMeta(file: string, patch: { label?: string | null; notes?: string | null; archived?: boolean }): void {
+    this.noteCourseSeen(file);
+    if (patch.label !== undefined) this.db.prepare(`UPDATE courses SET label = ? WHERE file = ?`).run(patch.label || null, file);
+    if (patch.notes !== undefined) this.db.prepare(`UPDATE courses SET notes = ? WHERE file = ?`).run(patch.notes || null, file);
+    if (patch.archived !== undefined) {
+      this.db.prepare(`UPDATE courses SET archived = ? WHERE file = ?`).run(patch.archived ? 1 : 0, file);
+    }
+  }
+
+  renameCourseMeta(from: string, to: string): void {
+    this.db.prepare(`UPDATE courses SET file = ? WHERE file = ?`).run(to, from);
+  }
+
+  deleteCourseMeta(file: string): void {
+    this.db.prepare(`DELETE FROM courses WHERE file = ?`).run(file);
   }
 
   // --- fleet registry (curated tracker inventory, event-independent) ---

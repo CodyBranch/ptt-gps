@@ -3,6 +3,7 @@ import { io } from 'socket.io-client';
 import { api } from './api';
 import { ConfirmDialog, type ConfirmRequest } from './components/Confirm';
 import { EventSetup } from './components/EventSetup';
+import { CoursesView } from './components/CoursesView';
 import { EventsView } from './components/EventsView';
 import { FleetView } from './components/FleetView';
 import { HomeView } from './components/HomeView';
@@ -82,7 +83,7 @@ function reducer(state: State, action: Action): State {
 const VIEWER_URL =
   window.location.pathname === '/watch' || new URLSearchParams(window.location.search).has('viewer');
 
-type Page = 'home' | 'event' | 'events' | 'fleet' | 'system' | 'sim';
+type Page = 'home' | 'event' | 'events' | 'courses' | 'fleet' | 'system' | 'sim';
 
 export default function App() {
   const [state, dispatch] = useReducer(reducer, { connected: false, lastSeen: {} });
@@ -345,6 +346,9 @@ export default function App() {
               <button className={`side-item ${page === 'events' ? 'active' : ''}`} onClick={() => go('events')}>
                 <span className="side-icon">☰</span> Events
               </button>
+              <button className={`side-item ${page === 'courses' ? 'active' : ''}`} onClick={() => go('courses')}>
+                <span className="side-icon">🗺</span> Courses
+              </button>
               <button className={`side-item ${page === 'fleet' ? 'active' : ''}`} onClick={() => go('fleet')}>
                 <span className="side-icon">🚐</span> Fleet
               </button>
@@ -468,7 +472,10 @@ export default function App() {
           ask={ask}
           onChanged={() => {}}
           onOpenSetup={(id) => openEvent(id, 'setup')}
+          onManageCourses={() => setPage('courses')}
         />
+      ) : page === 'courses' && admin && !viewer ? (
+        <CoursesView displayUnits={displayUnits} ask={ask} onOpenEvent={(id) => openEvent(id)} />
       ) : page === 'fleet' && admin && !viewer ? (
         <FleetView readonly={false} />
       ) : page === 'system' && admin && !viewer ? (

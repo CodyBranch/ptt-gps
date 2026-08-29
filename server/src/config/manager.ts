@@ -70,14 +70,143 @@ export function listCoursesIn(eventsDir: string): Array<{ file: string; points: 
   return out;
 }
 
-export function saveCourseIn(eventsDir: string, name: string, kmlText: string): { file: string; lengthMi: number; points: number } {
+/**
+ * Validate and store an uploaded KML course. Replacing the geometry behind an
+ * existing name changes it for every event that already points at it — past
+ * ones included — so that needs an explicit `replace`.
+ */
+export function saveCourseIn(
+  eventsDir: string,
+  name: string,
+  kmlText: string,
+  opts: { replace?: boolean } = {},
+): { file: string; lengthMi: number; points: number; replaced: boolean } {
   const safe = name.toLowerCase().replace(/\.kml$/, '').replace(/[^a-z0-9-_]+/g, '-');
   if (!safe) throw new Error('Invalid course name');
   const course = parseCourse(kmlText, true, 'miles'); // throws when there is no LineString
   const coursesDir = path.join(eventsDir, 'courses');
   fs.mkdirSync(coursesDir, { recursive: true });
-  fs.writeFileSync(path.join(coursesDir, `${safe}.kml`), kmlText);
-  return { file: `courses/${safe}.kml`, lengthMi: course.length, points: course.line.geometry.coordinates.length };
+  const target = path.join(coursesDir, `${safe}.kml`);
+  const exists = fs.existsSync(target);
+  if (exists && !opts.replace) {
+    throw new Error(`A course named ${safe}.kml already exists — rename this file, or replace it from the Courses page`);
+  }
+  fs.writeFileSync(target, kmlText);
+  return {
+    file: `courses/${safe}.kml`,
+    lengthMi: course.length,
+    points: course.line.geometry.coordinates.length,
+    replaced: exists,
+  };
+}
+
+export interface CourseUse {
+  eventId: string;
+  eventName: string;
+  file: string;
+  raceId: string;
+  raceName: string;
+  startDate?: string;
+  endDate?: string;
+}
+
+/**
+ * Every (event, race) that references each course file. Courses outlive the
+ * events that use them — a 2022 event still has to resolve its course to
+ * replay that race — so this drives the "used by" view and guards deletes.
+ */
+export function courseUsage(dir: string): Map<string, CourseUse[]> {
+  const out = new Map<string, CourseUse[]>();
+  for (const f of fs.readdirSync(dir)) {
+    if (!f.endsWith('.json')) continue;
+    try {
+      const json = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
+      for (const race of Array.isArray(json.races) ? json.races : []) {
+        const course = typeof race?.course === 'string' ? race.course : undefined;
+        if (!course) continue;
+        const key = course.replace(/^\.\//, '');
+        const list = out.get(key) ?? [];
+        list.push({
+          eventId: String(json.id ?? f.replace(/\.json$/, '')),
+          eventName: String(json.name ?? f),
+          file: f,
+          raceId: String(race.id ?? ''),
+          raceName: String(race.name ?? race.id ?? ''),
+          startDate: typeof json.startDate === 'string' ? json.startDate : undefined,
+          endDate: typeof json.endDate === 'string' ? json.endDate : undefined,
+        });
+        out.set(key, list);
+      }
+    } catch {
+      /* invalid files are reported by listEvents */
+    }
+  }
+  return out;
+}
+
+const courseFilePath = (eventsDir: string, file: string): string => {
+  const base = path.basename(file);
+  if (!base || base !== file.replace(/^courses\//, '')) throw new Error('Invalid course file');
+  return path.join(eventsDir, 'courses', base);
+};
+
+/**
+ * Rename a course and rewrite every event that points at it, so a tidier name
+ * never orphans an old event's race.
+ */
+export function renameCourseIn(eventsDir: string, from: string, to: string): { file: string; updated: string[] } {
+  const safe = to.toLowerCase().replace(/\.kml$/, '').replace(/[^a-z0-9-_]+/g, '-');
+  if (!safe) throw new Error('Invalid course name');
+  const src = courseFilePath(eventsDir, from);
+  if (!fs.existsSync(src)) throw new Error(`Course not found: ${from}`);
+  const ext = path.extname(src) || '.kml';
+  const target = `courses/${safe}${ext}`;
+  if (target === from) return { file: from, updated: [] };
+  const dst = path.join(eventsDir, 'courses', `${safe}${ext}`);
+  if (fs.existsSync(dst)) throw new Error(`A course named ${safe}${ext} already exists`);
+
+  const updated: string[] = [];
+  for (const [eventFile, uses] of eventFilesUsing(eventsDir, from)) {
+    const full = path.join(eventsDir, eventFile);
+    const json = JSON.parse(fs.readFileSync(full, 'utf8'));
+    for (const race of json.races ?? []) {
+      if (typeof race?.course === 'string' && race.course.replace(/^\.\//, '') === from) race.course = target;
+    }
+    fs.writeFileSync(full, JSON.stringify(json, null, 2) + '\n');
+    updated.push(`${json.name ?? eventFile} (${uses} race${uses === 1 ? '' : 's'})`);
+  }
+  fs.renameSync(src, dst);
+  return { file: target, updated };
+}
+
+/** event file → how many of its races use this course. */
+function eventFilesUsing(eventsDir: string, file: string): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const use of courseUsage(eventsDir).get(file) ?? []) {
+    counts.set(use.file, (counts.get(use.file) ?? 0) + 1);
+  }
+  return counts;
+}
+
+/** Delete a course file. Refused while any event — past or present — uses it. */
+export function deleteCourseIn(eventsDir: string, file: string): void {
+  const uses = courseUsage(eventsDir).get(file) ?? [];
+  if (uses.length > 0) {
+    const names = [...new Set(uses.map((u) => u.eventName))];
+    throw new Error(
+      `In use by ${names.length} event${names.length === 1 ? '' : 's'} (${names.join(', ')}) — archive it instead so those races still resolve`,
+    );
+  }
+  const p = courseFilePath(eventsDir, file);
+  if (!fs.existsSync(p)) throw new Error(`Course not found: ${file}`);
+  fs.unlinkSync(p);
+}
+
+/** Raw text of a course file, for download / re-export. */
+export function readCourseIn(eventsDir: string, file: string): string {
+  const p = courseFilePath(eventsDir, file);
+  if (!fs.existsSync(p)) throw new Error(`Course not found: ${file}`);
+  return fs.readFileSync(p, 'utf8');
 }
 
 /** Which events reference which tracker IMEIs (for the fleet page). */

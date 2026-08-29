@@ -5,7 +5,18 @@ import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { Server as SocketIOServer } from 'socket.io';
 import type { App } from '../app.js';
-import { listEvents, createEvent, eventRosters, listCoursesIn, saveCourseIn, type ConfigManager } from '../config/manager.js';
+import {
+  listEvents,
+  createEvent,
+  eventRosters,
+  listCoursesIn,
+  saveCourseIn,
+  courseUsage,
+  renameCourseIn,
+  deleteCourseIn,
+  readCourseIn,
+  type ConfigManager,
+} from '../config/manager.js';
 import { loadCourse } from '../engine/course.js';
 import type { Forwarder } from '../ingest/forwarder.js';
 import type { FixGate } from '../ingest/hygiene.js';
@@ -407,8 +418,54 @@ export function startApi(ctx: ServerContext, port: number): { httpServer: http.S
 
   // --- courses (shared across events) ---
 
+  /**
+   * The course library: geometry from disk, metadata from SQLite, and every
+   * (event, race) that points at each file. One course is reused across many
+   * events over the years, so usage travels with the listing.
+   */
   ex.get('/api/courses', (_req, res) => {
-    res.json(listCoursesIn(ctx.eventsDir));
+    const usage = courseUsage(ctx.eventsDir);
+    const meta = ctx.store.courseMeta();
+    const loaded = new Set([...ctx.apps.keys()]);
+    res.json(
+      listCoursesIn(ctx.eventsDir).map((c) => {
+        if (!meta.has(c.file)) ctx.store.noteCourseSeen(c.file);
+        const m = meta.get(c.file);
+        const uses = usage.get(c.file) ?? [];
+        return {
+          ...c,
+          label: m?.label ?? null,
+          notes: m?.notes ?? null,
+          archived: m?.archived === 1,
+          createdMs: m?.created_ms ?? null,
+          uses,
+          eventCount: new Set(uses.map((u) => u.eventId)).size,
+          inActiveEvent: uses.some((u) => loaded.has(u.eventId)),
+        };
+      }),
+    );
+  });
+
+  /** GeoJSON for the course library preview map. */
+  ex.get('/api/courses/:file/geometry', (req, res) => {
+    try {
+      const file = `courses/${path.basename(req.params.file as string)}`;
+      const course = loadCourse(path.join(ctx.eventsDir, file), 'miles');
+      res.json({ line: course.line, lengthMi: course.length });
+    } catch (err) {
+      res.status(404).json({ ok: false, error: (err as Error).message });
+    }
+  });
+
+  ex.get('/api/courses/:file/download', auth.adminOnly, (req, res) => {
+    try {
+      const name = path.basename(req.params.file as string);
+      res.type('application/vnd.google-earth.kml+xml')
+        .set('Content-Disposition', `attachment; filename="${name}"`)
+        .send(readCourseIn(ctx.eventsDir, `courses/${name}`));
+    } catch (err) {
+      res.status(404).json({ ok: false, error: (err as Error).message });
+    }
   });
 
   ex.post(
@@ -417,7 +474,55 @@ export function startApi(ctx: ServerContext, port: number): { httpServer: http.S
     express.text({ type: () => true, limit: '25mb' }),
     act((req) => {
       if (typeof req.body !== 'string' || req.body.length === 0) throw new Error('Empty upload');
-      return saveCourseIn(ctx.eventsDir, req.params.name as string, req.body);
+      const replace = req.query.replace === '1';
+      const saved = saveCourseIn(ctx.eventsDir, req.params.name as string, req.body, { replace });
+      ctx.store.noteCourseSeen(saved.file, req.operator);
+      return saved;
+    }),
+  );
+
+  ex.put(
+    '/api/courses/:file',
+    auth.adminOnly,
+    act((req) => {
+      const file = `courses/${path.basename(req.params.file as string)}`;
+      const { label, notes, archived } = req.body ?? {};
+      ctx.store.updateCourseMeta(file, {
+        label: typeof label === 'string' ? label.trim() : undefined,
+        notes: typeof notes === 'string' ? notes.trim() : undefined,
+        archived: typeof archived === 'boolean' ? archived : undefined,
+      });
+      return { file };
+    }),
+  );
+
+  ex.post(
+    '/api/courses/:file/rename',
+    auth.adminOnly,
+    act((req) => {
+      const from = `courses/${path.basename(req.params.file as string)}`;
+      const to = String(req.body?.to ?? '');
+      // Rewriting a loaded event's config underneath its running engines would
+      // desync them; make the operator deactivate first.
+      const uses = courseUsage(ctx.eventsDir).get(from) ?? [];
+      const live = uses.filter((u) => ctx.apps.has(u.eventId)).map((u) => u.eventName);
+      if (live.length > 0) {
+        throw new Error(`Deactivate ${[...new Set(live)].join(', ')} before renaming this course`);
+      }
+      const result = renameCourseIn(ctx.eventsDir, from, to);
+      ctx.store.renameCourseMeta(from, result.file);
+      return result;
+    }),
+  );
+
+  ex.delete(
+    '/api/courses/:file',
+    auth.adminOnly,
+    act((req) => {
+      const file = `courses/${path.basename(req.params.file as string)}`;
+      deleteCourseIn(ctx.eventsDir, file); // refuses while any event references it
+      ctx.store.deleteCourseMeta(file);
+      return { file };
     }),
   );
 

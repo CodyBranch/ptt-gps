@@ -55,6 +55,51 @@ export function MiniMap({ lat, lon }: { lat: number; lon: number }) {
   return <div className="mini-map" ref={ref} />;
 }
 
+/** Static course preview for the course library — line, start and finish. */
+export function CoursePreview({ file }: { file: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let map: mapboxgl.Map | undefined;
+    let cancelled = false;
+    api
+      .courseGeometry(file)
+      .then((data: { line: GeoJSON.Feature<GeoJSON.LineString> }) => {
+        if (cancelled || !ref.current) return;
+        const coords = data.line.geometry.coordinates as [number, number][];
+        if (coords.length < 2) return;
+        const bounds = coords.reduce(
+          (b, c) => b.extend(c),
+          new mapboxgl.LngLatBounds(coords[0], coords[0]),
+        );
+        map = new mapboxgl.Map({
+          container: ref.current,
+          style: STYLES.streets,
+          bounds,
+          fitBoundsOptions: { padding: 26 },
+        });
+        map.on('load', () => {
+          map!.addSource('preview', { type: 'geojson', data: data.line });
+          map!.addLayer({
+            id: 'preview',
+            type: 'line',
+            source: 'preview',
+            paint: { 'line-color': '#2f7ded', 'line-width': 3 },
+          });
+          new mapboxgl.Marker({ color: '#1fa860', scale: 0.7 }).setLngLat(coords[0]).addTo(map!);
+          new mapboxgl.Marker({ color: '#e70518', scale: 0.7 }).setLngLat(coords[coords.length - 1]).addTo(map!);
+        });
+      })
+      .catch(console.error);
+    return () => {
+      cancelled = true;
+      map?.remove();
+    };
+  }, [file]);
+
+  return <div className="course-preview" ref={ref} />;
+}
+
 /** One map for one or many races: a course line per race, markers deduped by IMEI. */
 export function MapView({ races, selected }: { races: RaceSnap[]; selected?: MapSelection }) {
   const containerRef = useRef<HTMLDivElement>(null);

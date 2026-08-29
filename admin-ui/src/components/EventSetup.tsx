@@ -389,11 +389,14 @@ export function EventSetup({
                     <td>
                       <select value={race.course} onChange={(e) => edit((c) => (c.races[i].course = e.target.value))}>
                         {!courses.some((x) => x.file === race.course) && <option value={race.course}>{race.course}</option>}
-                        {courses.map((x) => (
-                          <option key={x.file} value={x.file}>
-                            {x.file.replace('courses/', '')}
-                          </option>
-                        ))}
+                        {/* archived courses stay resolvable but drop out of the picker */}
+                        {courses
+                          .filter((x) => !x.archived || x.file === race.course)
+                          .map((x) => (
+                            <option key={x.file} value={x.file}>
+                              {x.label || x.file.replace('courses/', '')}
+                            </option>
+                          ))}
                       </select>
                     </td>
                     <td className="num course-dist">
@@ -500,15 +503,17 @@ export function EventSetup({
           <h4>Courses (shared by all events)</h4>
           <table className="setup-table">
             <tbody>
-              {courses.map((k) => (
-                <tr key={k.file}>
-                  <td className="mono">{k.file}</td>
-                  <td>
-                    {k.lengthMi.toFixed(2)} mi / {k.lengthKm.toFixed(2)} km
-                  </td>
-                  <td>{k.points} pts</td>
-                </tr>
-              ))}
+              {courses
+                .filter((k) => !k.archived)
+                .map((k) => (
+                  <tr key={k.file}>
+                    <td className="mono">{k.file}</td>
+                    <td>
+                      {k.lengthMi.toFixed(2)} mi / {k.lengthKm.toFixed(2)} km
+                    </td>
+                    <td>{k.points} pts</td>
+                  </tr>
+                ))}
             </tbody>
           </table>
           <input

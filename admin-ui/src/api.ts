@@ -25,6 +25,9 @@ async function send(url: string, method: string, body?: unknown) {
   return json.result ?? json;
 }
 
+/** Course ids travel as "courses/<name>"; the routes want just "<name>". */
+const courseName = (file: string) => file.replace(/^courses\//, '');
+
 export const api = {
   // --- race operations (event-scoped) ---
   lifecycle: (eventId: string, raceId: string, action: 'arm' | 'start' | 'finish' | 'reset') =>
@@ -62,16 +65,28 @@ export const api = {
   // --- courses (shared) ---
   courses: () => getJson('/api/courses'),
 
-  uploadCourse: async (name: string, kmlText: string) => {
-    const res = await fetch(`/api/courses/${encodeURIComponent(name)}`, {
+  uploadCourse: async (name: string, kmlText: string, replace = false) => {
+    const res = await fetch(`/api/courses/${encodeURIComponent(name)}${replace ? '?replace=1' : ''}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/vnd.google-earth.kml+xml' },
       body: kmlText,
     });
     const json = await res.json();
     if (!res.ok || json.ok === false) throw new Error(json.error ?? `HTTP ${res.status}`);
-    return json.result as { file: string; lengthMi: number; points: number };
+    return json.result as { file: string; lengthMi: number; points: number; replaced: boolean };
   },
+
+  // Routes take the bare filename — avoids an encoded slash in the path.
+  courseGeometry: (file: string) => getJson(`/api/courses/${encodeURIComponent(courseName(file))}/geometry`),
+  updateCourse: (file: string, patch: { label?: string; notes?: string; archived?: boolean }) =>
+    send(`/api/courses/${encodeURIComponent(courseName(file))}`, 'PUT', patch),
+  renameCourse: (file: string, to: string) =>
+    send(`/api/courses/${encodeURIComponent(courseName(file))}/rename`, 'POST', { to }) as Promise<{
+      file: string;
+      updated: string[];
+    }>,
+  deleteCourse: (file: string) => send(`/api/courses/${encodeURIComponent(courseName(file))}`, 'DELETE'),
+  courseDownloadUrl: (file: string) => `/api/courses/${encodeURIComponent(courseName(file))}/download`,
 
   // --- fleet + owners + history ---
   fleet: () => getJson('/api/fleet'),

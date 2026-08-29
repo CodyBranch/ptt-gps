@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '../api';
 import type { ConfirmRequest } from './Confirm';
 import type { CourseInfo, EventListing } from '../types';
@@ -13,18 +13,18 @@ export function EventsView({
   ask,
   onChanged,
   onOpenSetup,
+  onManageCourses,
 }: {
   loaded: string[];
   ask: (req: ConfirmRequest) => void;
   onChanged: () => void;
   onOpenSetup: (eventId: string) => void;
+  onManageCourses: () => void;
 }) {
   const [events, setEvents] = useState<EventListing[]>([]);
   const [courses, setCourses] = useState<CourseInfo[]>([]);
   const [showCompleted, setShowCompleted] = useState(false);
-  const [showCourses, setShowCourses] = useState(false);
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string }>();
-  const fileRef = useRef<HTMLInputElement>(null);
   // create form
   const [name, setName] = useState('');
   const [meetId, setMeetId] = useState('');
@@ -228,55 +228,15 @@ export function EventsView({
 
           <div className="event-card-head course-lib-head">
             <span className="event-card-name">Course library</span>
-            <button className="mini" onClick={() => setShowCourses(!showCourses)}>
-              {showCourses ? '▾' : '▸'} {courses.length}
-            </button>
+            <span className="dim">{courses.filter((c) => !c.archived).length} courses</span>
           </div>
-          {showCourses && (
-            <table className="setup-table">
-              <tbody>
-                {courses.map((k) => (
-                  <tr key={k.file}>
-                    <td className="mono">{k.file.replace('courses/', '')}</td>
-                    <td className="num">
-                      {k.lengthMi.toFixed(2)} mi / {k.lengthKm.toFixed(2)} km
-                    </td>
-                  </tr>
-                ))}
-                {courses.length === 0 && (
-                  <tr>
-                    <td className="hint">No courses uploaded yet.</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          )}
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".kml"
-            style={{ display: 'none' }}
-            onChange={async (e) => {
-              const f = e.target.files?.[0];
-              e.target.value = '';
-              if (!f) return;
-              try {
-                const text = await f.text();
-                const res = await api.uploadCourse(f.name.replace(/\.kml$/i, ''), text);
-                setMsg({ kind: 'ok', text: `Course ${res.file}: ${res.lengthMi.toFixed(2)} mi, ${res.points} points` });
-                setShowCourses(true);
-                reload();
-              } catch (err) {
-                setMsg({ kind: 'err', text: `Course upload failed: ${(err as Error).message}` });
-              }
-            }}
-          />
-          <button className="mini" onClick={() => fileRef.current?.click()}>
-            ⬆ Upload KML course
-          </button>
           <p className="hint">
-            Courses are shared by all events — upload here first, then pick them in each event's race setup.
+            Courses are shared by every event and reused year after year — upload, rename, archive and see which
+            events use each one on the Courses page.
           </p>
+          <button className="mini" onClick={onManageCourses}>
+            🗺 Manage courses →
+          </button>
         </div>
       </div>
     </div>

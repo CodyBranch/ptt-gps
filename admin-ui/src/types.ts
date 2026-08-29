@@ -204,11 +204,29 @@ export interface UserRow {
   role: 'admin' | 'staff';
 }
 
+export interface CourseUse {
+  eventId: string;
+  eventName: string;
+  file: string;
+  raceId: string;
+  raceName: string;
+  startDate?: string;
+  endDate?: string;
+}
+
 export interface CourseInfo {
   file: string;
   points: number;
   lengthMi: number;
   lengthKm: number;
+  label?: string | null;
+  notes?: string | null;
+  archived?: boolean;
+  createdMs?: number | null;
+  /** Every (event, race) pointing at this course — past events included. */
+  uses?: CourseUse[];
+  eventCount?: number;
+  inActiveEvent?: boolean;
 }
 
 export interface DeviceRow {
