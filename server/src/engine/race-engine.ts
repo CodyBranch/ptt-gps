@@ -24,6 +24,11 @@ export interface TrackerState {
 
 export interface RoleState extends RoleConfig {
   activeImei: string;
+  /**
+   * Which feed publishes this role's headline distance: the active tracker's
+   * GPS (normal), or the external split-time feed (when GPS is unusable).
+   */
+  source: 'gps' | 'splits';
 }
 
 export interface EngineHooks {
@@ -69,7 +74,7 @@ export class RaceEngine {
         window: initialWindow(snap, this.course.length),
       });
     }
-    this.roles = roles.map((r) => ({ ...r, activeImei: r.trackers[0] }));
+    this.roles = roles.map((r) => ({ ...r, activeImei: r.trackers[0], source: 'gps' as const }));
   }
 
   /** Feed one hygiene-accepted fix. Ignores IMEIs not in this race's roster. */
@@ -116,11 +121,24 @@ export class RaceEngine {
 
     if (this.status === 'live') {
       for (const role of this.roles) {
-        if (role.activeImei === fix.imei) {
+        // GPS publishes the role distance only while the role's source is GPS;
+        // on 'splits' the external feed owns the headline number.
+        if (role.activeImei === fix.imei && role.source === 'gps') {
           this.hooks.onRoleDistance(this.race.id, role, state, fix);
         }
       }
     }
+  }
+
+  /** Switch a role's published distance between GPS and the split feed. */
+  setSource(roleKey: string, source: 'gps' | 'splits', by?: string): void {
+    const role = this.roles.find((r) => r.key === roleKey);
+    if (!role) throw new Error(`Unknown role: ${roleKey}`);
+    if (source !== 'gps' && source !== 'splits') throw new Error('source must be "gps" or "splits"');
+    const prev = role.source;
+    if (prev === source) return;
+    role.source = source;
+    this.hooks.onSessionEvent(this.race.id, 'distance-source', { role: roleKey, from: prev, to: source, by });
   }
 
   setStatus(status: RaceStatus, by?: string): void {

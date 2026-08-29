@@ -98,6 +98,14 @@ aside {
 .role-dist { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--accent); }
 .failover-hint { color: var(--bad); font-size: 12px; margin: 2px 0 4px; font-weight: 600; }
 .splits-line { color: var(--accent); font-size: 12px; margin: 2px 0 4px; font-variant-numeric: tabular-nums; }
+.source-toggle { display: inline-flex; border: 1px solid var(--border); border-radius: 5px; overflow: hidden; margin-left: auto; }
+.source-toggle button {
+  background: var(--panel2); color: var(--dim); border: none; padding: 2px 8px; font-size: 10px;
+  font-weight: 800; cursor: pointer; letter-spacing: 0.5px;
+}
+.source-toggle button.on { background: var(--accent); color: #fff; }
+.role-head .role-dist { margin-left: 8px; }
+.role-dist.from-splits { color: var(--warn); }
 .role-tracker { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
 .role-tracker label { display: flex; align-items: center; gap: 7px; flex: 1; cursor: pointer; }
 .role-tracker.is-active .t-label { color: var(--ok); font-weight: 700; }

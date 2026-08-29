@@ -43,6 +43,7 @@ export function RolesPanel({
   readonly,
   ask,
   onActivate,
+  onSetSource,
 }: {
   race: RaceSnap;
   displayUnits: Units;
@@ -52,6 +53,7 @@ export function RolesPanel({
   readonly?: boolean;
   ask: (req: ConfirmRequest) => void;
   onActivate: (roleKey: string, imei: string) => void;
+  onSetSource: (roleKey: string, source: 'gps' | 'splits') => void;
 }) {
   const byImei = new Map(race.trackers.map((t) => [t.imei, t]));
   const d = (v: number) => toDisplay(v, race.units, displayUnits);
@@ -61,33 +63,57 @@ export function RolesPanel({
         const active = byImei.get(role.activeImei);
         const activeAge = packetAgeS(role.activeImei, lastSeen, active);
         const activeStale = activeAge !== undefined && activeAge > intervalS * 6;
+        const roleSim =
+          simulated?.[role.key] ??
+          simulated?.[role.activeImei] ??
+          (role.cmd !== undefined ? simulated?.[String(role.cmd)] : undefined);
+        const onSplits = role.source === 'splits';
+        const switchSource = (source: 'gps' | 'splits') => {
+          if (source === role.source) return;
+          ask({
+            title: source === 'splits' ? `Publish ${role.label} from the split feed?` : `Publish ${role.label} from GPS?`,
+            body:
+              source === 'splits'
+                ? 'The headline distance comes from the external split-time feed; the active tracker’s GPS stops publishing it (tracker data keeps flowing).'
+                : 'The active tracker’s GPS resumes publishing the headline distance.',
+            confirmLabel: source === 'splits' ? 'Use splits' : 'Use GPS',
+            danger: source === 'splits',
+            onConfirm: () => onSetSource(role.key, source),
+          });
+        };
         return (
           <div key={role.key} className={`role-card ${activeStale ? 'alert' : ''}`}>
             <div className="role-head">
               <span className="role-label">{role.label}</span>
-              <span className="role-dist">
-                {active?.distance !== undefined ? `${d(active.distance).toFixed(2)} ${unitAbbr(displayUnits)}` : '—'}
+              {!readonly && (
+                <span className="source-toggle" title="Which feed publishes this role's distance">
+                  <button className={!onSplits ? 'on' : ''} onClick={() => switchSource('gps')}>
+                    GPS
+                  </button>
+                  <button className={onSplits ? 'on' : ''} onClick={() => switchSource('splits')}>
+                    ⏱
+                  </button>
+                </span>
+              )}
+              <span className={`role-dist ${onSplits ? 'from-splits' : ''}`}>
+                {onSplits
+                  ? roleSim
+                    ? `⏱ ${roleSim.distance.toFixed(2)}`
+                    : '⏱ waiting for feed'
+                  : active?.distance !== undefined
+                    ? `${d(active.distance).toFixed(2)} ${unitAbbr(displayUnits)}`
+                    : '—'}
               </span>
             </div>
             {activeStale && role.trackers.length > 1 && (
               <div className="failover-hint">Active tracker stale — switch to backup?</div>
             )}
-            {(() => {
-              // Split-time feed entry for this role: keyed by role key, the
-              // active tracker's IMEI, or the role's Firebase cmd number.
-              const sim =
-                simulated?.[role.key] ??
-                simulated?.[role.activeImei] ??
-                (role.cmd !== undefined ? simulated?.[String(role.cmd)] : undefined);
-              if (!sim) return null;
-              const ageS = Math.round((Date.now() - sim.tMs) / 1000);
-              return (
-                <div className="splits-line" title="Simulated distance from the external split-time feed">
-                  ⏱ splits: {sim.distance.toFixed(2)}
-                  {sim.raceTime ? ` @ ${sim.raceTime}` : ''} · {fmtAge(ageS)} ago
-                </div>
-              );
-            })()}
+            {roleSim && (
+              <div className="splits-line" title="Simulated distance from the external split-time feed">
+                ⏱ splits: {roleSim.distance.toFixed(2)}
+                {roleSim.raceTime ? ` @ ${roleSim.raceTime}` : ''} · {fmtAge(Math.round((Date.now() - roleSim.tMs) / 1000))} ago
+              </div>
+            )}
             {role.trackers.map((imei) => {
               const t = byImei.get(imei);
               const age = packetAgeS(imei, lastSeen, t);

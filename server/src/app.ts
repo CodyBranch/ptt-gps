@@ -145,6 +145,36 @@ export class App {
     // Legacy-compatible rebroadcast: pages listening for 'simulatedDistance'
     // keep working with the same payload shape.
     this.out.emit('simulatedDistance', { tracker, distance, raceTime, tMs: entry.tMs });
+
+    // Roles switched to the splits source publish this distance directly.
+    // The feed's numbers are taken as already being in the event's output
+    // units (legacy behavior: passed through untouched).
+    if (!this.publishEnabled) return;
+    for (const engine of this.engines.values()) {
+      if (engine.status !== 'live') continue;
+      for (const role of engine.roles) {
+        if (role.source !== 'splits') continue;
+        const match =
+          role.key === tracker || role.activeImei === tracker || (role.cmd !== undefined && String(role.cmd) === tracker);
+        if (!match) continue;
+        const state = engine.trackers.get(role.activeImei);
+        if (!state) continue;
+        this.publishContextSession = this.sessions.get(engine.race.id) ?? null;
+        const syntheticFix: Fix = {
+          imei: role.activeImei,
+          lat: state.lastFix?.lat ?? 0,
+          lon: state.lastFix?.lon ?? 0,
+          tUtcMs: Date.now(),
+          fixValid: true,
+          buffered: false,
+          source: 'splits',
+          protocol: 'gtfri-22',
+          raw: '',
+          receivedAtMs: Date.now(),
+        };
+        for (const p of this.publishers) p.roleDistance(this.cfg.meetId, role, distance, state, syntheticFix);
+      }
+    }
   }
 
   onTelemetry(t: Telemetry): void {

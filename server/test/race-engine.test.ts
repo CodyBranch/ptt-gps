@@ -159,6 +159,30 @@ describe('RaceEngine', () => {
     expect(() => engine.setActive('lead', CHASE_A)).toThrow(/not in role/);
   });
 
+  it('distance source: GPS stops publishing the role when switched to splits', () => {
+    const { engine, published, events } = makeEngine();
+    engine.setStatus('armed');
+    engine.setStatus('live');
+    engine.onFix(fixAt(engine, LEAD_A, 0.5, T0));
+    expect(published).toHaveLength(1);
+
+    engine.setSource('lead', 'splits');
+    engine.onFix(fixAt(engine, LEAD_A, 0.6, T0 + 10_000));
+    expect(published).toHaveLength(1); // suppressed — splits feed owns the number
+    // tracker still computes (map/health keep working)
+    expect(engine.trackers.get(LEAD_A)!.distance).toBeCloseTo(0.6, 1);
+
+    engine.setSource('lead', 'gps');
+    engine.onFix(fixAt(engine, LEAD_A, 0.7, T0 + 20_000));
+    expect(published).toHaveLength(2);
+    expect(events.filter((e) => e.type === 'distance-source')).toHaveLength(2);
+  });
+
+  it('rejects switching source on an unknown role', () => {
+    const { engine } = makeEngine();
+    expect(() => engine.setSource('nope', 'splits')).toThrow(/Unknown role/);
+  });
+
   it('window override: one-shot reset and latched zone clamp', () => {
     const { engine, events } = makeEngine();
     engine.setStatus('armed');

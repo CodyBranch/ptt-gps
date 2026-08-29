@@ -116,6 +116,8 @@ export interface RoleState {
   label: string;
   trackers: string[];
   activeImei: string;
+  /** Which feed publishes the role's headline distance. */
+  source: 'gps' | 'splits';
   cmd?: number;
   clockSlot?: number;
   mapEvent?: string;

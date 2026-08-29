@@ -212,6 +212,16 @@ export function startApi(holder: AppHolder, port: number): { httpServer: http.Se
   );
 
   ex.post(
+    '/api/races/:raceId/roles/:roleKey/source',
+    act((req) => {
+      const engine = app.engines.get(req.params.raceId as string);
+      if (!engine) throw new Error('unknown race');
+      engine.setSource(req.params.roleKey as string, req.body.source, (req as OpRequest).operator);
+      io.emit('race', app.raceSnapshot(req.params.raceId as string));
+    }),
+  );
+
+  ex.post(
     '/api/races/:raceId/trackers/:imei/window',
     act((req) => {
       const engine = app.engines.get(req.params.raceId as string);

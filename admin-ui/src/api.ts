@@ -15,6 +15,9 @@ export const api = {
   setActive: (raceId: string, roleKey: string, imei: string) =>
     post(`/api/races/${raceId}/roles/${roleKey}/active`, { imei }),
 
+  setSource: (raceId: string, roleKey: string, source: 'gps' | 'splits') =>
+    post(`/api/races/${raceId}/roles/${roleKey}/source`, { source }),
+
   setWindow: (raceId: string, imei: string, start: number, end: number, latch: boolean) =>
     post(`/api/races/${raceId}/trackers/${imei}/window`, { start, end, latch }),
 

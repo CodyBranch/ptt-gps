@@ -195,6 +195,7 @@ export default function App() {
         readonly={viewer}
         ask={ask}
         onActivate={(roleKey, imei) => api.setActive(r.raceId, roleKey, imei).catch(oops('Failover failed'))}
+        onSetSource={(roleKey, source) => api.setSource(r.raceId, roleKey, source).catch(oops('Source switch failed'))}
       />
       <TrackerTable
         race={r}
