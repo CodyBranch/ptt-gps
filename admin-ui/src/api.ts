@@ -83,7 +83,7 @@ export const api = {
   courseMarkers: (file: string) => getJson(`/api/courses/${encodeURIComponent(courseName(file))}/markers`),
   saveCourseMarkers: (
     file: string,
-    body: { auto?: boolean; units?: Units; markers?: Array<{ at: number; label: string; kind?: 'point' | 'post' | 'timing' }> },
+    body: { auto?: boolean; units?: Units; markers?: Array<{ at: number; label: string; kind?: 'point' | 'post' | 'timing'; units?: Units }> },
   ) => send(`/api/courses/${encodeURIComponent(courseName(file))}/markers`, 'PUT', body),
   locateOnCourse: (file: string, lat: number, lon: number) =>
     send(`/api/courses/${encodeURIComponent(courseName(file))}/locate`, 'POST', { lat, lon }) as Promise<{

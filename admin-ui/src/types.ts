@@ -226,7 +226,7 @@ export interface CourseInfo {
   /** Markers live on the course, shared by every event that uses it. */
   autoMarkers?: boolean;
   markerUnits?: Units;
-  markers?: Array<{ at: number; label: string; kind?: 'point' | 'post' | 'timing' }>;
+  markers?: Array<{ at: number; label: string; kind?: 'point' | 'post' | 'timing'; units?: Units }>;
   /** Every (event, race) pointing at this course — past events included. */
   uses?: CourseUse[];
   eventCount?: number;

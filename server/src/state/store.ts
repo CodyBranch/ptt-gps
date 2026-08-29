@@ -4,8 +4,11 @@ import path from 'node:path';
 import type { Fix, Telemetry } from '../ingest/types.js';
 
 export interface CourseMarker {
-  /** Distance along the course, in the course's markerUnits. */
+  /** Distance along the course, in this marker's own units. */
   at: number;
+  /** Defaults to the course's markerUnits — set per marker so one course can
+   *  carry mile posts and kilometre posts at the same time. */
+  units?: 'miles' | 'kilometers';
   label: string;
   /** 'post' = a distance post (renders like a generated one), 'timing' = a
    *  timing point/mat, 'point' = anything else (aid station, turnaround). */
@@ -451,6 +454,8 @@ export class Store {
     file: string,
     patch: { auto?: boolean; units?: 'miles' | 'kilometers'; markers?: CourseMarker[] },
   ): void {
+    const MI_PER_KM = 0.621371;
+    const inMiles = (m: CourseMarker) => (m.units === 'kilometers' ? m.at * MI_PER_KM : m.at);
     this.noteCourseSeen(file);
     if (patch.auto !== undefined) {
       this.db.prepare(`UPDATE courses SET auto_markers = ? WHERE file = ?`).run(patch.auto ? 1 : 0, file);
@@ -465,8 +470,10 @@ export class Store {
           at: Number(m.at),
           label: String(m.label ?? '').slice(0, 60),
           kind: m.kind === 'timing' ? ('timing' as const) : m.kind === 'post' ? ('post' as const) : ('point' as const),
+          units: m.units === 'kilometers' ? ('kilometers' as const) : ('miles' as const),
         }))
-        .sort((a, b) => a.at - b.at);
+        // mixed units: order by real distance, not by the raw number
+        .sort((a, b) => inMiles(a) - inMiles(b));
       this.db.prepare(`UPDATE courses SET markers = ? WHERE file = ?`).run(JSON.stringify(clean), file);
     }
   }

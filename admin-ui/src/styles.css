@@ -866,3 +866,8 @@ button.mini.on { border-color: var(--warn); color: var(--warn); }
   max-height: 210px; overflow-y: auto; overscroll-behavior: contain;
   padding-right: 2px;
 }
+.course-markers .marker-units {
+  flex: none; width: 58px;
+  background: var(--bg); border: 1px solid var(--border); color: var(--text);
+  border-radius: 6px; padding: 6px 4px; font: inherit; font-size: 12px;
+}

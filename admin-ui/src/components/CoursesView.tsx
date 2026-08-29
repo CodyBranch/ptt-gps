@@ -4,7 +4,12 @@ import type { ConfirmRequest } from './Confirm';
 import type { CourseInfo, Units } from '../types';
 import { CoursePreview, type CourseMarker } from './MapView';
 
-type MarkerEdit = { at: number; label: string; kind?: 'point' | 'post' | 'timing' };
+type MarkerEdit = { at: number; label: string; kind?: 'point' | 'post' | 'timing'; units?: Units };
+
+const MI_PER_KM = 0.621371;
+/** Sort key for a mixed mi/km list: compare real distance, not raw numbers. */
+const inMiles = (m: MarkerEdit) => (m.units === 'kilometers' ? m.at * MI_PER_KM : m.at);
+const sortMarks = (list: MarkerEdit[]) => [...list].sort((a, b) => inMiles(a) - inMiles(b));
 
 /**
  * The course library. A course outlives the event it was drawn for — the same
@@ -222,24 +227,27 @@ function CourseDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [course.file]);
 
-  const unitAbbr = mUnits === 'miles' ? 'mi' : 'km';
-  const courseLen = mUnits === 'miles' ? course.lengthMi : course.lengthKm;
+  const unitAbbr = (u: Units) => (u === 'miles' ? 'mi' : 'km');
 
   /**
-   * Fill in a post at every whole mile/km. These become real rows you can
-   * rename or delete individually, so the generated set is switched off to
-   * avoid drawing each post twice.
+   * Fill in a post at every whole mile or kilometre. A course can carry both
+   * sets at once (mile posts painted on the road, km posts for an
+   * international field), so each row keeps the unit it was created in.
+   * Materialising the unit the generated set already covers switches that set
+   * off, otherwise every post would be drawn twice.
    */
-  const addEveryUnit = () => {
+  const addEveryUnit = (u: Units) => {
+    const abbr = unitAbbr(u);
+    const total = u === 'miles' ? course.lengthMi : course.lengthKm;
     setMarks((prev) => {
-      const have = new Set(prev.map((m) => m.at));
+      const have = new Set(prev.filter((m) => (m.units ?? mUnits) === u).map((m) => m.at));
       const next = [...prev];
-      for (let d = 1; d < courseLen; d++) {
-        if (!have.has(d)) next.push({ at: d, label: `${d} ${unitAbbr}`, kind: 'post' });
+      for (let d = 1; d < total; d++) {
+        if (!have.has(d)) next.push({ at: d, label: `${d} ${abbr}`, kind: 'post', units: u });
       }
-      return next.sort((a, b) => a.at - b.at);
+      return sortMarks(next);
     });
-    setAuto(false);
+    if (u === mUnits) setAuto(false);
   };
 
   // Functional updates: several rows can change before a re-render.
@@ -254,7 +262,7 @@ function CourseDialog({
     try {
       const hit = await api.locateOnCourse(course.file, p.lat, p.lon);
       setMarks((prev) =>
-        [...prev, { at: Number(hit.at.toFixed(2)), label: '', kind: 'point' as const }].sort((a, b) => a.at - b.at),
+        sortMarks([...prev, { at: Number(hit.at.toFixed(2)), label: '', kind: 'point' as const, units: mUnits }]),
       );
       setPicking(false);
     } catch (e) {
@@ -383,8 +391,21 @@ function CourseDialog({
                   min="0"
                   value={m.at}
                   onChange={(e) => setMark(i, { at: Number(e.target.value) })}
+                  /* re-order once the distance is entered, not mid-keystroke:
+                     rows jumping under the cursor would make typing impossible */
+                  onBlur={() => setMarks(sortMarks)}
                 />
-                <span className="dim">{unitAbbr}</span>
+                <select
+                  className="marker-units"
+                  value={m.units ?? mUnits}
+                  onChange={(e) => {
+                    setMark(i, { units: e.target.value as Units });
+                    setMarks(sortMarks);
+                  }}
+                >
+                  <option value="miles">mi</option>
+                  <option value="kilometers">km</option>
+                </select>
                 <input
                   className="marker-label"
                   placeholder="Label (e.g. Aid Station 1)"
@@ -406,11 +427,14 @@ function CourseDialog({
             {marks.length === 0 && <p className="hint">No custom markers yet.</p>}
           </div>
           <div className="home-actions">
-            <button className="mini" onClick={() => addMark({ at: 0, label: '', kind: 'point' })}>
+            <button className="mini" onClick={() => addMark({ at: 0, label: '', kind: 'point', units: mUnits })}>
               + Add marker
             </button>
-            <button className="mini" onClick={addEveryUnit} title={`Add a row at every whole ${unitAbbr}`}>
-              ⊞ Every {mUnits === 'miles' ? 'mile' : 'km'}
+            <button className="mini" onClick={() => addEveryUnit('miles')} title="Add a row at every whole mile">
+              ⊞ Every mile
+            </button>
+            <button className="mini" onClick={() => addEveryUnit('kilometers')} title="Add a row at every whole km">
+              ⊞ Every km
             </button>
             <button className={`mini ${picking ? 'on' : ''}`} onClick={() => setPicking(!picking)}>
               {picking ? '◎ Click the course…' : '📍 Place on map'}

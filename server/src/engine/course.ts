@@ -70,7 +70,7 @@ export function placeMarkers(
   cfg: {
     auto: boolean;
     units: 'miles' | 'kilometers';
-    markers: Array<{ at: number; label: string; kind?: 'point' | 'post' | 'timing' }>;
+    markers: Array<{ at: number; label: string; kind?: 'point' | 'post' | 'timing'; units?: 'miles' | 'kilometers' }>;
   },
 ): PlacedMarker[] {
   const out: PlacedMarker[] = [];
@@ -91,12 +91,13 @@ export function placeMarkers(
     }
   }
   for (const m of cfg.markers) {
-    const at = convert(m.at, cfg.units, course.units);
+    // each marker carries its own unit; fall back to the course's default
+    const at = convert(m.at, m.units ?? cfg.units, course.units);
     if (at <= course.length) {
       place(at, m.label, m.kind === 'timing' ? 'timing' : m.kind === 'post' ? 'unit' : 'custom');
     }
   }
-  return out;
+  return out.sort((a, b) => a.at - b.at);
 }
 
 /** Distance along the course of the point nearest to a lat/lon — lets the
