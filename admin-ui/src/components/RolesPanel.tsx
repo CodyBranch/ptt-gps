@@ -58,7 +58,8 @@ export function RolesPanel({
   onVehicle: (roleKey: string, vehicle: string) => void;
 }) {
   const byImei = new Map(race.trackers.map((t) => [t.imei, t]));
-  const vehicleLabel = (key: string) => race.vehicles.find((v) => v.key === key)?.label || key;
+  const vehicles = race.vehicles ?? [];
+  const vehicleLabel = (key: string) => vehicles.find((v) => v.key === key)?.label || key;
   const d = (v: number) => toDisplay(v, race.units, displayUnits);
   return (
     <div className="roles-panel">
@@ -130,7 +131,7 @@ export function RolesPanel({
                     });
                   }}
                 >
-                  {race.vehicles.map((v) => (
+                  {vehicles.map((v) => (
                     <option key={v.key} value={v.key}>
                       {v.label || v.key}
                     </option>

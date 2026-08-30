@@ -12,6 +12,7 @@ import { MapView, type MapSelection } from './components/MapView';
 import { RacePanel } from './components/RacePanel';
 import { RolesPanel } from './components/RolesPanel';
 import { SimPanel, type SimProgress } from './components/SimPanel';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { SystemView } from './components/SystemView';
 import { WireLog } from './components/WireLog';
 import { TrackerTable } from './components/TrackerTable';
@@ -496,6 +497,8 @@ export default function App() {
       </aside>
 
       <div className="content">
+      {/* One page failing must not take the whole console down. */}
+      <ErrorBoundary where={`${page}:${eventId ?? ''}:${eventTab}`}>
       {page === 'event' && !ev && eventId && admin && !viewer && (
         <nav className="event-subnav">
           <span className="event-chip">{eventId}</span>
@@ -599,6 +602,7 @@ export default function App() {
       ) : (
         eventRaceView()
       )}
+      </ErrorBoundary>
       </div>
 
       {pwDialog && (

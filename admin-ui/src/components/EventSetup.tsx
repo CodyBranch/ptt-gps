@@ -259,10 +259,10 @@ export function EventSetup({
                   value={role.vehicle}
                   onChange={(e) => edit((c) => (c.roles[ri].vehicle = e.target.value))}
                 >
-                  {!cfg.vehicles.some((v) => v.key === role.vehicle) && (
+                  {!(cfg.vehicles ?? []).some((v) => v.key === role.vehicle) && (
                     <option value={role.vehicle}>{role.vehicle || '— pick a vehicle —'}</option>
                   )}
-                  {cfg.vehicles.map((v) => (
+                  {(cfg.vehicles ?? []).map((v) => (
                     <option key={v.key} value={v.key}>
                       {v.label || v.key}
                     </option>
@@ -289,7 +289,7 @@ export function EventSetup({
             that assignment mid-race moves coverage without touching hardware — ★ is the vehicle's primary
             tracker, the rest are its failover backups.
           </p>
-          {cfg.vehicles.map((vehicle, vi) => (
+          {(cfg.vehicles ?? []).map((vehicle, vi) => (
             <div className="role-edit" key={vi}>
               <div className="form-row">
                 <label>
@@ -318,7 +318,7 @@ export function EventSetup({
                 </button>
               </div>
               <div className="role-trackers-edit">
-                {vehicle.trackers.map((imei, ti) => {
+                {(vehicle.trackers ?? []).map((imei, ti) => {
                   const t = cfg.trackers.find((x) => x.imei === imei);
                   return (
                     <span className="chip" key={imei}>
@@ -355,7 +355,7 @@ export function EventSetup({
               </div>
             </div>
           ))}
-          <button className="mini" onClick={() => edit((c) => c.vehicles.push({ key: '', label: '', trackers: [] }))}>
+          <button className="mini" onClick={() => edit((c) => { c.vehicles = c.vehicles ?? []; c.vehicles.push({ key: '', label: '', trackers: [] }); })}>
             + Add vehicle
           </button>
 
