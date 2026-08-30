@@ -284,18 +284,11 @@ export function MapView({ races, selected }: { races: RaceSnap[]; selected?: Map
         },
       });
       // Course markers: start/finish flags, mile/km posts, custom points.
+      // Course markers are reference for a race in progress, so the source
+      // starts empty and is filled only while that race is live — 68 mile and
+      // km posts on a scheduled course is just clutter.
       const mid = `markers-${race.raceId}`;
-      map.addSource(mid, {
-        type: 'geojson',
-        data: {
-          type: 'FeatureCollection',
-          features: course.markers.map((m) => ({
-            type: 'Feature',
-            properties: { label: m.label, kind: m.kind, units: m.units ?? '' },
-            geometry: { type: 'Point', coordinates: [m.lon, m.lat] },
-          })),
-        },
-      });
+      map.addSource(mid, { type: 'geojson', data: emptyFc });
       map.addLayer({ id: `${mid}-dot`, type: 'circle', source: mid, paint: MARKER_DOT_PAINT });
       map.addLayer({
         id: `${mid}-label`,
@@ -427,6 +420,24 @@ export function MapView({ races, selected }: { races: RaceSnap[]; selected?: Map
         m.remove();
         markers.delete(imei);
       }
+    }
+
+    for (const race of races) {
+      const src = map.getSource(`markers-${race.raceId}`) as mapboxgl.GeoJSONSource | undefined;
+      if (!src) continue;
+      const course = coursesRef.current.get(race.raceId);
+      src.setData(
+        race.status === 'live' && course
+          ? {
+              type: 'FeatureCollection',
+              features: course.markers.map((m) => ({
+                type: 'Feature',
+                properties: { label: m.label, kind: m.kind, units: m.units ?? '' },
+                geometry: { type: 'Point', coordinates: [m.lon, m.lat] },
+              })),
+            }
+          : emptyFc,
+      );
     }
 
     const selRace = races.find((r) => r.raceId === selected?.raceId);

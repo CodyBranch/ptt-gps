@@ -1,7 +1,7 @@
 import { useEffect, useReducer, useState } from 'react';
 import { api } from '../api';
 import type { ConfirmRequest } from './Confirm';
-import type { CourseInfo, EventListing, EventSnap } from '../types';
+import type { CourseInfo, EventListing, EventSnap, Units } from '../types';
 import { PublishBadge, RaceRows, ReportingCount } from './EventLive';
 import { Toast } from './Toast';
 
@@ -13,6 +13,7 @@ import { Toast } from './Toast';
 export function EventsView({
   live,
   lastSeen,
+  displayUnits,
   ask,
   onChanged,
   onOpenSetup,
@@ -22,6 +23,7 @@ export function EventsView({
   /** Snapshot of the running events — active cards show their live state. */
   live: EventSnap[];
   lastSeen: Record<string, number>;
+  displayUnits: Units;
   ask: (req: ConfirmRequest) => void;
   onChanged: () => void;
   onOpenSetup: (eventId: string) => void;
@@ -170,7 +172,7 @@ export function EventsView({
             race with its state and how much of its fleet is reporting. */}
         {ev && (
           <div className="event-card-races">
-            <RaceRows ev={ev} lastSeen={lastSeen} now={now} onOpenRace={(raceId) => onOpenEvent(e.id, raceId)} />
+            <RaceRows ev={ev} lastSeen={lastSeen} now={now} displayUnits={displayUnits} onOpenRace={(raceId) => onOpenEvent(e.id, raceId)} />
           </div>
         )}
         <div className="event-card-actions">

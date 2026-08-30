@@ -130,6 +130,19 @@ describe('RaceEngine', () => {
     expect(published[0].distance).toBeCloseTo(0.4, 1);
   });
 
+  it('records positions before the gun without snapping them to the course', () => {
+    const { engine, published } = makeEngine();
+    engine.onFix(fixAt(engine, LEAD_A, 0.3, T0));
+    const t = engine.trackers.get(LEAD_A)!;
+    // the crew can see the vehicle on the map...
+    expect(t.lastFix).toBeDefined();
+    expect(t.lastFix!.lat).toBeCloseTo(fixAt(engine, LEAD_A, 0.3, T0).lat, 5);
+    // ...but a scheduled race has no distance, window movement or output
+    expect(t.distance).toBeUndefined();
+    expect(t.window.min).toBe(0);
+    expect(published).toHaveLength(0);
+  });
+
   it('only the ACTIVE tracker of a role publishes; backups still compute', () => {
     const { engine, published } = makeEngine();
     engine.setStatus('armed');

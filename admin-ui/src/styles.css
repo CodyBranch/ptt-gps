@@ -738,15 +738,24 @@ button.linklike {
   .dialog, .dialog-confirm { width: calc(100vw - 32px); max-width: 400px; }
 }
 
-.map-marker { position: relative; }
+/*
+ * The marker element must be a zero-size anchor. Left as an auto-width block it
+ * stretched to the map's width, and Mapbox's translate(-50%,-50%) then centred
+ * that whole box on the coordinate — putting the dot half a map-width to the
+ * left. The error was constant in pixels, so the dot appeared to slide across
+ * the ground as you zoomed. At 0x0 the element's origin IS the GPS point and
+ * the dot centres itself on it.
+ */
+.map-marker { position: relative; width: 0; height: 0; }
 .map-marker-dot {
+  position: absolute; left: 0; top: 0; transform: translate(-50%, -50%);
   width: 14px; height: 14px; border-radius: 50%; border: 2.5px solid #fff;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
 }
 .map-marker.selected .map-marker-dot { outline: 3px solid var(--warn); }
 .map-marker.suspect .map-marker-dot { border-color: var(--warn); }
 .map-marker-label {
-  position: absolute; left: 18px; top: -3px; white-space: nowrap; font-size: 11px; font-weight: 700;
+  position: absolute; left: 12px; top: -9px; white-space: nowrap; font-size: 11px; font-weight: 700;
   color: #111; background: rgba(255, 255, 255, 0.92); border-radius: 4px; padding: 1px 6px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
 }

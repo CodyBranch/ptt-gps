@@ -4,7 +4,7 @@
   "meetId": 9001,
   "startDate": "2026-09-26",
   "endDate": "2026-09-26",
-  "outputUnits": "miles",
+  "outputUnits": "kilometers",
   "reportIntervalS": 10,
   "listeners": [
     {

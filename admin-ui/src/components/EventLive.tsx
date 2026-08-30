@@ -1,4 +1,5 @@
-import type { EventSnap } from '../types';
+import { toDisplay, unitAbbr } from '../api';
+import type { EventSnap, Units } from '../types';
 
 /**
  * The live view of an active event — publishing state and a row per race with
@@ -55,11 +56,15 @@ export function RaceRows({
   ev,
   lastSeen,
   now,
+  displayUnits,
   onOpenRace,
 }: {
   ev: EventSnap;
   lastSeen: Record<string, number>;
   now: number;
+  /** The console's mi/km choice — a race measured in miles still reads in km
+   *  when that is what the operator asked to see. */
+  displayUnits: Units;
   onOpenRace: (raceId: string) => void;
 }) {
   if (ev.races.length === 0) return <p className="hint">No races configured yet.</p>;
@@ -74,7 +79,7 @@ export function RaceRows({
             <span className="ev-race-name">{race.name}</span>
             <span className={`ev-race-status ${race.status}`}>{race.status.toUpperCase()}</span>
             <span className="ev-race-len dim">
-              {race.courseLength.toFixed(1)} {race.units === 'miles' ? 'mi' : 'km'}
+              {toDisplay(race.courseLength, race.units, displayUnits).toFixed(1)} {unitAbbr(displayUnits)}
             </span>
             <span className={`ev-report ${on < imeis.length ? 'warn-text' : 'ok-text'}`}>
               {on}/{imeis.length}

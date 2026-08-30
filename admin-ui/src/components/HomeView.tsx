@@ -1,6 +1,6 @@
 import { useEffect, useReducer, useState } from 'react';
 import { api } from '../api';
-import type { EventSnap, FleetRow, Snapshot, TunnelStatus } from '../types';
+import type { EventSnap, FleetRow, Snapshot, TunnelStatus, Units } from '../types';
 import { PublishBadge, RaceRows, ReportingCount, eventImeis, isReporting as reporting } from './EventLive';
 
 type Severity = 'bad' | 'warn' | 'info';
@@ -19,6 +19,7 @@ interface Alert {
 export function HomeView({
   snapshot,
   lastSeen,
+  displayUnits,
   role,
   onOpenEvent,
   onNavigate,
@@ -27,6 +28,7 @@ export function HomeView({
   /** Live packet ages — kept outside the snapshot so they update between
    *  snapshots, as fixes arrive. */
   lastSeen: Record<string, number>;
+  displayUnits: Units;
   role: 'admin' | 'staff';
   onOpenEvent: (eventId: string, tab?: string) => void;
   onNavigate: (view: 'events' | 'fleet' | 'system' | 'sim') => void;
@@ -203,6 +205,7 @@ export function HomeView({
                   ev={ev}
                   lastSeen={lastSeen}
                   now={now}
+                  displayUnits={displayUnits}
                   onOpenRace={(raceId) => onOpenEvent(ev.event.id, raceId)}
                 />
                 <div className="home-actions">

@@ -544,6 +544,7 @@ export default function App() {
         <HomeView
           snapshot={state.snapshot}
           lastSeen={state.lastSeen}
+          displayUnits={displayUnits}
           role={admin ? 'admin' : 'staff'}
           onOpenEvent={(id) => openEvent(id)}
           onNavigate={(v) => setPage(v)}
@@ -552,6 +553,7 @@ export default function App() {
         <EventsView
           live={events}
           lastSeen={state.lastSeen}
+          displayUnits={displayUnits}
           ask={ask}
           onChanged={() => {}}
           onOpenSetup={(id) => openEvent(id, 'setup')}

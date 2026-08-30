@@ -5,6 +5,7 @@ import type { CourseInfo, EventConfigT, FirebaseConn, FleetRow } from '../types'
 import { Toast } from './Toast';
 import { TrackerPicker } from './TrackerPicker';
 import { CoursePicker } from './CoursePicker';
+import { NumberField } from './NumberField';
 
 /**
  * Setup for one active event: details & dates, Firebase outputs, what we're
@@ -112,7 +113,7 @@ export function EventSetup({
             </label>
             <label>
               Meet ID
-              <input value={cfg.meetId} inputMode="numeric" onChange={(e) => edit((c) => (c.meetId = Number(e.target.value) || 0))} />
+              <NumberField value={cfg.meetId} min={-1} onCommit={(n) => edit((c) => (c.meetId = n))} />
             </label>
           </div>
           <div className="form-row">
@@ -143,35 +144,19 @@ export function EventSetup({
           <div className="form-row">
             <label>
               Report interval (s)
-              <input
-                value={cfg.reportIntervalS ?? 10}
-                inputMode="numeric"
-                onChange={(e) => edit((c) => (c.reportIntervalS = Number(e.target.value) || 10))}
-              />
+              <NumberField value={cfg.reportIntervalS ?? 10} onCommit={(n) => edit((c) => (c.reportIntervalS = n))} />
             </label>
             <label>
               Window back
-              <input
-                value={cfg.snapDefaults.minInc}
-                inputMode="decimal"
-                onChange={(e) => edit((c) => (c.snapDefaults.minInc = Number(e.target.value) || 0.2))}
-              />
+              <NumberField value={cfg.snapDefaults.minInc} onCommit={(n) => edit((c) => (c.snapDefaults.minInc = n))} />
             </label>
             <label>
               Window ahead
-              <input
-                value={cfg.snapDefaults.maxInc}
-                inputMode="decimal"
-                onChange={(e) => edit((c) => (c.snapDefaults.maxInc = Number(e.target.value) || 1))}
-              />
+              <NumberField value={cfg.snapDefaults.maxInc} onCommit={(n) => edit((c) => (c.snapDefaults.maxInc = n))} />
             </label>
             <label>
               Initial window
-              <input
-                value={cfg.snapDefaults.initialMax}
-                inputMode="decimal"
-                onChange={(e) => edit((c) => (c.snapDefaults.initialMax = Number(e.target.value) || 0.5))}
-              />
+              <NumberField value={cfg.snapDefaults.initialMax} onCommit={(n) => edit((c) => (c.snapDefaults.initialMax = n))} />
             </label>
           </div>
 
@@ -407,7 +392,10 @@ export function EventSetup({
           </table>
           <button
             className="mini"
-            onClick={() => edit((c) => c.races.push({ id: '', name: '', course: courses[0]?.file ?? '', units: 'miles' }))}
+            onClick={() =>
+              // a new race measures the way the event publishes unless changed
+              edit((c) => c.races.push({ id: '', name: '', course: courses[0]?.file ?? '', units: c.outputUnits }))
+            }
           >
             + Add race
           </button>

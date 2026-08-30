@@ -81,9 +81,13 @@ export class RaceEngine {
   onFix(fix: Fix): void {
     const state = this.trackers.get(fix.imei);
     if (!state) return;
-    if (this.status !== 'armed' && this.status !== 'live') return;
-
-    const result = snapFix(this.course, state.window, fix.lon, fix.lat, this.snap, state.distance);
+    // Positions are recorded whatever the race is doing, so the crew can watch
+    // vehicles get into place before the gun. Only an armed or live race snaps
+    // them to the course and produces a distance.
+    const racing = this.status === 'armed' || this.status === 'live';
+    const result = racing
+      ? snapFix(this.course, state.window, fix.lon, fix.lat, this.snap, state.distance)
+      : undefined;
 
     if (state.lastFix) {
       const dtH = (fix.tUtcMs - state.lastFix.tUtcMs) / 3600_000;
@@ -97,12 +101,14 @@ export class RaceEngine {
       }
     }
 
-    state.window = result.window;
-    state.distance = result.distance;
-    state.offCourse = result.offCourse;
-    state.suspect = result.suspect;
-    state.pathLat = result.pathLat;
-    state.pathLon = result.pathLon;
+    if (result) {
+      state.window = result.window;
+      state.distance = result.distance;
+      state.offCourse = result.offCourse;
+      state.suspect = result.suspect;
+      state.pathLat = result.pathLat;
+      state.pathLon = result.pathLon;
+    }
     state.lastFix = {
       lat: fix.lat,
       lon: fix.lon,
