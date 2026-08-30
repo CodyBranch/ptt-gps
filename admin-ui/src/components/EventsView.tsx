@@ -3,6 +3,7 @@ import { api } from '../api';
 import type { ConfirmRequest } from './Confirm';
 import type { CourseInfo, EventListing, EventSnap } from '../types';
 import { PublishBadge, RaceRows, ReportingCount } from './EventLive';
+import { Toast } from './Toast';
 
 /**
  * Event library. Several events can be active (running) at once. Sorted:
@@ -199,7 +200,6 @@ export function EventsView({
     <div className="setup">
       <div className="setup-bar">
         <span className="setup-title">Events</span>
-        {msg && <span className={`setup-msg ${msg.kind}`}>{msg.text}</span>}
         <span className="spacer" />
       </div>
 
@@ -273,6 +273,8 @@ export function EventsView({
           </button>
         </div>
       </div>
+
+      <Toast msg={msg} onDone={() => setMsg(undefined)} />
     </div>
   );
 }

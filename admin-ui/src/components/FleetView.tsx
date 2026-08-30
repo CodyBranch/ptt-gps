@@ -4,6 +4,7 @@ type SortKey = 'label' | 'imei' | 'model' | 'owner' | 'battery' | 'seen' | 'even
 import { api } from '../api';
 import { MiniMap } from './MapView';
 import type { DeviceAssignment, DeviceIssue, DeviceRow, FleetRow, Owner } from '../types';
+import { Toast } from './Toast';
 
 /**
  * Fleet page: the permanent tracker inventory — shared by every event.
@@ -101,7 +102,6 @@ export function FleetView({ readonly }: { readonly: boolean }) {
     <div className="setup">
       <div className="setup-bar">
         <span className="setup-title">Tracker fleet</span>
-        {msg && <span className={`setup-msg ${msg.kind}`}>{msg.text}</span>}
         <span className="spacer" />
         <input
           className="fleet-search"
@@ -325,6 +325,8 @@ export function FleetView({ readonly }: { readonly: boolean }) {
           onChanged={reload}
         />
       )}
+
+      <Toast msg={msg} onDone={() => setMsg(undefined)} />
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import type { ConfirmRequest } from './Confirm';
 import type { CourseInfo, EventConfigT, FirebaseConn, FleetRow } from '../types';
+import { Toast } from './Toast';
 
 /**
  * Setup for one active event: details & dates, Firebase outputs, what we're
@@ -89,7 +90,6 @@ export function EventSetup({
     <div className="setup">
       <div className="setup-bar">
         <span className="setup-title">Setup — {cfg.name}</span>
-        {msg && <span className={`setup-msg ${msg.kind}`}>{msg.text}</span>}
         <span className="spacer" />
         <button className="mini" onClick={reload} disabled={!dirty}>
           Discard changes
@@ -469,6 +469,8 @@ export function EventSetup({
           </p>
         </section>
       </div>
+
+      <Toast msg={msg} onDone={() => setMsg(undefined)} />
     </div>
   );
 }

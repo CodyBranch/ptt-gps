@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import type { ConfirmRequest } from './Confirm';
 import type { FirebaseConn, TunnelStatus, UserRow } from '../types';
+import { Toast } from './Toast';
 
 type Msg = { kind: 'ok' | 'err'; text: string };
 
@@ -18,7 +19,6 @@ export function SystemView({ ask }: { ask: (req: ConfirmRequest) => void }) {
     <div className="setup">
       <div className="setup-bar">
         <span className="setup-title">System</span>
-        {msg && <span className={`setup-msg ${msg.kind}`}>{msg.text}</span>}
         <span className="spacer" />
       </div>
       <div className="setup-grid">
@@ -45,6 +45,8 @@ export function SystemView({ ask }: { ask: (req: ConfirmRequest) => void }) {
           <RemoteAccessPanel onMsg={setMsg} ask={ask} />
         </section>
       </div>
+
+      <Toast msg={msg} onDone={() => setMsg(undefined)} />
     </div>
   );
 }

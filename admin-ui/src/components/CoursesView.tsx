@@ -3,6 +3,7 @@ import { api } from '../api';
 import type { ConfirmRequest } from './Confirm';
 import type { CourseInfo, Units } from '../types';
 import { CoursePreview, type CourseMarker } from './MapView';
+import { Toast } from './Toast';
 
 type MarkerEdit = { at: number; label: string; kind?: 'point' | 'post' | 'timing'; units?: Units };
 
@@ -66,7 +67,6 @@ export function CoursesView({
     <div className="setup">
       <div className="setup-bar">
         <span className="setup-title">Courses</span>
-        {msg && <span className={`setup-msg ${msg.kind}`}>{msg.text}</span>}
         <span className="spacer" />
         <button className="mini primary" onClick={() => fileRef.current?.click()}>
           ⬆ Upload course
@@ -183,6 +183,8 @@ export function CoursesView({
           onOpenEvent={onOpenEvent}
         />
       )}
+
+      <Toast msg={msg} onDone={() => setMsg(undefined)} />
     </div>
   );
 }

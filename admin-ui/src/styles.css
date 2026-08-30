@@ -213,6 +213,7 @@ aside {
 button.mini {
   background: var(--panel2); color: var(--text); border: 1px solid var(--border);
   border-radius: 5px; padding: 4px 10px; cursor: pointer; font-size: 12px;
+  white-space: nowrap;
 }
 button.mini.primary { background: var(--brand-red); border-color: var(--brand-red); font-weight: 600; color: #fff; }
 
@@ -884,13 +885,14 @@ button.mini.on { border-color: var(--warn); color: var(--warn); }
 }
 
 /* --- fleet search / filter / sort --- */
-.fleet-search {
-  width: 220px; min-width: 120px; flex: 0 1 220px;
+.setup input.fleet-search {
+  flex: 1 1 320px; width: 320px; min-width: 200px; max-width: 460px;
   background: var(--bg); border: 1px solid var(--border); color: var(--text);
   border-radius: 6px; padding: 5px 10px; font: inherit; font-size: 13px;
 }
 .fleet-search::placeholder { color: var(--dim); }
-.fleet-filter {
+.setup select.fleet-filter {
+  flex: none; width: auto; min-width: 150px;
   background: var(--bg); border: 1px solid var(--border); color: var(--text);
   border-radius: 6px; padding: 5px 8px; font: inherit; font-size: 13px;
 }
@@ -898,3 +900,25 @@ button.mini.on { border-color: var(--warn); color: var(--warn); }
 .setup-table th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
 .setup-table th.sortable:hover { color: var(--text); }
 .sort-caret { display: inline-block; width: 10px; margin-left: 4px; font-size: 8px; color: var(--accent); }
+
+/* Transient page status — floats clear of the control bar it used to crowd. */
+.toast {
+  position: fixed; right: 18px; bottom: 18px; z-index: 60;
+  display: flex; align-items: flex-start; gap: 9px; max-width: 380px;
+  background: var(--panel); border: 1px solid var(--border); border-left: 3px solid var(--dim);
+  border-radius: 8px; padding: 10px 13px; cursor: pointer;
+  font-size: 13px; line-height: 1.4; color: var(--text);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+  animation: toast-in 0.18s ease-out;
+}
+.toast.ok { border-left-color: var(--ok); }
+.toast.err { border-left-color: var(--bad); }
+.toast-mark {
+  flex: none; width: 17px; height: 17px; border-radius: 50%; display: grid; place-items: center;
+  font-size: 11px; font-weight: 800; margin-top: 1px;
+}
+.toast.ok .toast-mark { background: var(--ok); color: #06210f; }
+.toast.err .toast-mark { background: var(--bad); color: #fff; }
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+}
