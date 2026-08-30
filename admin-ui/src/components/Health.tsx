@@ -1,7 +1,9 @@
 import type { TrackerPub } from '../types';
 
 /** Battery level bar — legacy color bands: <20 low, 20–60 mid, ≥60 high. */
-export function BatteryBar({ tracker }: { tracker: TrackerPub }) {
+export function BatteryBar({ tracker }: { tracker?: TrackerPub }) {
+  // a vehicle can carry a tracker this race has no reading for yet
+  if (!tracker) return <span className="dim">—</span>;
   if (!tracker.hasBattery) return <span className="batt-ext" title="Vehicle powered">EXT</span>;
   const pct = tracker.lastFix?.battery;
   if (pct === undefined) return <span className="dim">—</span>;
@@ -20,7 +22,8 @@ export function BatteryBar({ tracker }: { tracker: TrackerPub }) {
  * GNSS lock certainty. GL family: GTFRI accuracy (1 good, ≥2 degraded,
  * 0 repeating last-known). GV500: HDOP + satellites.
  */
-export function GpsChip({ tracker }: { tracker: TrackerPub }) {
+export function GpsChip({ tracker }: { tracker?: TrackerPub }) {
+  if (!tracker) return <span className="dim">—</span>;
   const q = tracker.gpsQuality;
   if (!q) return <span className="dim">—</span>;
   const f = tracker.lastFix;

@@ -1006,3 +1006,9 @@ button.mini.on { border-color: var(--warn); color: var(--warn); }
   background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
   padding: 8px 10px; font-size: 12px; color: var(--warn); word-break: break-word;
 }
+.role-card.idle { opacity: 0.7; border-style: dashed; }
+.roles-uncovered {
+  margin: 4px 10px 10px; padding: 8px 11px; font-size: 12.5px;
+  background: var(--panel2); border: 1px solid var(--border); border-left: 3px solid var(--warn);
+  border-radius: 7px;
+}

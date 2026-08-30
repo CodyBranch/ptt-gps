@@ -127,7 +127,8 @@ export class App {
         if (role.source !== 'splits') continue;
         const match =
           role.key === tracker || role.activeImei === tracker || (role.cmd !== undefined && String(role.cmd) === tracker);
-        if (!match) continue;
+        // A role nobody is covering has no tracker to attribute the split to.
+        if (!match || !role.activeImei) continue;
         const state = engine.trackers.get(role.activeImei);
         if (!state) continue;
         this.publishContextSession = sessionId ?? null;

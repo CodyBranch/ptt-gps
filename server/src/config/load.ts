@@ -29,7 +29,7 @@ export function parseEventConfig(
   }
   const vehicleKeys = new Set(raw.vehicles.map((v) => v.key));
   for (const role of raw.roles) {
-    if (!vehicleKeys.has(role.vehicle)) {
+    if (role.vehicle !== '' && !vehicleKeys.has(role.vehicle)) {
       throw new Error(`Role "${role.key}" is assigned to unknown vehicle "${role.vehicle}"`);
     }
   }

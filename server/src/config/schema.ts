@@ -28,11 +28,14 @@ export const RoleSchema = z.object({
   key: z.string(),
   label: z.string(),
   /**
-   * Which vehicle is currently covering this role. The role owns the output
-   * bindings below and keeps them whoever is assigned, so a scoreboard slot
-   * stays fixed while the vehicle behind it changes mid-race.
+   * Which vehicle is currently covering this role, if any. The role owns the
+   * output bindings below and keeps them whoever is assigned, so a scoreboard
+   * slot stays fixed while the vehicle behind it changes mid-race. Empty means
+   * nobody is covering it — a real state when a moto leaves one race for
+   * another — and an uncovered role publishes nothing rather than a stale or
+   * invented number.
    */
-  vehicle: z.string(),
+  vehicle: z.string().default(''),
   /** Legacy Firebase command number — GPSMap/<cmd> path (krush flavor). */
   cmd: z.number().int().optional(),
   /** Legacy event name written into GPSMap payloads, e.g. "elite_women". */
@@ -153,9 +156,11 @@ export function resolveRace(event: EventConfig, race: RaceConfig) {
     .map((v) => ({ ...v, trackers: v.trackers.filter((i) => imeis.has(i)) }))
     .filter((v) => v.trackers.length > 0);
   const byKey = new Map(vehicles.map((v) => [v.key, v]));
-  const roles: ResolvedRole[] = (race.roles ?? event.roles)
-    .map((r) => ({ ...r, trackers: byKey.get(r.vehicle)?.trackers ?? [] }))
-    .filter((r) => r.trackers.length > 0);
+  // Uncovered roles are kept: the console has to show that nobody is on them.
+  const roles: ResolvedRole[] = (race.roles ?? event.roles).map((r) => ({
+    ...r,
+    trackers: byKey.get(r.vehicle)?.trackers ?? [],
+  }));
   const snap = { ...event.snapDefaults, ...(race.snap ?? {}) };
   return { trackers, vehicles, roles, snap };
 }

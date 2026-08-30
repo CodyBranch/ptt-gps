@@ -63,35 +63,75 @@ export function RolesPanel({
   const d = (v: number) => toDisplay(v, race.units, displayUnits);
   return (
     <div className="roles-panel">
-      {race.roles.map((role) => {
-        const active = byImei.get(role.activeImei);
-        const activeAge = packetAgeS(role.activeImei, lastSeen, active);
+      {/* Vehicle-first: a moto is a physical thing carrying trackers, and it is
+          assigned to cover a role. Leading with the role hid that — the
+          trackers read as belonging to "Lead Men" rather than to the bike. */}
+      {vehicles.map((vehicle) => {
+        const covering = race.roles.filter((r) => r.vehicle === vehicle.key);
+        const role = covering[0];
+        const active = role?.activeImei ? byImei.get(role.activeImei) : undefined;
+        const activeAge = packetAgeS(role?.activeImei ?? '', lastSeen, active);
         const activeStale = activeAge !== undefined && activeAge > intervalS * 6;
-        const roleSim =
-          simulated?.[role.key] ??
-          simulated?.[role.activeImei] ??
-          (role.cmd !== undefined ? simulated?.[String(role.cmd)] : undefined);
-        const onSplits = role.source === 'splits';
+        const onSplits = role?.source === 'splits';
+        const roleSim = role
+          ? (simulated?.[role.key] ??
+            (role.activeImei ? simulated?.[role.activeImei] : undefined) ??
+            (role.cmd !== undefined ? simulated?.[String(role.cmd)] : undefined))
+          : undefined;
+
         const switchSource = (source: 'gps' | 'splits') => {
-          if (source === role.source) return;
+          if (!role || source === role.source) return;
           ask({
-            title: source === 'splits' ? `Publish ${role.label} from the split feed?` : `Publish ${role.label} from GPS?`,
+            title:
+              source === 'splits'
+                ? `Publish ${role.label} from the split feed?`
+                : `Publish ${role.label} from GPS?`,
             body:
               source === 'splits'
-                ? 'The headline distance comes from the external split-time feed; the active tracker’s GPS stops publishing it (tracker data keeps flowing).'
-                : 'The active tracker’s GPS resumes publishing the headline distance.',
+                ? 'The headline distance comes from the external split-time feed; the active tracker stops publishing it (tracker data keeps flowing).'
+                : 'The active tracker resumes publishing the headline distance.',
             confirmLabel: source === 'splits' ? 'Use splits' : 'Use GPS',
             danger: source === 'splits',
             onConfirm: () => onSetSource(role.key, source),
           });
         };
+
+        /** Put this vehicle on a role, displacing whoever was on it. */
+        const assign = (roleKey: string) => {
+          if (roleKey === '') {
+            if (!role) return;
+            ask({
+              title: `Stand ${vehicle.label} down from ${role.label}?`,
+              body: `${role.label} publishes nothing until a vehicle is put back on it. Its scoreboard slot and map channel are untouched.`,
+              confirmLabel: 'Stand down',
+              danger: true,
+              onConfirm: () => onVehicle(role.key, ''),
+            });
+            return;
+          }
+          const target = race.roles.find((r) => r.key === roleKey)!;
+          const displaced = vehicles.find((v) => v.key === target.vehicle && v.key !== vehicle.key);
+          ask({
+            title: `Put ${vehicle.label} on ${target.label}?`,
+            body: displaced
+              ? `${displaced.label} comes off ${target.label}. The role keeps its scoreboard slot and map channel.`
+              : `${target.label} keeps its scoreboard slot and map channel; only the vehicle behind it changes.`,
+            confirmLabel: 'Assign',
+            onConfirm: () => {
+              onVehicle(target.key, vehicle.key);
+              // a vehicle can only be in one place, so it leaves its old role
+              if (role && role.key !== target.key) onVehicle(role.key, '');
+            },
+          });
+        };
+
         return (
-          <div key={role.key} className={`role-card ${activeStale ? 'alert' : ''}`}>
+          <div key={vehicle.key} className={`role-card ${activeStale ? 'alert' : ''} ${role ? '' : 'idle'}`}>
             <div className="role-head">
-              <span className="role-label">{role.label}</span>
-              {!readonly && (
+              <span className="role-label">{vehicle.label || vehicle.key}</span>
+              {role && !readonly && (
                 <span className="source-toggle" title="Which feed publishes this role's distance">
-                  <button className={!onSplits ? 'on' : ''} onClick={() => switchSource('gps')}>
+                  <button className={onSplits ? '' : 'on'} onClick={() => switchSource('gps')}>
                     GPS
                   </button>
                   <button className={onSplits ? 'on' : ''} onClick={() => switchSource('splits')}>
@@ -100,101 +140,93 @@ export function RolesPanel({
                 </span>
               )}
               <span className={`role-dist ${onSplits ? 'from-splits' : ''}`}>
-                {onSplits
-                  ? roleSim
-                    ? `⏱ ${roleSim.distance.toFixed(2)}`
-                    : '⏱ waiting for feed'
-                  : active?.distance !== undefined
-                    ? `${d(active.distance).toFixed(2)} ${unitAbbr(displayUnits)}`
-                    : '—'}
+                {!role
+                  ? '—'
+                  : onSplits
+                    ? roleSim
+                      ? `⏱ ${roleSim.distance.toFixed(2)}`
+                      : '⏱ waiting for feed'
+                    : active?.distance !== undefined
+                      ? `${d(active.distance).toFixed(2)} ${unitAbbr(displayUnits)}`
+                      : '—'}
               </span>
             </div>
-            {/* Which vehicle is covering this role — the swap that moves
-                coverage between motos without touching the output bindings. */}
+
             <div className="role-vehicle-line">
-              <span className="dim">Covered by</span>
+              <span className="dim">Covering</span>
               {readonly ? (
-                <span className="role-vehicle-name">{vehicleLabel(role.vehicle)}</span>
+                <span className="role-vehicle-name">{role ? role.label : 'nothing'}</span>
               ) : (
-                <select
-                  value={role.vehicle}
-                  onChange={(e) => {
-                    const to = e.target.value;
-                    if (to === role.vehicle) return;
-                    ask({
-                      title: `Hand ${role.label} to ${vehicleLabel(to)}?`,
-                      body:
-                        `${vehicleLabel(to)} takes over this role's output immediately. ` +
-                        'Its scoreboard slot and map channel do not change.',
-                      confirmLabel: 'Reassign',
-                      onConfirm: () => onVehicle(role.key, to),
-                    });
-                  }}
-                >
-                  {vehicles.map((v) => (
-                    <option key={v.key} value={v.key}>
-                      {v.label || v.key}
+                <select value={role?.key ?? ''} onChange={(e) => assign(e.target.value)}>
+                  <option value="">— not assigned —</option>
+                  {race.roles.map((r) => (
+                    <option key={r.key} value={r.key}>
+                      {r.label}
                     </option>
                   ))}
                 </select>
               )}
-              {race.roles.filter((r) => r.vehicle === role.vehicle).length > 1 && (
+              {covering.length > 1 && (
                 <span className="warn-text" title="This vehicle is covering more than one role">
-                  ⚠ also on {race.roles.filter((r) => r.vehicle === role.vehicle && r.key !== role.key).map((r) => r.label).join(', ')}
+                  ⚠ also {covering.slice(1).map((r) => r.label).join(', ')}
                 </span>
               )}
             </div>
-            {activeStale && role.trackers.length > 1 && (
+
+            {activeStale && vehicle.trackers.length > 1 && (
               <div className="failover-hint">Active tracker stale — switch to backup?</div>
             )}
             {roleSim && (
               <div className="splits-line" title="Simulated distance from the external split-time feed">
                 ⏱ splits: {roleSim.distance.toFixed(2)}
-                {roleSim.raceTime ? ` @ ${roleSim.raceTime}` : ''} · {fmtAge(Math.round((Date.now() - roleSim.tMs) / 1000))} ago
+                {roleSim.raceTime ? ` @ ${roleSim.raceTime}` : ''} ·{' '}
+                {fmtAge(Math.round((Date.now() - roleSim.tMs) / 1000))} ago
               </div>
             )}
-            {role.trackers.map((imei) => {
+
+            {vehicle.trackers.map((imei) => {
               const t = byImei.get(imei);
+              const isActive = role?.activeImei === imei;
               const age = packetAgeS(imei, lastSeen, t);
-              const isActive = imei === role.activeImei;
               return (
-                <div key={imei} className={`role-tracker ${isActive ? 'is-active' : ''}`}>
-                  <label>
-                    {readonly ? (
-                      <span className={`active-dot ${isActive ? 'on' : ''}`} />
-                    ) : (
-                      <input
-                        type="radio"
-                        name={`role-${race.raceId}-${role.key}`}
-                        checked={isActive}
-                        onChange={() =>
-                          ask({
-                            title: `Make ${t?.label ?? imei} the active ${role.label}?`,
-                            body:
-                              race.status === 'live'
-                                ? 'Published distances switch to this tracker immediately.'
-                                : undefined,
-                            confirmLabel: 'Switch',
-                            onConfirm: () => onActivate(role.key, imei),
-                          })
-                        }
-                      />
-                    )}
-                    <span className="t-label">{t?.label ?? imei}</span>
-                  </label>
-                  {t && <GpsChip tracker={t} />}
-                  {t && <BatteryBar tracker={t} />}
+                <div
+                  key={imei}
+                  className={`role-tracker ${isActive ? 'active' : ''}`}
+                  onClick={() => !readonly && role && !isActive && onActivate(role.key, imei)}
+                  title={
+                    role
+                      ? isActive
+                        ? 'Publishing this role'
+                        : 'Make this the publishing tracker'
+                      : 'This vehicle is not covering a role'
+                  }
+                >
+                  <span className={`radio ${isActive ? 'on' : ''}`} />
+                  <span className="t-name">{t?.label ?? imei}</span>
+                  <BatteryBar tracker={t} />
+                  <GpsChip tracker={t} />
                   <span className="t-dist">
                     {t?.distance !== undefined ? `${d(t.distance).toFixed(2)} ${unitAbbr(displayUnits)}` : '—'}
                   </span>
                   <span className={`t-age ${ageClass(age, intervalS)}`}>{fmtAge(age)}</span>
-                  {t?.suspect && <span className="t-suspect" title="Snapped far from course">⚠</span>}
                 </div>
               );
             })}
           </div>
         );
       })}
+
+      {/* Roles nobody is on. The gap is the point, so it is stated plainly. */}
+      {race.roles.filter((r) => !r.vehicle).length > 0 && (
+        <div className="roles-uncovered">
+          <span className="warn-text">Not being covered:</span>{' '}
+          {race.roles
+            .filter((r) => !r.vehicle)
+            .map((r) => r.label)
+            .join(', ')}
+        </div>
+      )}
     </div>
   );
+
 }

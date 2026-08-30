@@ -26,7 +26,8 @@ export interface RoleState extends RoleConfig {
   /** The assigned vehicle's trackers, primary first — resolved at build time
    *  and swapped wholesale when the role is reassigned to another vehicle. */
   trackers: string[];
-  activeImei: string;
+  /** Undefined while no vehicle is covering the role. */
+  activeImei?: string;
   /**
    * Which feed publishes this role's headline distance: the active tracker's
    * GPS (normal), or the external split-time feed (when GPS is unusable).
@@ -176,11 +177,20 @@ export class RaceEngine {
   setVehicle(roleKey: string, vehicleKey: string, by?: string): void {
     const role = this.roles.find((r) => r.key === roleKey);
     if (!role) throw new Error(`Unknown role: ${roleKey}`);
+    const from = role.vehicle;
+    if (from === vehicleKey) return;
+    if (vehicleKey === '') {
+      // Standing the role down: it keeps its outputs but publishes nothing
+      // until someone is put back on it.
+      role.vehicle = '';
+      role.trackers = [];
+      role.activeImei = undefined;
+      this.hooks.onSessionEvent(this.race.id, 'role-vehicle', { role: roleKey, from, to: null, by });
+      return;
+    }
     const vehicle = this.vehicles.find((v) => v.key === vehicleKey);
     if (!vehicle) throw new Error(`Unknown vehicle: ${vehicleKey}`);
     if (vehicle.trackers.length === 0) throw new Error(`Vehicle ${vehicleKey} has no trackers in this race`);
-    const from = role.vehicle;
-    if (from === vehicleKey) return;
     role.vehicle = vehicleKey;
     role.trackers = vehicle.trackers;
     role.activeImei = vehicle.trackers[0];
