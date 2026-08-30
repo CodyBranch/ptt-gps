@@ -29,8 +29,7 @@ export function TrackerTable({
         <thead>
           <tr>
             <th>Tracker</th>
-            <th>Dist ({unitAbbr(displayUnits)})</th>
-            <th>Off</th>
+            <th>Dist</th>
             <th>GPS</th>
             <th>Batt</th>
             <th>Age</th>
@@ -58,14 +57,15 @@ export function TrackerTable({
                   </div>
                   <div className="t-imei">{t.imei}</div>
                 </td>
-                <td className="num">{t.distance !== undefined ? d(t.distance).toFixed(2) : '—'}</td>
-                <td className={`num ${t.suspect ? 'warn' : ''}`}>{offM !== undefined ? `${offM}m` : '—'}</td>
+                <td className={`num ${t.suspect ? 'warn' : ''}`} title={offM !== undefined ? `${offM} m off course` : undefined}>
+                  {t.distance !== undefined ? `${d(t.distance).toFixed(2)} ${unitAbbr(displayUnits)}` : '—'}
+                </td>
                 <td><GpsChip tracker={t} /></td>
                 <td><BatteryBar tracker={t} /></td>
                 <td className={`num ${ageClass(age, intervalS)}`}>{fmtAge(age)}</td>
                 <td className="num window-cell">
                   {t.window.mode === 'clamped' && <span className="clamp-badge">HOLD</span>}
-                  {d(t.window.min).toFixed(1)}–{d(t.window.max).toFixed(1)}
+                  {d(t.window.min).toFixed(1)}–{d(t.window.max).toFixed(1)} {unitAbbr(displayUnits)}
                 </td>
                 {!readonly && (
                   <td>

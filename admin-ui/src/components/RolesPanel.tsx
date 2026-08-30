@@ -145,7 +145,9 @@ export function RolesPanel({
                   </label>
                   {t && <GpsChip tracker={t} />}
                   {t && <BatteryBar tracker={t} />}
-                  <span className="t-dist">{t?.distance !== undefined ? d(t.distance).toFixed(2) : '—'}</span>
+                  <span className="t-dist">
+                    {t?.distance !== undefined ? `${d(t.distance).toFixed(2)} ${unitAbbr(displayUnits)}` : '—'}
+                  </span>
                   <span className={`t-age ${ageClass(age, intervalS)}`}>{fmtAge(age)}</span>
                   {t?.suspect && <span className="t-suspect" title="Snapped far from course">⚠</span>}
                 </div>
