@@ -10,15 +10,20 @@ import { NumberField } from './NumberField';
 /**
  * Setup for one active event: details & dates, Firebase outputs, what we're
  * tracking (roles matched to fleet trackers), the event roster, races and
- * courses. Saves rebuild that event's engines; refused while a race is armed
- * or live.
+ * courses. With nothing running a save rebuilds that event's engines. With a
+ * race armed or live the engines are kept and patched in place, so most of the
+ * page can still be edited mid-event; the few settings that would reinterpret
+ * a race in progress are refused by the server, which says which.
  */
 export function EventSetup({
   eventId,
   ask,
   onSaved,
+  runningRaces = [],
 }: {
   eventId: string;
+  /** Names of this event's armed/live races, for what the page can promise. */
+  runningRaces?: string[];
   ask: (req: ConfirmRequest) => void;
   onSaved: () => void;
 }) {
@@ -99,9 +104,19 @@ export function EventSetup({
           Discard changes
         </button>
         <button className="mini primary" onClick={save} disabled={!dirty}>
-          {cfg._active === false ? 'Save' : 'Save & rebuild'}
+          {cfg._active === false || runningRaces.length > 0 ? 'Save' : 'Save & rebuild'}
         </button>
       </div>
+
+      {runningRaces.length > 0 && (
+        <p className="setup-live-note">
+          <strong>{runningRaces.join(' and ')}</strong>{' '}
+          {runningRaces.length === 1 ? 'is' : 'are'} running. Saving keeps every window and distance —
+          names, roles, vehicles, trackers, scoreboard slots and snap settings can all be changed now.
+          A running race's course and units, the output units, listener ports and Firebase outputs stay
+          locked until it finishes.
+        </p>
+      )}
 
       <div className="setup-grid">
         <section>

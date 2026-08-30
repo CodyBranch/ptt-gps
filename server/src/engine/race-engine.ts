@@ -84,6 +84,65 @@ export class RaceEngine {
     this.roles = roles.map((r) => ({ ...r, activeImei: r.trackers[0], source: 'gps' as const }));
   }
 
+  /**
+   * Re-read the config without disturbing what is being tracked.
+   *
+   * A rebuild throws away every snap window, distance and session, which is
+   * why setup used to be refused outright while a race was running. Most of
+   * what people need to fix mid-event — a mislabelled tracker, a role on the
+   * wrong vehicle, a scoreboard slot, an extra bike — touches none of that.
+   *
+   * The course and the units are the exception and the caller refuses them
+   * before we get here: every distance already computed is expressed in them,
+   * so changing either mid-race would silently reinterpret the whole race.
+   */
+  applyConfig(event: EventConfig, race: RaceConfig): void {
+    const { trackers, vehicles, roles, snap } = resolveRace(event, race);
+    Object.assign(this.snap, snap);
+    Object.assign(this.race, race);
+
+    // Trackers still on the roster keep their window and distance; only ones
+    // actually removed lose their state.
+    const next = new Map(trackers.map((t) => [t.imei, t]));
+    for (const imei of [...this.trackers.keys()]) {
+      if (!next.has(imei)) {
+        this.trackers.delete(imei);
+        this.trackerCfg.delete(imei);
+      }
+    }
+    for (const t of trackers) {
+      this.trackerCfg.set(t.imei, t);
+      const cur = this.trackers.get(t.imei);
+      if (cur) {
+        cur.label = t.label;
+        cur.hasBattery = t.hasBattery;
+      } else {
+        // a tracker added mid-race starts from the line like any other
+        this.trackers.set(t.imei, {
+          imei: t.imei,
+          label: t.label,
+          hasBattery: t.hasBattery,
+          window: initialWindow(this.snap, this.course.length),
+        });
+      }
+    }
+
+    this.vehicles.length = 0;
+    this.vehicles.push(...vehicles);
+
+    // A role that survives the edit keeps whoever is publishing it and which
+    // feed it is on — re-electing the primary mid-race would drop the output.
+    const prev = new Map(this.roles.map((r) => [r.key, r]));
+    const merged = roles.map((r) => {
+      const old = prev.get(r.key);
+      const activeImei =
+        old?.activeImei && r.trackers.includes(old.activeImei) ? old.activeImei : r.trackers[0];
+      return { ...r, activeImei, source: old?.source ?? ('gps' as const) };
+    });
+    this.roles.length = 0;
+    this.roles.push(...merged);
+  }
+
   /** Feed one hygiene-accepted fix. Ignores IMEIs not in this race's roster. */
   onFix(fix: Fix): void {
     const state = this.trackers.get(fix.imei);

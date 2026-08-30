@@ -129,6 +129,29 @@ function moveTracker(eventId: string, imei: string, vehicleKey: string, by?: str
   console.log(`[${eventId}] tracker ${imei} moved to ${vehicleKey || 'no vehicle'}${by ? ` by ${by}` : ''}`);
 }
 
+/**
+ * Save an edit to a running event.
+ *
+ * With nothing racing this is the old behaviour — validate, write, rebuild the
+ * engines from scratch. With a race armed or live the engines are patched in
+ * place instead, so windows, distances and open sessions survive the save; the
+ * App refuses the few changes that cannot be made mid-race and says which.
+ */
+function updateEvent(eventId: string, json: unknown): void {
+  const manager = managers.get(eventId);
+  const app = apps.get(eventId);
+  if (!manager || !app) throw new Error(`Event "${eventId}" is not active`);
+  if (!app.hasActiveRaces()) return rebuildEvent(eventId, json);
+
+  // Validate before anything is written, then let the App vet it against what
+  // is actually running — a refusal must leave the file untouched.
+  const resolved = manager.validate(json);
+  app.applyConfig(resolved);
+  manager.update(json);
+  syncListeners();
+  console.log(`[events] "${eventId}" config updated live — engines kept`);
+}
+
 function rebuildEvent(eventId: string, json: unknown): void {
   const manager = managers.get(eventId);
   if (!manager) throw new Error(`Event "${eventId}" is not active`);
@@ -301,6 +324,7 @@ const ctx: ServerContext = {
   loadEvent,
   unloadEvent,
   rebuildEvent,
+  updateEvent,
   moveTracker,
   snapshotAll,
   snapshotFor,

@@ -259,6 +259,64 @@ describe('RaceEngine', () => {
     expect(engine.trackers.has(LEAD_B)).toBe(true);
   });
 
+  it('a mid-race config edit keeps every window and distance', () => {
+    const cfg = makeConfig();
+    const { engine } = makeEngine(cfg);
+    engine.setStatus('armed');
+    engine.onFix(fixAt(engine, LEAD_A, 0.5, T0));
+    engine.onFix(fixAt(engine, LEAD_B, 0.4, T0));
+    const before = {
+      a: { ...engine.trackers.get(LEAD_A)! },
+      b: { ...engine.trackers.get(LEAD_B)! },
+    };
+
+    // rename a tracker, relabel a vehicle, move a scoreboard slot
+    cfg.trackers[0].label = 'Lead A (spare)';
+    cfg.vehicles[0].label = 'Moto 1';
+    cfg.roles[0].clockSlot = 3;
+    engine.applyConfig(cfg, cfg.races.find((r) => r.id === 'r1')!);
+
+    expect(engine.trackers.get(LEAD_A)!.label).toBe('Lead A (spare)');
+    expect(engine.trackers.get(LEAD_A)!.distance).toBeCloseTo(before.a.distance!, 5);
+    expect(engine.trackers.get(LEAD_A)!.window).toEqual(before.a.window);
+    expect(engine.trackers.get(LEAD_B)!.distance).toBeCloseTo(before.b.distance!, 5);
+    expect(engine.vehicles[0].label).toBe('Moto 1');
+    expect(engine.roles.find((r) => r.key === 'lead')!.clockSlot).toBe(3);
+  });
+
+  it('a role keeps its publishing tracker across an edit', () => {
+    const cfg = makeConfig();
+    const { engine } = makeEngine(cfg);
+    engine.setStatus('armed');
+    engine.setActive('lead', LEAD_B, 'op');
+
+    cfg.roles[0].label = 'Race Leader';
+    engine.applyConfig(cfg, cfg.races.find((r) => r.id === 'r1')!);
+
+    // re-electing the primary here would silently move the output back to A
+    expect(engine.roles.find((r) => r.key === 'lead')!.activeImei).toBe(LEAD_B);
+    expect(engine.roles.find((r) => r.key === 'lead')!.label).toBe('Race Leader');
+  });
+
+  it('a tracker added mid-race starts fresh; one removed is dropped', () => {
+    const cfg = makeConfig();
+    const { engine } = makeEngine(cfg);
+    engine.setStatus('armed');
+    engine.onFix(fixAt(engine, LEAD_A, 0.5, T0));
+
+    const SPARE = '860201060000001';
+    cfg.trackers.push({ imei: SPARE, label: 'Spare', hasBattery: true });
+    cfg.vehicles[0].trackers.push(SPARE);
+    cfg.trackers = cfg.trackers.filter((t) => t.imei !== CHASE_A);
+    cfg.vehicles[1].trackers = [SPARE];
+    engine.applyConfig(cfg, cfg.races.find((r) => r.id === 'r1')!);
+
+    expect(engine.trackers.get(SPARE)!.distance).toBeUndefined();
+    expect(engine.trackers.has(CHASE_A)).toBe(false);
+    // the tracker that stayed is untouched
+    expect(engine.trackers.get(LEAD_A)!.distance).toBeCloseTo(0.5, 1);
+  });
+
   it('rejects moving a tracker that is not in the race', () => {
     const { engine } = makeEngine();
     expect(() => engine.moveTracker('999999999999999', 'chase-car')).toThrow(/not in race/);

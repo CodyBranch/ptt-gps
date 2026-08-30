@@ -6,6 +6,10 @@
   "endDate": "2026-09-26",
   "outputUnits": "kilometers",
   "reportIntervalS": 10,
+  "viewerPrecision": {
+    "full": 2,
+    "board": 2
+  },
   "listeners": [
     {
       "name": "queclink",
@@ -111,9 +115,5 @@
       "course": "courses/gans-8k.geojson",
       "units": "miles"
     }
-  ],
-  "viewerPrecision": {
-    "full": 2,
-    "board": 2
-  }
+  ]
 }

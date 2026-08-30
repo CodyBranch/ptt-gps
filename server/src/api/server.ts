@@ -42,6 +42,7 @@ export interface ServerContext {
   loadEvent: (file: string) => App;
   unloadEvent: (eventId: string) => void;
   rebuildEvent: (eventId: string, json: unknown) => void;
+  updateEvent: (eventId: string, json: unknown) => void;
   moveTracker: (eventId: string, imei: string, vehicleKey: string, by?: string) => void;
   snapshotAll: () => unknown;
   snapshotFor: (eventId: string) => unknown;
@@ -480,15 +481,13 @@ export function startApi(
     act((req: OpRequest) => {
       const eventId = req.params.eventId as string;
       const { manager, active } = configFor(eventId);
-      if (active && eventApp(req).hasActiveRaces()) {
-        throw new Error('A race is armed or live — finish or reset it before editing setup');
-      }
       const before = new Set(manager.raw.trackers.map((t) => t.imei));
       // Editing a file that no engine is reading needs no rebuild.
       // the UI round-trips the read-only _active flag; it is not part of the config
       const body = { ...(req.body as Record<string, unknown>) };
       delete body._active;
-      if (active) ctx.rebuildEvent(eventId, body);
+      // Running races keep their engines; the rest is rebuilt as before.
+      if (active) ctx.updateEvent(eventId, body);
       else manager.update(body);
       const raw = active
         ? ([...ctx.managers.values()].find((m) => m.raw.id === (req.body as { id?: string })?.id)?.raw ?? manager.raw)

@@ -375,6 +375,14 @@ export class ConfigManager {
     return parseEventConfig(this.raw, this.baseDir).resolved;
   }
 
+  /**
+   * Validate without writing. Used before a live edit is applied, so a config
+   * the running engines refuse never reaches the file.
+   */
+  validate(json: unknown): EventConfig {
+    return parseEventConfig(json, this.baseDir).resolved;
+  }
+
   /** Validate + persist a full event config; returns the resolved form. */
   update(json: unknown): EventConfig {
     const { raw, resolved } = parseEventConfig(json, this.baseDir);

@@ -1,6 +1,6 @@
 import type { EventConfig } from './config/schema.js';
 import { convertUnits, resolveRace } from './config/schema.js';
-import { RaceEngine, type RaceStatus, type TrackerState } from './engine/race-engine.js';
+import { RaceEngine, type EngineHooks, type RaceStatus, type TrackerState } from './engine/race-engine.js';
 import type { Fix } from './ingest/types.js';
 import { DebugPublisher, type Publisher } from './outputs/publisher.js';
 import { FirebasePublisher } from './outputs/firebase.js';
@@ -84,20 +84,7 @@ export class App {
     }
 
     for (const race of cfg.races) {
-      const engine = new RaceEngine(cfg, race, {
-        onTrackerUpdate: (raceId, state) => this.handleTrackerUpdate(raceId, state),
-        onRoleDistance: (raceId, role, state, fix) => {
-          if (!this.publishEnabled || state.distance === undefined) return;
-          this.publishContextSession = this.sessions.get(raceId) ?? null;
-          const distOut = convertUnits(state.distance, race.units, cfg.outputUnits);
-          for (const p of this.publishers) p.roleDistance(cfg.meetId, role, distOut, state, fix);
-        },
-        onSessionEvent: (raceId, type, payload) => {
-          const sessionId = this.sessions.get(raceId);
-          if (sessionId !== undefined) this.store.addSessionEvent(sessionId, type, payload);
-          this.out.emit('session-event', { eventId: cfg.id, raceId, type, payload, tMs: Date.now() });
-        },
-      });
+      const engine = new RaceEngine(cfg, race, this.engineHooks());
       this.engines.set(race.id, engine);
       console.log(
         `[${cfg.id}] race "${race.id}": course ${engine.course.length.toFixed(2)} ${race.units}, ` +
@@ -346,6 +333,94 @@ export class App {
     for (const sessionId of this.sessions.values()) {
       this.store.addSessionEvent(sessionId, 'publishing', { enabled, by });
     }
+  }
+
+  /**
+   * Wiring every engine gets. Read this.cfg at call time rather than closing
+   * over a config object, so an engine built before an edit still publishes
+   * against the current meet id and output units.
+   */
+  private engineHooks(): EngineHooks {
+    return {
+      onTrackerUpdate: (raceId, state) => this.handleTrackerUpdate(raceId, state),
+      onRoleDistance: (raceId, role, state, fix) => {
+        if (!this.publishEnabled || state.distance === undefined) return;
+        this.publishContextSession = this.sessions.get(raceId) ?? null;
+        const units = this.engines.get(raceId)?.race.units ?? this.cfg.outputUnits;
+        const distOut = convertUnits(state.distance, units, this.cfg.outputUnits);
+        for (const p of this.publishers) p.roleDistance(this.cfg.meetId, role, distOut, state, fix);
+      },
+      onSessionEvent: (raceId, type, payload) => {
+        const sessionId = this.sessions.get(raceId);
+        if (sessionId !== undefined) this.store.addSessionEvent(sessionId, type, payload);
+        this.out.emit('session-event', { eventId: this.cfg.id, raceId, type, payload, tMs: Date.now() });
+      },
+    };
+  }
+
+  /**
+   * Apply an edited config to a running event.
+   *
+   * Setup used to be refused outright whenever a race was armed or live,
+   * because rebuilding the engines discards every window, distance and open
+   * session. But most mid-event edits are exactly the ones you need while the
+   * event is on — a tracker labelled wrong, a moto on the wrong role, a
+   * scoreboard slot, a spare bike added at the last minute — and none of them
+   * touch tracking state.
+   *
+   * So: races that are not running are rebuilt as before, and running ones are
+   * patched in place. Only the handful of changes that would reinterpret a race
+   * already in progress are refused, and the message names them.
+   */
+  applyConfig(next: EventConfig): void {
+    const running = [...this.engines.values()].filter((e) => e.status === 'armed' || e.status === 'live');
+    if (running.length > 0) {
+      const blocked: string[] = [];
+      if (next.id !== this.cfg.id) blocked.push('the event id');
+      if (next.outputUnits !== this.cfg.outputUnits) blocked.push('output units');
+      if (JSON.stringify(next.listeners) !== JSON.stringify(this.cfg.listeners)) {
+        blocked.push('listener ports');
+      }
+      if (JSON.stringify(next.firebase) !== JSON.stringify(this.cfg.firebase)) {
+        blocked.push('Firebase outputs');
+      }
+      for (const e of running) {
+        const r = next.races.find((x) => x.id === e.race.id);
+        if (!r) {
+          blocked.push(`removing "${e.race.name}" while it is ${e.status}`);
+          continue;
+        }
+        if (r.course !== e.race.course) blocked.push(`the course for "${e.race.name}"`);
+        if (r.units !== e.race.units) blocked.push(`the units for "${e.race.name}"`);
+      }
+      if (blocked.length > 0) {
+        const what = blocked.length === 1 ? blocked[0] : blocked.slice(0, -1).join(', ') + ' and ' + blocked[blocked.length - 1];
+        throw new Error(
+          `Cannot change ${what} while a race is armed or live — finish or reset it first. ` +
+            'Everything else on this page can be saved while racing.',
+        );
+      }
+    }
+
+    Object.assign(this.cfg, next);
+
+    for (const race of next.races) {
+      const engine = this.engines.get(race.id);
+      if (!engine) {
+        this.engines.set(race.id, new RaceEngine(next, race, this.engineHooks()));
+        continue;
+      }
+      if (engine.status === 'armed' || engine.status === 'live') {
+        engine.applyConfig(next, race);
+      } else {
+        // nothing to preserve on a race that has not started
+        this.engines.set(race.id, new RaceEngine(next, race, this.engineHooks()));
+      }
+    }
+    for (const id of [...this.engines.keys()]) {
+      if (!next.races.some((r) => r.id === id)) this.engines.delete(id);
+    }
+    for (const raceId of this.engines.keys()) this.out.emit('race', this.raceSnapshot(raceId));
   }
 
   hasActiveRaces(): boolean {

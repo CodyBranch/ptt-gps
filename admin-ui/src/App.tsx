@@ -383,7 +383,16 @@ export default function App() {
     // Setup works for any event, running or not: next weekend's meet gets built
     // during the week, and activating it just to edit would start its engines.
     if (eventTab === 'setup' && admin && !viewer && eventId) {
-      return <EventSetup eventId={eventId} ask={ask} onSaved={() => setEventTab(ev ? 'all' : 'setup')} />;
+      return (
+        <EventSetup
+          eventId={eventId}
+          ask={ask}
+          runningRaces={(ev?.races ?? [])
+            .filter((r) => r.status === 'armed' || r.status === 'live')
+            .map((r) => r.name)}
+          onSaved={() => setEventTab(ev ? 'all' : 'setup')}
+        />
+      );
     }
     if (!ev) {
       return (
