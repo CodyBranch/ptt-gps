@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
+import { useDismissOnOutside } from '../hooks';
 import type { FleetRow } from '../types';
 
 /**
@@ -27,21 +28,7 @@ export function TrackerPicker({
   const [owner, setOwner] = useState('all');
   const wrapRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
+  useDismissOnOutside(wrapRef, open, () => setOpen(false));
 
   const owners = [...new Set(options.map((f) => f.owner).filter(Boolean))].sort() as string[];
   const q = query.trim().toLowerCase();
@@ -86,7 +73,7 @@ export function TrackerPicker({
         )}
       </div>
       {open && (
-        <div className="tracker-picker-list">
+        <div className="picker-list tracker-picker-list">
           {shown.length === 0 && <div className="tracker-picker-empty">No matching device</div>}
           {shown.map((f) => {
             const elsewhere = f.events.some((e) => e.id !== eventId);

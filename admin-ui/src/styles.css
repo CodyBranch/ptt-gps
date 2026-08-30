@@ -928,12 +928,16 @@ button.mini.on { border-color: var(--warn); color: var(--warn); }
 .tracker-picker-bar { display: flex; gap: 6px; align-items: center; }
 .setup .tracker-picker-bar input { flex: 1; min-width: 0; }
 .setup .tracker-picker-bar select { flex: none; width: auto; min-width: 110px; }
-.tracker-picker-list {
+.picker-list {
   position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 25;
   max-height: 260px; overflow-y: auto; overscroll-behavior: contain;
   background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 4px;
   box-shadow: 0 10px 26px rgba(0, 0, 0, 0.55);
 }
+/* the race table cell is narrow — let the list spill out to a readable width */
+.course-picker { position: relative; }
+.course-picker-list { min-width: 300px; }
+.tracker-picker-row.chosen { background: var(--panel2); box-shadow: inset 2px 0 0 var(--brand-red); }
 .tracker-picker-row {
   display: flex; align-items: center; gap: 9px; width: 100%; text-align: left;
   background: none; border: none; border-radius: 6px; padding: 6px 8px;

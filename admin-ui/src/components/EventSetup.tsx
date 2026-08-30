@@ -4,6 +4,7 @@ import type { ConfirmRequest } from './Confirm';
 import type { CourseInfo, EventConfigT, FirebaseConn, FleetRow } from '../types';
 import { Toast } from './Toast';
 import { TrackerPicker } from './TrackerPicker';
+import { CoursePicker } from './CoursePicker';
 
 /**
  * Setup for one active event: details & dates, Firebase outputs, what we're
@@ -26,6 +27,7 @@ export function EventSetup({
   const [fbConns, setFbConns] = useState<FirebaseConn[]>([]);
   const [dirty, setDirty] = useState(false);
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string }>();
+  const [showCourseList, setShowCourseList] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const reload = () => {
@@ -367,17 +369,12 @@ export function EventSetup({
                       <input value={race.name} onChange={(e) => edit((c) => (c.races[i].name = e.target.value))} />
                     </td>
                     <td>
-                      <select value={race.course} onChange={(e) => edit((c) => (c.races[i].course = e.target.value))}>
-                        {!courses.some((x) => x.file === race.course) && <option value={race.course}>{race.course}</option>}
-                        {/* archived courses stay resolvable but drop out of the picker */}
-                        {courses
-                          .filter((x) => !x.archived || x.file === race.course)
-                          .map((x) => (
-                            <option key={x.file} value={x.file}>
-                              {x.label || x.file.replace('courses/', '')}
-                            </option>
-                          ))}
-                      </select>
+                      <CoursePicker
+                        courses={courses}
+                        value={race.course}
+                        units={race.units}
+                        onPick={(file) => edit((c) => (c.races[i].course = file))}
+                      />
                     </td>
                     <td className="num course-dist">
                       {k ? (race.units === 'miles' ? `${k.lengthMi.toFixed(2)} mi` : `${k.lengthKm.toFixed(2)} km`) : '—'}
@@ -415,22 +412,29 @@ export function EventSetup({
             + Add race
           </button>
 
-          <h4>Courses (shared by all events)</h4>
-          <table className="setup-table">
-            <tbody>
-              {courses
-                .filter((k) => !k.archived)
-                .map((k) => (
-                  <tr key={k.file}>
-                    <td className="mono">{k.file}</td>
-                    <td>
-                      {k.lengthMi.toFixed(2)} mi / {k.lengthKm.toFixed(2)} km
-                    </td>
-                    <td>{k.points} pts</td>
-                  </tr>
-                ))}
-            </tbody>
-          </table>
+          {/* The picker above searches these; the full list is a reference,
+              so it stays folded rather than pushing the page down by 85 rows. */}
+          <button className="mini completed-toggle" onClick={() => setShowCourseList(!showCourseList)}>
+            {showCourseList ? '▾' : '▸'} Courses (shared by all events) —{' '}
+            {courses.filter((k) => !k.archived).length}
+          </button>
+          {showCourseList && (
+            <table className="setup-table">
+              <tbody>
+                {courses
+                  .filter((k) => !k.archived)
+                  .map((k) => (
+                    <tr key={k.file}>
+                      <td className="mono">{k.file}</td>
+                      <td>
+                        {k.lengthMi.toFixed(2)} mi / {k.lengthKm.toFixed(2)} km
+                      </td>
+                      <td>{k.points} pts</td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          )}
           <input
             ref={fileRef}
             type="file"
