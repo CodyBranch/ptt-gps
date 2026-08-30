@@ -368,7 +368,7 @@ export default function App() {
             </div>
           ))}
         </aside>
-        <MapView races={races} selected={selected} />
+        <MapView races={races} selected={selected} displayUnits={displayUnits} />
       </div>
     );
   };

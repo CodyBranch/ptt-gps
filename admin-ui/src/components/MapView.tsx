@@ -1,8 +1,8 @@
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { useEffect, useRef, useState } from 'react';
-import { api } from '../api';
-import type { RaceSnap, TrackerPub } from '../types';
+import { api, toDisplay, unitAbbr } from '../api';
+import type { RaceSnap, TrackerPub, Units } from '../types';
 
 export interface CourseMarker {
   at: number;
@@ -241,7 +241,16 @@ function setMarkerData(map: mapboxgl.Map, markers: CourseMarker[]) {
 }
 
 /** One map for one or many races: a course line per race, markers deduped by IMEI. */
-export function MapView({ races, selected }: { races: RaceSnap[]; selected?: MapSelection }) {
+export function MapView({
+  races,
+  selected,
+  displayUnits,
+}: {
+  races: RaceSnap[];
+  selected?: MapSelection;
+  /** Marker labels read in the console's units, like every other distance. */
+  displayUnits: Units;
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map>(null);
   const markersRef = useRef(new Map<string, mapboxgl.Marker>());
@@ -378,20 +387,20 @@ export function MapView({ races, selected }: { races: RaceSnap[]; selected?: Map
 
     // Union of trackers across races, deduped by IMEI (one physical device =
     // one marker). Prefer the selected race's copy, else the first with a fix.
-    const byImei = new Map<string, { t: TrackerPub; colorIdx: number }>();
+    const byImei = new Map<string, { t: TrackerPub; colorIdx: number; units: Units }>();
     let idx = 0;
     for (const race of races) {
       for (const t of race.trackers) {
         const existing = byImei.get(t.imei);
         const preferThis = selected?.imei === t.imei && selected.raceId === race.raceId;
         if (!existing || preferThis) {
-          byImei.set(t.imei, { t, colorIdx: existing?.colorIdx ?? idx });
+          byImei.set(t.imei, { t, colorIdx: existing?.colorIdx ?? idx, units: race.units });
         }
         if (!existing) idx++;
       }
     }
 
-    for (const [imei, { t, colorIdx }] of byImei) {
+    for (const [imei, { t, colorIdx, units }] of byImei) {
       if (!t.lastFix) continue;
       seen.add(imei);
       let marker = markers.get(imei);
@@ -413,7 +422,14 @@ export function MapView({ races, selected }: { races: RaceSnap[]; selected?: Map
       el.classList.toggle('selected', imei === selected?.imei);
       el.classList.toggle('suspect', !!t.suspect);
       const label = el.querySelector('.map-marker-label') as HTMLDivElement;
-      label.textContent = `${t.label}${t.distance !== undefined ? ` · ${t.distance.toFixed(2)}` : ''}`;
+      // The engine measures in the race's units; the label reads in the
+      // operator's, and says which — an unlabelled 0.09 next to a panel
+      // reading 0.14 km is just the same distance in miles.
+      const dist =
+        t.distance !== undefined
+          ? ` · ${toDisplay(t.distance, units, displayUnits).toFixed(2)} ${unitAbbr(displayUnits)}`
+          : '';
+      label.textContent = `${t.label}${dist}`;
     }
     for (const [imei, m] of markers) {
       if (!seen.has(imei)) {
@@ -448,7 +464,7 @@ export function MapView({ races, selected }: { races: RaceSnap[]; selected?: Map
       properties: {},
       geometry: { type: 'LineString', coordinates: sel?.slice && sel.slice.length > 1 ? sel.slice : [] },
     });
-  }, [races, selected]);
+  }, [races, selected, displayUnits]);
 
   return (
     <div className="map-wrap">
