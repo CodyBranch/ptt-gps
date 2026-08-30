@@ -479,6 +479,7 @@ button.mini.has-issues { border-color: var(--warn); color: var(--warn); font-wei
 }
 /* pushes the publishing switch to the right-hand end of the bar */
 .event-subnav .spacer { flex: 1; }
+.subnav-races { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
 .event-subnav button {
   background: var(--panel); color: var(--text); border: 1px solid var(--border);
   padding: 4px 12px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 7px;
@@ -728,6 +729,15 @@ button.linklike {
   .event-subnav { padding-left: 52px; }
   /* let the publish switch wrap with the tabs instead of being pushed off */
   .event-subnav .spacer { display: none; }
+  /* Races swipe sideways on one line; Setup and the publish switch keep their
+     own line below. A ten-race meet then costs the same two rows as a two-race
+     one, instead of wrapping a fifth of the screen away from the map. */
+  .subnav-races {
+    flex: 1 0 100%; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .subnav-races::-webkit-scrollbar { display: none; }
+  .subnav-races button { flex: none; }
   .setup-bar { padding-left: 52px; } /* page titles clear the fixed hamburger */
   .race-panel { margin-left: 0; width: 100%; }
 

@@ -526,17 +526,30 @@ export default function App() {
       )}
       {page === 'event' && ev && (
         <nav className="event-subnav">
-          {ev.races.length > 1 && (
-            <button className={eventTab === 'all' ? 'active' : ''} onClick={() => setEventTab('all')}>
-              All races
-            </button>
-          )}
-          {ev.races.map((r) => (
-            <button key={r.raceId} className={eventTab === r.raceId ? 'active' : ''} onClick={() => setEventTab(r.raceId)}>
-              {r.name}
-              <span className={`status-dot ${r.status}`} />
-            </button>
-          ))}
+          {/* Its own strip so a meet with ten races scrolls sideways here
+              instead of wrapping the header down over the map. */}
+          <div className="subnav-races">
+            {ev.races.length > 1 && (
+              <button className={eventTab === 'all' ? 'active' : ''} onClick={() => setEventTab('all')}>
+                All races
+              </button>
+            )}
+            {ev.races.map((r) => (
+              <button
+                key={r.raceId}
+                ref={(el) => {
+                  // a race picked from elsewhere (or restored from the URL) can
+                  // sit off the end of the strip — bring it into view
+                  if (el && eventTab === r.raceId) el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+                }}
+                className={eventTab === r.raceId ? 'active' : ''}
+                onClick={() => setEventTab(r.raceId)}
+              >
+                {r.name}
+                <span className={`status-dot ${r.status}`} />
+              </button>
+            ))}
+          </div>
           {admin && !viewer && (
             <button className={eventTab === 'setup' ? 'active' : ''} onClick={() => setEventTab('setup')}>
               ⚙ Setup
