@@ -126,8 +126,29 @@ function rebuildEvent(eventId: string, json: unknown): void {
 
 // --- shared fix/telemetry handling ---
 
+/** Rate-limit the "unreadable frame" warning so one bad device can't drown the log. */
+const unreadableWarned = new Map<string, number>();
+
 function onFix(fix: Fix): void {
   lastSeen.set(fix.imei, fix.receivedAtMs);
+  if (!Number.isFinite(fix.tUtcMs)) {
+    // No usable GPS time means this is not a fix. Keep the raw frame as
+    // telemetry for diagnosis rather than pushing NaN at a NOT NULL column and
+    // taking the listener down with it.
+    store.recordTelemetry({
+      type: 'unreadable-fix',
+      imei: /^\d{15}$/.test(fix.imei) ? fix.imei : undefined,
+      source: fix.source,
+      raw: fix.raw,
+    });
+    const key = fix.imei || fix.source;
+    const last = unreadableWarned.get(key) ?? 0;
+    if (Date.now() - last > 30_000) {
+      unreadableWarned.set(key, Date.now());
+      console.warn(`[${fix.source}] unreadable frame (no GPS time) from ${key}: ${String(fix.raw).slice(0, 220)}`);
+    }
+    return;
+  }
   const g = gate.accept(fix);
   store.recordFix(fix, g.ok, g.reason);
   out.emit('fix', {

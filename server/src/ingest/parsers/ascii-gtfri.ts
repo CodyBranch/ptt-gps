@@ -46,11 +46,21 @@ const BLOCK = 11;
 const TAILS = { 'gtfri-22': 4, 'gtfri-27': 9 } as const;
 type Layout = keyof typeof TAILS;
 
-/** Which family/point-count a field count implies, or undefined if neither. */
-function layoutOf(len: number): { layout: Layout; points: number } | undefined {
+/**
+ * Which family and point count a frame has.
+ *
+ * The count comes from the protocol's own `Number` field, not from arithmetic
+ * on the field count: inferring it meant any frame whose length happened to
+ * satisfy `(len - header - tail) % block === 0` was accepted as a multi-point
+ * report, and the phantom extra "points" were read out of tail fields as
+ * garbage coordinates and unparseable times. The declared count must agree
+ * with the actual length exactly, or the frame is an unknown layout — which is
+ * how anything unexpected was treated before multi-point support existed.
+ */
+function layoutOf(len: number, declared: number): { layout: Layout; points: number } | undefined {
+  if (!Number.isInteger(declared) || declared < 0 || declared > 64) return undefined;
   for (const layout of Object.keys(TAILS) as Layout[]) {
-    const rest = len - HEADER - TAILS[layout];
-    if (rest >= 0 && rest % BLOCK === 0) return { layout, points: rest / BLOCK };
+    if (len === HEADER + BLOCK * declared + TAILS[layout]) return { layout, points: declared };
   }
   return undefined;
 }
@@ -73,10 +83,13 @@ export function parseAsciiFrame(
     return { fixes: [], telemetry: { type: head, imei, source, raw } };
   }
 
-  const shape = layoutOf(f.length);
+  const shape = layoutOf(f.length, Number(f[6]));
   if (!shape) {
     // Unknown GTFRI layout — surface it rather than guessing field positions.
-    return { fixes: [], telemetry: { type: `${head}:unknown-layout(${f.length})`, imei: f[2], source, raw } };
+    return {
+      fixes: [],
+      telemetry: { type: `${head}:unknown-layout(${f.length} fields, Number=${f[6]})`, imei: f[2], source, raw },
+    };
   }
   const { layout, points } = shape;
   const tail = HEADER + BLOCK * points;

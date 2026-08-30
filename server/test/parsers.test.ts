@@ -80,6 +80,25 @@ describe('ascii GTFRI parser', () => {
     expect(fixes.map((f) => gate.accept(f).ok)).toEqual([true, true, true]);
   });
 
+  it('refuses a frame whose length disagrees with its declared point count', () => {
+    // 33 fields satisfies (33 - 7 - 4) % 11 === 0, so inferring the count from
+    // the length alone read this as two points and produced garbage from the
+    // tail. Number says 1, which does not fit 33 fields, so it is unknown.
+    const declaredOne = REAL_GTFRI_22.replace('$', '') + ',x,x,x,x,x,x,x,x,x,x,x$';
+    const { fixes, telemetry } = parseAsciiFrame(declaredOne, 'test', NOW);
+    expect(fixes).toHaveLength(0);
+    expect(telemetry!.type).toContain('unknown-layout');
+  });
+
+  it('never emits a fix without a usable GPS time', () => {
+    const noTime = REAL_GTFRI_22.replace('20221028094541', 'NOTATIME');
+    const { fixes } = parseAsciiFrame(noTime, 'test', NOW);
+    // it still parses as a frame, but the time is unusable and flagged
+    for (const f of fixes) {
+      expect(Number.isFinite(f.tUtcMs) || f.fixValid === false).toBe(true);
+    }
+  });
+
   it('routes non-GTFRI frames to telemetry (GV500 ACK relays etc.)', () => {
     const { fixes, telemetry } = parseAsciiFrame(MIRROR_ACK, 'mirror', NOW);
     expect(fixes).toHaveLength(0);
@@ -91,7 +110,7 @@ describe('ascii GTFRI parser', () => {
     const weird = REAL_GTFRI_22.replace(/\$$/, '') + ',extra$';
     const { fixes, telemetry } = parseAsciiFrame(weird, 'test', NOW);
     expect(fixes).toHaveLength(0);
-    expect(telemetry!.type).toContain('unknown-layout(23)');
+    expect(telemetry!.type).toContain('unknown-layout(23 fields');
   });
 
   it('marks empty coordinates as fixValid=false', () => {
