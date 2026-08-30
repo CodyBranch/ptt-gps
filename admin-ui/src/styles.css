@@ -417,6 +417,7 @@ a.export-link:hover { border-color: var(--dim); }
 .tunnel-err { color: var(--bad); font-size: 12px; }
 .retired-row td { opacity: 0.45; }
 .ping-cell { white-space: nowrap; font-size: 12px; }
+.seen-short { display: none; }
 .locate-link { margin-left: 6px; text-decoration: none; font-size: 13px; }
 .events-cell { white-space: nowrap; }
 .event-badge {
@@ -738,7 +739,12 @@ button.linklike {
   }
   .subnav-races::-webkit-scrollbar { display: none; }
   .subnav-races button { flex: none; }
-  .setup-bar { padding-left: 52px; } /* page titles clear the fixed hamburger */
+  /* The page title clears the fixed hamburger, and the bar wraps: as a single
+     nowrap row its controls — the owner filter, "+ Add device", Save — were
+     pushed past the screen edge with no way to scroll to them. */
+  .setup-bar { padding-left: 52px; flex-wrap: wrap; gap: 8px; }
+  .setup-bar .spacer { display: none; }
+  .setup-bar .fleet-search { flex: 1 0 100%; min-width: 0; }
   .race-panel { margin-left: 0; width: 100%; }
 
   .main { flex-direction: column; }
@@ -748,8 +754,12 @@ button.linklike {
     border-right: none; border-top: 1px solid var(--border);
   }
 
-  .setup-grid { grid-template-columns: 1fr; padding: 10px; }
-  .events-list { grid-template-columns: 1fr; padding: 10px; }
+  /* minmax(0, …) rather than a bare 1fr: a grid track's automatic minimum is
+     its content's, so a card with a long line held the column wider than the
+     screen and the right edge was simply clipped away. */
+  .setup-grid { grid-template-columns: minmax(0, 1fr); padding: 10px; }
+  .events-list { grid-template-columns: minmax(0, 1fr); padding: 10px; }
+  .setup-grid section, .events-list > * { min-width: 0; }
   /* The table must fit the screen rather than scroll sideways. GPS lock and
      the window range are both already on the vehicle card above it, so on a
      phone the table keeps what is unique to it: the name, the distance, how
@@ -769,6 +779,27 @@ button.linklike {
   .tracker-table button.mini { padding: 4px 7px; font-size: 11px; }
   .tracker-table .fleet-actions, .tracker-table td:last-child { text-align: right; }
   .batt-pct { display: none; } /* bar + color carry the info on phones */
+  /* The fleet table was 767px wide and simply clipped at the screen edge. Model,
+     owner and the event badges all appear when you open a device, and owner is
+     a filter above the table anyway — so the phone keeps the three things you
+     scan the list for: which device, how charged, how long since it reported. */
+  .fleet-table { table-layout: fixed; width: 100%; }
+  .fleet-table .col-model, .fleet-table .col-owner, .fleet-table .col-events { display: none; }
+  .fleet-table td, .fleet-table th { padding: 6px 4px; }
+  .fleet-table .t-imei { font-size: 10px; }
+  /* split explicitly, or the even split cuts the ping timestamp mid-value */
+  .fleet-table .col-device { width: 38%; }
+  .fleet-table .col-batt { width: 17%; }
+  .fleet-table .col-seen { width: 25%; }
+  .fleet-table .ping-cell { font-size: 11px; }
+  .seen-full { display: none; }
+  .seen-short { display: inline; }
+  .fleet-table th { font-size: 10px; }
+  /* Tapping the row opens the device, so View is redundant here; Edit keeps
+     its icon only. That leaves the issue badge, which is worth the space. */
+  .fleet-table .btn-view, .fleet-table .btn-edit .btn-word { display: none; }
+  .fleet-actions { white-space: nowrap; }
+  .fleet-table button.mini { padding: 4px 7px; font-size: 11px; }
   /* The move picker cannot fit beside a full tracker row at phone width — it
      pushed the card past the screen edge, where it was clipped out of reach.
      Given its own line it stays readable and the card still fits. */
@@ -900,7 +931,10 @@ a.mini.linkbtn { text-decoration: none; display: inline-flex; align-items: cente
 .course-history-name { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dialog-actions { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
 @media (max-width: 900px) {
-  .courses-wrap { grid-template-columns: 1fr; padding: 10px; }
+  .courses-wrap { grid-template-columns: minmax(0, 1fr); padding: 10px; }
+  .course-card { min-width: 0; }
+  /* course files are named like boston-marathon.kml — long unbroken tokens */
+  .course-card-meta, .course-notes { overflow-wrap: anywhere; }
 }
 
 /* Course markers editor (in the course dialog) */

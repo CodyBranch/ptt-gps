@@ -45,6 +45,17 @@ export function FleetView({ readonly }: { readonly: boolean }) {
   const fleetImeis = new Set(fleet.map((f) => f.imei));
   const fleetByImei = new Map(fleet.map((f) => [f.imei, f]));
   const fmtSeen = (ms: number | null) => (ms ? new Date(ms).toLocaleString() : 'never');
+  /** Phone-width form: a full timestamp does not fit, and "how long ago" is
+   *  what you are scanning the list for anyway. */
+  const fmtSince = (ms: number | null) => {
+    if (!ms) return 'never';
+    const s = Math.max(0, Math.round((Date.now() - ms) / 1000));
+    if (s < 60) return `${s}s ago`;
+    if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+    if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+    if (s < 86400 * 7) return `${Math.floor(s / 86400)}d ago`;
+    return new Date(ms).toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' });
+  };
 
   // --- find a device in a fleet of dozens -------------------------------
   const ownerNames = [...new Set(fleet.map((f) => f.owner).filter(Boolean))].sort() as string[];
@@ -168,32 +179,35 @@ export function FleetView({ readonly }: { readonly: boolean }) {
           <table className="setup-table fleet-table">
             <thead>
               <tr>
-                <Th k="label">Device</Th>
-                <Th k="model">Model</Th>
-                <Th k="owner">Owner</Th>
-                <Th k="battery">Battery</Th>
-                <Th k="seen">Latest ping</Th>
-                <Th k="events">Events</Th>
+                <Th k="label" className="col-device">Device</Th>
+                <Th k="model" className="col-model">Model</Th>
+                <Th k="owner" className="col-owner">Owner</Th>
+                <Th k="battery" className="col-batt">Battery</Th>
+                <Th k="seen" className="col-seen">Latest ping</Th>
+                <Th k="events" className="col-events">Events</Th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
               {visible.map((f) => (
                 <tr key={f.imei} className={f.retired ? 'retired-row' : ''} onClick={() => setDetailImei(f.imei)}>
-                  <td>
+                  <td className="col-device">
                     <div className="t-label">
                       {f.label}
                       {f.retired ? <span className="dim"> (retired)</span> : ''}
                     </div>
                     <div className="t-imei">{f.imei}</div>
                   </td>
-                  <td className="dim">{f.model ?? '—'}</td>
-                  <td className="dim">{f.owner ?? '—'}</td>
-                  <td>
+                  <td className="dim col-model">{f.model ?? '—'}</td>
+                  <td className="dim col-owner">{f.owner ?? '—'}</td>
+                  <td className="col-batt">
                     <FleetBattery row={f} />
                   </td>
-                  <td className="dim ping-cell">{fmtSeen(f.last_received_ms)}</td>
-                  <td className="events-cell">
+                  <td className="dim ping-cell col-seen">
+                    <span className="seen-full">{fmtSeen(f.last_received_ms)}</span>
+                    <span className="seen-short">{fmtSince(f.last_received_ms)}</span>
+                  </td>
+                  <td className="events-cell col-events">
                     {f.events.length === 0 && <span className="dim">—</span>}
                     {f.events.map((e) => (
                       <span key={e.id} className={`event-badge ${e.active ? 'active' : ''}`} title={e.name}>
@@ -214,7 +228,8 @@ export function FleetView({ readonly }: { readonly: boolean }) {
                     )}
                   </td>
                   <td className="fleet-actions" onClick={(e) => e.stopPropagation()}>
-                    <button className="mini" title="Live location & details" onClick={() => setDetailImei(f.imei)}>
+                    {/* the whole row opens this too, so the phone drops it */}
+                    <button className="mini btn-view" title="Live location & details" onClick={() => setDetailImei(f.imei)}>
                       👁 View
                     </button>
                     <button
@@ -225,8 +240,8 @@ export function FleetView({ readonly }: { readonly: boolean }) {
                       {f.openIssues > 0 ? `🔧${f.openIssues}` : '🕘'}
                     </button>
                     {!readonly && (
-                      <button className="mini" onClick={() => setEditImei(f.imei)}>
-                        ✎ Edit
+                      <button className="mini btn-edit" onClick={() => setEditImei(f.imei)} title="Edit device">
+                        ✎<span className="btn-word"> Edit</span>
                       </button>
                     )}
                   </td>
