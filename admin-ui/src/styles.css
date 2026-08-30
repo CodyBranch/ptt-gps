@@ -721,6 +721,8 @@ button.linklike {
   }
   .content { padding-top: 0; }
   .event-subnav { padding-left: 52px; }
+  /* let the publish switch wrap with the tabs instead of being pushed off */
+  .event-subnav .spacer { display: none; }
   .setup-bar { padding-left: 52px; } /* page titles clear the fixed hamburger */
   .race-panel { margin-left: 0; width: 100%; }
 
@@ -733,9 +735,24 @@ button.linklike {
 
   .setup-grid { grid-template-columns: 1fr; padding: 10px; }
   .events-list { grid-template-columns: 1fr; padding: 10px; }
-  .tracker-table { overflow-x: auto; } /* last resort on very narrow phones */
-  .tracker-table table { font-size: 12px; }
+  /* The table must fit the screen rather than scroll sideways. GPS lock and
+     the window range are both already on the vehicle card above it, so on a
+     phone the table keeps what is unique to it: the name, the distance, how
+     stale it is, and the button that opens the window dialog. */
+  .tracker-table { overflow-x: hidden; }
+  .tracker-table table { font-size: 12px; table-layout: fixed; width: 100%; }
   .tracker-table td, .tracker-table th { padding: 5px 4px; }
+  /* Battery, lock and the window range all appear on the vehicle card above,
+     so the phone table keeps only what is unique to it. Widths are explicit
+     because the Window button cannot shrink and would otherwise push the
+     table past the screen. */
+  .tracker-table .col-gps, .tracker-table .col-window, .tracker-table .col-batt { display: none; }
+  .tracker-table .col-name { width: 44%; }
+  .tracker-table .col-dist { width: 22%; }
+  .tracker-table .col-age { width: 14%; }
+  .tracker-table .t-imei { font-size: 10px; }
+  .tracker-table button.mini { padding: 4px 7px; font-size: 11px; }
+  .tracker-table .fleet-actions, .tracker-table td:last-child { text-align: right; }
   .batt-pct { display: none; } /* bar + color carry the info on phones */
   .dialog, .dialog-confirm { width: calc(100vw - 32px); max-width: 400px; }
 }

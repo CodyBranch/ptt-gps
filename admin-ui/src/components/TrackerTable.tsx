@@ -28,12 +28,12 @@ export function TrackerTable({
       <table>
         <thead>
           <tr>
-            <th>Tracker</th>
-            <th>Dist</th>
-            <th>GPS</th>
-            <th>Batt</th>
-            <th>Age</th>
-            <th>Window</th>
+            <th className="col-name">Tracker</th>
+            <th className="col-dist">Dist</th>
+            <th className="col-gps">GPS</th>
+            <th className="col-batt">Batt</th>
+            <th className="col-age">Age</th>
+            <th className="col-window">Window</th>
             {!readonly && <th></th>}
           </tr>
         </thead>
@@ -57,13 +57,13 @@ export function TrackerTable({
                   </div>
                   <div className="t-imei">{t.imei}</div>
                 </td>
-                <td className={`num ${t.suspect ? 'warn' : ''}`} title={offM !== undefined ? `${offM} m off course` : undefined}>
+                <td className={`num col-dist ${t.suspect ? 'warn' : ''}`} title={offM !== undefined ? `${offM} m off course` : undefined}>
                   {t.distance !== undefined ? `${d(t.distance).toFixed(2)} ${unitAbbr(displayUnits)}` : '—'}
                 </td>
-                <td><GpsChip tracker={t} /></td>
-                <td><BatteryBar tracker={t} /></td>
-                <td className={`num ${ageClass(age, intervalS)}`}>{fmtAge(age)}</td>
-                <td className="num window-cell">
+                <td className="col-gps"><GpsChip tracker={t} /></td>
+                <td className="col-batt"><BatteryBar tracker={t} /></td>
+                <td className={`num col-age ${ageClass(age, intervalS)}`}>{fmtAge(age)}</td>
+                <td className="num window-cell col-window">
                   {t.window.mode === 'clamped' && <span className="clamp-badge">HOLD</span>}
                   {d(t.window.min).toFixed(1)}–{d(t.window.max).toFixed(1)} {unitAbbr(displayUnits)}
                 </td>

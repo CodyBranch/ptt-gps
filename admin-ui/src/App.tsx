@@ -304,7 +304,13 @@ export default function App() {
         intervalS={intervalS}
         readonly={viewer}
         selectedImei={selected?.raceId === r.raceId ? selected.imei : undefined}
-        onSelect={(imei) => setSelected({ raceId: r.raceId, imei })}
+        onSelect={(imei) =>
+          // clicking the highlighted tracker again clears it, so the map goes
+          // back to showing every vehicle without a window slice drawn
+          setSelected((cur) =>
+            cur?.imei === imei && cur.raceId === r.raceId ? undefined : { raceId: r.raceId, imei },
+          )
+        }
         onWindow={(imei) => setWindowDialog({ raceId: r.raceId, imei })}
       />
     </>
