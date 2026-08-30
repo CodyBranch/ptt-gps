@@ -38,6 +38,18 @@ export interface CourseMeta {
  * stream belongs to which race, so a session can be back-dated to recover a
  * missed start.
  */
+/** One frame as it came off a port, plus the id the history pages on. */
+export interface WireFrameRow {
+  id?: number;
+  tMs: number;
+  source: string;
+  ip: string;
+  binary: boolean;
+  bytes: number;
+  imei?: string;
+  text: string;
+}
+
 export class Store {
   readonly db: Database.Database;
 
@@ -178,6 +190,23 @@ export class Store {
     `);
     // Owners are a table (case-insensitive unique) so "PTT" / "Ptt" /
     // "PrimeTime" can't drift apart; fleet links by owner_id.
+    // Raw wire frames, exactly as they arrived. Kept because the question
+    // "did that device send anything at 9:42?" is usually asked afterwards,
+    // and a live-only view has already thrown the answer away. Bounded by
+    // count and age — this is a debugging aid, not an archive.
+    this.db.exec(`CREATE TABLE IF NOT EXISTS wire_frames (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      t_ms INTEGER NOT NULL,
+      source TEXT NOT NULL,
+      ip TEXT NOT NULL,
+      binary INTEGER NOT NULL,
+      bytes INTEGER NOT NULL,
+      imei TEXT,
+      text TEXT NOT NULL
+    )`);
+    this.db.exec(`CREATE INDEX IF NOT EXISTS idx_wire_t ON wire_frames(t_ms)`);
+    this.db.exec(`CREATE INDEX IF NOT EXISTS idx_wire_imei ON wire_frames(imei, t_ms)`);
+
     this.db.exec(`CREATE TABLE IF NOT EXISTS owners (
       id INTEGER PRIMARY KEY,
       name TEXT NOT NULL UNIQUE COLLATE NOCASE
@@ -684,7 +713,132 @@ export class Store {
     this.db.prepare(`DELETE FROM auth_tokens WHERE token_hash = ?`).run(tokenHash);
   }
 
+  // --- raw wire log -------------------------------------------------------
+
+  /** Buffered so the ingest path never waits on a disk write; a whole backlog
+   *  flush from one device lands in a single transaction. */
+  private wireBuffer: WireFrameRow[] = [];
+
+  queueWireFrame(f: WireFrameRow): void {
+    this.wireBuffer.push(f);
+    // A GL320 clearing its backlog can arrive as a burst; write it out rather
+    // than letting the buffer grow unbounded between ticks.
+    if (this.wireBuffer.length >= 500) this.flushWireFrames();
+  }
+
+  flushWireFrames(): void {
+    if (this.wireBuffer.length === 0) return;
+    const batch = this.wireBuffer;
+    this.wireBuffer = [];
+    const stmt = this.db.prepare(
+      `INSERT INTO wire_frames (t_ms, source, ip, binary, bytes, imei, text) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    );
+    this.db.transaction((rows: WireFrameRow[]) => {
+      for (const r of rows) stmt.run(r.tMs, r.source, r.ip, r.binary ? 1 : 0, r.bytes, r.imei ?? null, r.text);
+    })(batch);
+  }
+
+  /**
+   * Newest-first page of the log. `before` is an id from a previous page, so
+   * scrolling back is stable even while new frames are still arriving.
+   */
+  wireHistory(opts: {
+    limit?: number;
+    before?: number;
+    source?: string;
+    imei?: string;
+    q?: string;
+    since?: number;
+    until?: number;
+  } = {}): WireFrameRow[] {
+    this.flushWireFrames(); // anything just received should be findable
+    const where: string[] = [];
+    const args: unknown[] = [];
+    if (opts.before !== undefined) {
+      where.push('id < ?');
+      args.push(opts.before);
+    }
+    if (opts.source && opts.source !== 'all') {
+      where.push('source = ?');
+      args.push(opts.source);
+    }
+    if (opts.imei) {
+      where.push('imei = ?');
+      args.push(opts.imei);
+    }
+    if (opts.since !== undefined) {
+      where.push('t_ms >= ?');
+      args.push(opts.since);
+    }
+    if (opts.until !== undefined) {
+      where.push('t_ms <= ?');
+      args.push(opts.until);
+    }
+    if (opts.q) {
+      where.push('(text LIKE ? OR ip LIKE ?)');
+      args.push(`%${opts.q}%`, `%${opts.q}%`);
+    }
+    const limit = Math.min(2000, Math.max(1, opts.limit ?? 500));
+    const rows = this.db
+      .prepare(
+        `SELECT id, t_ms, source, ip, binary, bytes, imei, text FROM wire_frames
+         ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
+         ORDER BY id DESC LIMIT ?`,
+      )
+      .all(...args, limit) as Array<Record<string, unknown>>;
+    return rows.map((r) => ({
+      id: Number(r.id),
+      tMs: Number(r.t_ms),
+      source: String(r.source),
+      ip: String(r.ip),
+      binary: r.binary === 1,
+      bytes: Number(r.bytes),
+      imei: r.imei === null ? undefined : String(r.imei),
+      text: String(r.text),
+    }));
+  }
+
+  /** Which ports have been heard from, for the history filter. */
+  wireSources(): string[] {
+    return (this.db.prepare(`SELECT DISTINCT source FROM wire_frames ORDER BY source`).all() as Array<{
+      source: string;
+    }>).map((r) => r.source);
+  }
+
+  wireStats(): { frames: number; oldestMs: number | null } {
+    this.flushWireFrames();
+    const r = this.db.prepare(`SELECT COUNT(*) AS n, MIN(t_ms) AS oldest FROM wire_frames`).get() as {
+      n: number;
+      oldest: number | null;
+    };
+    return { frames: Number(r.n), oldestMs: r.oldest === null ? null : Number(r.oldest) };
+  }
+
+  /**
+   * Keep the log bounded: a full fleet reporting every 10 s is roughly half a
+   * million frames a day, which is far more than anyone scrolls back through.
+   */
+  pruneWireFrames(keep = 200_000, maxAgeMs = 7 * 24 * 3600_000): number {
+    this.flushWireFrames();
+    const cutoff = Date.now() - maxAgeMs;
+    const byAge = this.db.prepare(`DELETE FROM wire_frames WHERE t_ms < ?`).run(cutoff);
+    const byCount = this.db
+      .prepare(
+        `DELETE FROM wire_frames WHERE id <= (
+           SELECT id FROM wire_frames ORDER BY id DESC LIMIT 1 OFFSET ?
+         )`,
+      )
+      .run(keep);
+    return Number(byAge.changes) + Number(byCount.changes);
+  }
+
+  clearWireFrames(): void {
+    this.wireBuffer = [];
+    this.db.exec(`DELETE FROM wire_frames`);
+  }
+
   close(): void {
+    this.flushWireFrames();
     this.db.close();
   }
 }

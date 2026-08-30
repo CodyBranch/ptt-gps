@@ -94,21 +94,39 @@ export function startApi(
    * subscribes and unsubscribes as it opens and closes.
    */
   const RAW_ROOM = 'raw-wire';
+  /** IMEIs are 15 digits; pulling one out here makes "everything from this
+   *  device" an indexed lookup without parsing the frame. */
+  const imeiOf = (text: string): string | undefined => text.match(/\b(\d{15})\b/)?.[1];
+
   const emitRaw = (raw: string | Buffer, source: string, ip: string): void => {
-    const room = io.sockets.adapter.rooms.get(RAW_ROOM);
-    if (!room || room.size === 0) return;
     const binary = Buffer.isBuffer(raw);
-    io.to(RAW_ROOM).emit('raw', {
+    const text = binary
+      ? // binary frames are unreadable as text — hex is what you compare
+        // against the protocol doc
+        (raw as Buffer).toString('hex').replace(/(..)/g, '$1 ').trim()
+      : (raw as string).trim();
+    const frame = {
       tMs: Date.now(),
       source,
       ip,
       binary,
       bytes: binary ? (raw as Buffer).length : Buffer.byteLength(raw as string),
-      // binary frames are unreadable as text — hex is what you compare against
-      // the protocol doc
-      text: binary ? (raw as Buffer).toString('hex').replace(/(..)/g, '$1 ').trim() : (raw as string).trim(),
-    });
+      imei: binary ? undefined : imeiOf(text),
+      text,
+    };
+    // Recorded whether or not anyone is watching: the reason to look is almost
+    // always something that already happened.
+    ctx.store.queueWireFrame(frame);
+    const room = io.sockets.adapter.rooms.get(RAW_ROOM);
+    if (room && room.size > 0) io.to(RAW_ROOM).emit('raw', frame);
   };
+
+  // Frames buffer between writes; flush steadily so history is current, and
+  // prune on a slower beat so the table stays a debugging aid, not an archive.
+  const wireFlush = setInterval(() => ctx.store.flushWireFrames(), 1000);
+  const wirePrune = setInterval(() => ctx.store.pruneWireFrames(), 10 * 60_000);
+  wireFlush.unref?.();
+  wirePrune.unref?.();
 
   const broadcastSnapshot = (): void => {
     io.to('all-events').emit('snapshot', ctx.snapshotAll());
@@ -757,6 +775,32 @@ export function startApi(
   );
 
   // --- fleet registry ---
+
+  /** Past wire traffic. Paged newest-first on `before` so scrolling back is
+   *  stable while new frames keep arriving. */
+  ex.get('/api/wire/history', (req, res) => {
+    const q = req.query as Record<string, string | undefined>;
+    const num = (v: string | undefined) => (v === undefined || v === '' ? undefined : Number(v));
+    res.json({
+      ok: true,
+      frames: ctx.store.wireHistory({
+        limit: num(q.limit),
+        before: num(q.before),
+        since: num(q.since),
+        until: num(q.until),
+        source: q.source,
+        imei: q.imei,
+        q: q.q,
+      }),
+      sources: ctx.store.wireSources(),
+      stats: ctx.store.wireStats(),
+    });
+  });
+
+  ex.post('/api/wire/clear', auth.adminOnly, (_req, res) => {
+    ctx.store.clearWireFrames();
+    res.json({ ok: true });
+  });
 
   ex.get('/api/fleet', (_req, res) => {
     const rosters = eventRosters(ctx.eventsDir);
