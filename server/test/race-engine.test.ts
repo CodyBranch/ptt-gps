@@ -257,12 +257,13 @@ describe('RaceEngine', () => {
     const b = makeEngine(cfg, 'r2');
     a.engine.setStatus('armed');
     b.engine.setStatus('armed');
-    a.engine.onFix(fixAt(a.engine, LEAD_A, 0.8, T0));
+    // both inside the initial 0..initialMax window, so each snaps where it is
+    a.engine.onFix(fixAt(a.engine, LEAD_A, 0.4, T0));
     b.engine.onFix(fixAt(b.engine, LEAD_A, 0.1, T0 + 1000));
-    expect(a.engine.trackers.get(LEAD_A)!.distance).toBeCloseTo(0.8, 1);
+    expect(a.engine.trackers.get(LEAD_A)!.distance).toBeCloseTo(0.4, 1);
     expect(b.engine.trackers.get(LEAD_A)!.distance).toBeCloseTo(0.1, 1);
-    // a's window advanced around 0.8; b's is untouched by it
-    expect(a.engine.trackers.get(LEAD_A)!.window.min).toBeGreaterThan(0.2);
+    // a's window advanced around 0.4; b's is untouched by it
+    expect(a.engine.trackers.get(LEAD_A)!.window.min).toBeGreaterThan(0.1);
     expect(b.engine.trackers.get(LEAD_A)!.window.min).toBe(0);
   });
 

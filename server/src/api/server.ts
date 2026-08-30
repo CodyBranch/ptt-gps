@@ -54,8 +54,13 @@ export function startApi(ctx: ServerContext, port: number): { httpServer: http.S
   const uiDist = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../admin-ui/dist');
   if (fs.existsSync(path.join(uiDist, 'index.html'))) {
     ex.use(express.static(uiDist));
-    // The link to hand viewers: /watch opens straight into PIN entry + view-only.
-    ex.get('/watch', (_req, res) => res.sendFile(path.join(uiDist, 'index.html')));
+    // The console keeps its place in the URL (/fleet, /event/<id>/setup, the
+    // /watch viewer link), so a refresh or a shared link lands where it says.
+    // Everything that is not an API call or a real file is the SPA shell.
+    ex.get(/^\/(?!api\/).*/, (req, res, next) => {
+      if (req.method !== 'GET' || req.headers.accept?.includes('application/json')) return next();
+      res.sendFile(path.join(uiDist, 'index.html'));
+    });
     console.log(`[api] serving admin UI from ${uiDist}`);
   } else {
     console.log('[api] no admin-ui build found — run "npm run build -w admin-ui" to serve the console here');

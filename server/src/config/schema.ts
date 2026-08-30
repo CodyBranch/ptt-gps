@@ -25,13 +25,20 @@ export const RoleSchema = z.object({
   clockSlot: z.number().int().min(1).max(4).optional(),
 });
 
+/**
+ * Snap window defaults, taken from the legacy per-event admin pages
+ * (min_inc 0.2 / max_inc 1.0, first window 0..0.5, in miles) rather than
+ * invented: those are the values PT Timing actually raced with. The asymmetry
+ * is deliberate — a lead vehicle only moves forward, so the window is kept on
+ * a short leash behind and given room ahead to recover from a dropped signal.
+ */
 export const SnapSchema = z.object({
   /** How far behind the last snap the window reaches (course units). */
-  minInc: z.number().positive().default(0.5),
+  minInc: z.number().positive().default(0.2),
   /** How far ahead of the last snap the window reaches (course units). */
-  maxInc: z.number().positive().default(0.5),
+  maxInc: z.number().positive().default(1.0),
   /** Window before the first fix: 0..initialMax (course units). */
-  initialMax: z.number().positive().default(1.0),
+  initialMax: z.number().positive().default(0.5),
   /** Max distance off-course before a snap is flagged suspect (course units). */
   maxOffCourse: z.number().positive().default(0.25),
   /**

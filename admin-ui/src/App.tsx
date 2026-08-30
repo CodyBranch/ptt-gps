@@ -85,12 +85,44 @@ const VIEWER_URL =
 
 type Page = 'home' | 'event' | 'events' | 'courses' | 'fleet' | 'system' | 'sim';
 
+/**
+ * The console keeps its place in the address bar, so a refresh returns you to
+ * the page you were on and a link to a race can be handed to someone else.
+ * Small enough to map by hand — no router dependency for seven pages.
+ */
+interface Route {
+  page: Page;
+  eventId?: string;
+  eventTab: string;
+}
+
+const TOP_PAGES: Page[] = ['events', 'courses', 'fleet', 'system', 'sim'];
+
+function parseRoute(pathname: string): Route {
+  const [first, second, third] = pathname.replace(/^\/+|\/+$/g, '').split('/');
+  if (first === 'event' && second) {
+    return { page: 'event', eventId: decodeURIComponent(second), eventTab: third ? decodeURIComponent(third) : 'all' };
+  }
+  if (TOP_PAGES.includes(first as Page)) return { page: first as Page, eventTab: 'all' };
+  // '/', '/watch' and anything unrecognised land on home
+  return { page: 'home', eventTab: 'all' };
+}
+
+function routePath(page: Page, eventId?: string, eventTab = 'all'): string {
+  if (page === 'home') return '/';
+  if (page !== 'event') return `/${page}`;
+  if (!eventId) return '/';
+  const base = `/event/${encodeURIComponent(eventId)}`;
+  return eventTab && eventTab !== 'all' ? `${base}/${encodeURIComponent(eventTab)}` : base;
+}
+
 export default function App() {
   const [state, dispatch] = useReducer(reducer, { connected: false, lastSeen: {} });
   const [auth, setAuth] = useState<'checking' | 'out' | AuthInfo>('checking');
-  const [page, setPage] = useState<Page>(VIEWER_URL ? 'event' : 'home');
-  const [eventId, setEventId] = useState<string>();
-  const [eventTab, setEventTab] = useState<string>('all'); // 'all' | raceId | 'setup'
+  const initialRoute = useMemo(() => (VIEWER_URL ? null : parseRoute(window.location.pathname)), []);
+  const [page, setPage] = useState<Page>(VIEWER_URL ? 'event' : (initialRoute?.page ?? 'home'));
+  const [eventId, setEventId] = useState<string | undefined>(initialRoute?.eventId);
+  const [eventTab, setEventTab] = useState<string>(initialRoute?.eventTab ?? 'all'); // 'all' | raceId | 'setup'
   const [selected, setSelected] = useState<MapSelection>();
   const [windowDialog, setWindowDialog] = useState<MapSelection & { raceId: string }>();
   const [simProgress, setSimProgress] = useState<SimProgress>();
@@ -131,6 +163,27 @@ export default function App() {
       },
     });
   };
+
+  // --- address bar <-> page state ---------------------------------------
+  // The viewer link (/watch) keeps its own URL: it is a fixed entry point, not
+  // a page you navigate away from.
+  useEffect(() => {
+    if (VIEWER_URL) return;
+    const want = routePath(page, eventId, eventTab);
+    if (window.location.pathname !== want) window.history.pushState({}, '', want);
+  }, [page, eventId, eventTab]);
+
+  useEffect(() => {
+    if (VIEWER_URL) return;
+    const onPop = () => {
+      const r = parseRoute(window.location.pathname);
+      setPage(r.page);
+      setEventId(r.eventId);
+      setEventTab(r.eventTab);
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
 
   // Account menu closes on an outside click or Escape, like the other popovers.
   useEffect(() => {

@@ -1,4 +1,11 @@
 {
+  "id": "test-gans-creek",
+  "name": "Test Gans Creek",
+  "meetId": 9001,
+  "startDate": "2026-09-26",
+  "endDate": "2026-09-26",
+  "outputUnits": "miles",
+  "reportIntervalS": 10,
   "listeners": [
     {
       "name": "queclink",
@@ -6,12 +13,80 @@
     }
   ],
   "firebase": [],
-  "trackers": [],
-  "roles": [],
-  "races": [],
-  "id": "test-gans-creek",
-  "name": "Test Gans Creek",
-  "meetId": 0,
-  "startDate": "2026-09-26",
-  "endDate": "2026-09-26"
+  "trackers": [
+    {
+      "imei": "868239051004294",
+      "label": "Lead A",
+      "hasBattery": true
+    },
+    {
+      "imei": "860201060910745",
+      "label": "Lead B",
+      "hasBattery": true
+    },
+    {
+      "imei": "868239051003577",
+      "label": "Trail A",
+      "hasBattery": true
+    },
+    {
+      "imei": "860201060924902",
+      "label": "Trail B",
+      "hasBattery": true
+    },
+    {
+      "imei": "860201060898288",
+      "label": "Timer",
+      "hasBattery": true
+    }
+  ],
+  "roles": [
+    {
+      "key": "lead",
+      "label": "Lead Vehicle",
+      "trackers": [
+        "868239051004294",
+        "860201060910745"
+      ],
+      "clockSlot": 1
+    },
+    {
+      "key": "trail",
+      "label": "Trail Vehicle",
+      "trackers": [
+        "868239051003577",
+        "860201060924902"
+      ],
+      "clockSlot": 2
+    },
+    {
+      "key": "timer",
+      "label": "Timer",
+      "trackers": [
+        "860201060898288"
+      ],
+      "clockSlot": 3
+    }
+  ],
+  "snapDefaults": {
+    "minInc": 0.2,
+    "maxInc": 1,
+    "initialMax": 0.5,
+    "maxOffCourse": 0.25,
+    "fwdTolerance": 0.02
+  },
+  "races": [
+    {
+      "id": "womens-6k",
+      "name": "Women's 6k",
+      "course": "courses/gans-6k.geojson",
+      "units": "miles"
+    },
+    {
+      "id": "mens-8k",
+      "name": "Men's 8k",
+      "course": "courses/gans-8k.geojson",
+      "units": "miles"
+    }
+  ]
 }
