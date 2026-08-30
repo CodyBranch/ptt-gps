@@ -13,11 +13,14 @@ export interface CourseMarker {
   lon: number;
 }
 
-// Public (pk.) Mapbox token — same account/token the legacy admin pages use.
-// Override with VITE_MAPBOX_TOKEN at build time if the token is ever rotated.
-mapboxgl.accessToken =
-  import.meta.env.VITE_MAPBOX_TOKEN ??
-  'MAPBOX_TOKEN_FROM_ENV';
+// Mapbox publishable (pk.) token, supplied at build time — see .env.example.
+// It is public by nature, but it is an account credential and GitHub's push
+// protection rejects it in source, so it lives in the build environment.
+const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN ?? '';
+if (!MAPBOX_TOKEN) {
+  console.error('[map] VITE_MAPBOX_TOKEN is not set — copy admin-ui/.env.example to .env; maps will not render without it.');
+}
+mapboxgl.accessToken = MAPBOX_TOKEN;
 
 const STYLES = {
   streets: 'mapbox://styles/mapbox/light-v10',

@@ -12,7 +12,12 @@
       "port": 1000
     }
   ],
-  "firebase": [],
+  "firebase": [
+    {
+      "connection": "ptt-testbed",
+      "flavor": "ptt"
+    }
+  ],
   "trackers": [
     {
       "imei": "868239051004294",
@@ -48,6 +53,7 @@
         "868239051004294",
         "860201060910745"
       ],
+      "cmd": 0,
       "clockSlot": 1
     },
     {
@@ -57,7 +63,7 @@
         "868239051003577",
         "860201060924902"
       ],
-      "clockSlot": 2
+      "cmd": 1
     },
     {
       "key": "timer",
@@ -65,12 +71,12 @@
       "trackers": [
         "860201060898288"
       ],
-      "clockSlot": 3
+      "cmd": 2
     }
   ],
   "snapDefaults": {
     "minInc": 0.2,
-    "maxInc": 1,
+    "maxInc": 0.2,
     "initialMax": 0.5,
     "maxOffCourse": 0.25,
     "fwdTolerance": 0.02

@@ -11,6 +11,7 @@ data/
 # Secrets
 .env
 .env.*
+!.env.example
 *serviceaccount*.json
 *firebase-adminsdk*.json
 secrets/
