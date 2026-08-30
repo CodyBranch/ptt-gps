@@ -4,6 +4,7 @@ import { api } from './api';
 import { ConfirmDialog, type ConfirmRequest } from './components/Confirm';
 import { EventSetup } from './components/EventSetup';
 import { CoursesView } from './components/CoursesView';
+import { DistanceBoard } from './components/DistanceBoard';
 import { EventsView } from './components/EventsView';
 import { FleetView } from './components/FleetView';
 import { HomeView } from './components/HomeView';
@@ -18,7 +19,7 @@ import { SystemView } from './components/SystemView';
 import { WireLog } from './components/WireLog';
 import { TrackerTable } from './components/TrackerTable';
 import { WindowDialog } from './components/WindowDialog';
-import type { RaceSnap, SimulatedDistance, Snapshot, TrackerPub, Units } from './types';
+import type { RaceSnap, RaceStatus, SimulatedDistance, Snapshot, TrackerPub, Units } from './types';
 
 interface State {
   snapshot?: Snapshot;
@@ -82,9 +83,19 @@ function reducer(state: State, action: Action): State {
   }
 }
 
-/** Forced viewer layout: the /watch link handed to viewers, or ?viewer. */
+/**
+ * Forced viewer layout: the /watch link handed to viewers, or ?viewer.
+ *
+ * Two flavours, because two different people get handed this link. /watch is
+ * the full picture — map, vehicles, trackers. /watch/distances is just the
+ * headline number per role, for an announcer who needs to read it, not work it.
+ */
+const VIEWER_PATHS = ['/watch', '/watch/distances'];
 const VIEWER_URL =
-  window.location.pathname === '/watch' || new URLSearchParams(window.location.search).has('viewer');
+  VIEWER_PATHS.includes(window.location.pathname) || new URLSearchParams(window.location.search).has('viewer');
+const BOARD_URL =
+  window.location.pathname === '/watch/distances' ||
+  new URLSearchParams(window.location.search).get('viewer') === 'distances';
 
 type Page = 'home' | 'event' | 'events' | 'courses' | 'fleet' | 'system' | 'sim' | 'wire';
 
@@ -100,6 +111,15 @@ interface Route {
 }
 
 const TOP_PAGES: Page[] = ['events', 'courses', 'fleet', 'system', 'sim', 'wire'];
+
+/** The tab strip's status dot, for a native <option> that cannot be styled:
+ *  filled is running, half is armed and ready, hollow is waiting, tick is done. */
+const STATUS_DOT: Record<RaceStatus, string> = {
+  live: '●',
+  armed: '◐',
+  scheduled: '○',
+  finished: '✓',
+};
 
 function parseRoute(pathname: string): Route {
   const [first, second, third] = pathname.replace(/^\/+|\/+$/g, '').split('/');
@@ -137,6 +157,9 @@ export default function App() {
     }
   });
   const [confirm, setConfirm] = useState<ConfirmRequest>();
+  // which viewer flavour is on screen; the URL is kept in step so the chosen
+  // one can be bookmarked or handed on
+  const [board, setBoard] = useState(BOARD_URL);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [pwDialog, setPwDialog] = useState(false);
   const [accountMenu, setAccountMenu] = useState(false);
@@ -148,6 +171,14 @@ export default function App() {
   const go = (p: Page) => {
     setPage(p);
     setSidebarOpen(false);
+  };
+  /** Flip viewer flavour and keep the address bar honest, so the tab can be
+   *  bookmarked or the link passed on as whichever view is on screen. */
+  const setViewerMode = (toBoard: boolean) => {
+    setBoard(toBoard);
+    if (window.location.pathname.startsWith('/watch')) {
+      window.history.replaceState(null, '', toBoard ? '/watch/distances' : '/watch');
+    }
   };
   const oops = (title: string) => (err: unknown) =>
     ask({ title, body: err instanceof Error ? err.message : String(err), alertOnly: true, onConfirm: () => {} });
@@ -284,6 +315,24 @@ export default function App() {
   // Assigned across the whole event, not the filtered view, so a tracker keeps
   // the same colour when the operator narrows down to one race.
   const trackerColorMap = trackerColors(ev?.races ?? []);
+  /**
+   * On the viewer pages a marker is named for the role it is covering, not the
+   * device on the bike: someone watching follows "Lead Vehicle", and which
+   * tracker is currently publishing it is the operator's business.
+   */
+  const roleLabelByImei: Record<string, string> = {};
+  for (const race of ev?.races ?? []) {
+    for (const role of race.roles) {
+      if (role.activeImei && roleLabelByImei[role.activeImei] === undefined) {
+        roleLabelByImei[role.activeImei] = role.label;
+      }
+    }
+  }
+  const precision = ev?.event.viewerPrecision;
+  // The console is a working instrument and always reads 2; the viewer pages
+  // read whatever the event asked for.
+  const decimals = !viewer ? 2 : board ? (precision?.board ?? 2) : (precision?.full ?? 2);
+  const viewerLabels = viewer ? roleLabelByImei : undefined;
 
   const racePanels = (r: RaceSnap) => (
     <>
@@ -291,6 +340,7 @@ export default function App() {
         race={r}
         displayUnits={displayUnits}
         colors={trackerColorMap}
+        decimals={decimals}
         lastSeen={state.lastSeen}
         intervalS={intervalS}
         simulated={snapshotSimulated}
@@ -309,6 +359,7 @@ export default function App() {
         race={r}
         displayUnits={displayUnits}
         colors={trackerColorMap}
+        decimals={decimals}
         lastSeen={state.lastSeen}
         intervalS={intervalS}
         readonly={viewer}
@@ -352,8 +403,20 @@ export default function App() {
         </div>
       );
     }
-    const shown = eventTab === 'all' ? ev.races : ev.races.filter((r) => r.raceId === eventTab);
-    const races = shown.length > 0 ? shown : ev.races;
+    // The distances page is for someone following the race that is on. A
+    // scheduled race there is just a column of "no distance yet", so it offers
+    // the live ones only — and with a single live race there is nothing to
+    // choose, it simply shows it.
+    const pool = viewer && board ? ev.races.filter((r) => r.status === 'live') : ev.races;
+    const shown = eventTab === 'all' ? pool : pool.filter((r) => r.raceId === eventTab);
+    const races = shown.length > 0 ? shown : pool;
+    if (viewer && board && races.length === 0) {
+      return (
+        <div className="loading">
+          <span>No race is running — distances appear here as soon as one starts.</span>
+        </div>
+      );
+    }
     if (races.length === 0) {
       return (
         <div className="loading">
@@ -374,6 +437,34 @@ export default function App() {
         </div>
       );
     }
+    if (viewer && board) {
+      return (
+        <div className="main">
+          <aside className="board-aside">
+            <DistanceBoard
+              races={races}
+              displayUnits={displayUnits}
+              decimals={decimals}
+              lastSeen={state.lastSeen}
+              intervalS={intervalS}
+              simulated={snapshotSimulated}
+              selected={selected}
+              onSelect={(raceId, imei) =>
+                setSelected((cur) => (cur?.imei === imei && cur.raceId === raceId ? undefined : { raceId, imei }))
+              }
+            />
+          </aside>
+          <MapView
+            races={races}
+            selected={selected}
+            displayUnits={displayUnits}
+            colors={trackerColorMap}
+            labelOverrides={viewerLabels}
+            decimals={decimals}
+          />
+        </div>
+      );
+    }
     return (
       <div className="main">
         <aside className={races.length > 1 ? 'all-races' : ''}>
@@ -391,7 +482,14 @@ export default function App() {
             </div>
           ))}
         </aside>
-        <MapView races={races} selected={selected} displayUnits={displayUnits} colors={trackerColorMap} />
+        <MapView
+          races={races}
+          selected={selected}
+          displayUnits={displayUnits}
+          colors={trackerColorMap}
+          labelOverrides={viewerLabels}
+          decimals={decimals}
+        />
       </div>
     );
   };
@@ -524,17 +622,20 @@ export default function App() {
           </button>
         </nav>
       )}
-      {page === 'event' && ev && (
+      {page === 'event' && ev && (() => {
+        // The distances page lists only what is running, matching what it shows.
+        const navRaces = viewer && board ? ev.races.filter((r) => r.status === 'live') : ev.races;
+        return (
         <nav className="event-subnav">
           {/* Its own strip so a meet with ten races scrolls sideways here
               instead of wrapping the header down over the map. */}
           <div className="subnav-races">
-            {ev.races.length > 1 && (
+            {navRaces.length > 1 && (
               <button className={eventTab === 'all' ? 'active' : ''} onClick={() => setEventTab('all')}>
                 All races
               </button>
             )}
-            {ev.races.map((r) => (
+            {navRaces.map((r) => (
               <button
                 key={r.raceId}
                 ref={(el) => {
@@ -550,12 +651,43 @@ export default function App() {
               </button>
             ))}
           </div>
+          {/* Phone-width stand-in for the tab strip: tabs of varying widths
+              wrapped into a messy two or three rows once an event had a few
+              races. One control, one line, any race count. */}
+          <select
+            className="subnav-race-select"
+            value={eventTab === 'setup' ? 'setup' : eventTab}
+            onChange={(e) => setEventTab(e.target.value)}
+          >
+            {navRaces.length > 1 && <option value="all">All races</option>}
+            {navRaces.map((r) => (
+              <option key={r.raceId} value={r.raceId}>
+                {STATUS_DOT[r.status]} {r.name}
+              </option>
+            ))}
+            {admin && !viewer && <option value="setup">⚙ Setup</option>}
+          </select>
           {admin && !viewer && (
-            <button className={eventTab === 'setup' ? 'active' : ''} onClick={() => setEventTab('setup')}>
-              ⚙ Setup
+            <button
+              className={`subnav-setup ${eventTab === 'setup' ? 'active' : ''}`}
+              onClick={() => setEventTab('setup')}
+            >
+              ⚙<span className="btn-word"> Setup</span>
             </button>
           )}
           <span className="spacer" />
+          {viewer && (
+            /* Viewers get the switch instead of the publish control: the same
+               link opens either flavour, so nobody has to be re-sent a URL. */
+            <span className="view-mode" title="How much of the race to show">
+              <button className={board ? '' : 'on'} onClick={() => setViewerMode(false)}>
+                Full
+              </button>
+              <button className={board ? 'on' : ''} onClick={() => setViewerMode(true)}>
+                Distances
+              </button>
+            </span>
+          )}
           {!viewer ? (
             <button
               className={`publish-toggle ${ev.publishEnabled ? 'on' : 'off'}`}
@@ -579,7 +711,8 @@ export default function App() {
             !ev.publishEnabled && <span className="publish-toggle off">⛔ OUTPUTS OFF</span>
           )}
         </nav>
-      )}
+        );
+      })()}
 
       {page === 'home' && !viewer ? (
         <HomeView

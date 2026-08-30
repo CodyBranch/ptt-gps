@@ -111,5 +111,9 @@
       "course": "courses/gans-8k.geojson",
       "units": "miles"
     }
-  ]
+  ],
+  "viewerPrecision": {
+    "full": 2,
+    "board": 2
+  }
 }

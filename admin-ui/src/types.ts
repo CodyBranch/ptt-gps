@@ -84,6 +84,8 @@ export interface EventMeta {
   name: string;
   meetId: number;
   reportIntervalS: number;
+  /** Decimal places for the viewer pages; the console itself always shows 2. */
+  viewerPrecision?: { full: number; board: number };
   startDate?: string;
   endDate?: string;
 }
@@ -119,6 +121,7 @@ export interface EventConfigT {
   endDate?: string;
   outputUnits: Units;
   reportIntervalS: number;
+  viewerPrecision?: { full: number; board: number };
   listeners: Array<{ name: string; port: number }>;
   firebase: Array<{ connection: string; flavor: 'ptt' | 'krush' }>;
   trackers: Array<{ imei: string; label: string; hasBattery: boolean }>;

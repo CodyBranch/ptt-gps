@@ -7,6 +7,7 @@ export function TrackerTable({
   race,
   displayUnits,
   colors,
+  decimals = 2,
   lastSeen,
   intervalS,
   readonly,
@@ -18,6 +19,8 @@ export function TrackerTable({
   displayUnits: Units;
   /** Per-IMEI colour, matching the tracker's dot on the map. */
   colors: Record<string, string>;
+  /** Decimals on distances; viewer pages can be set coarser in Setup. */
+  decimals?: number;
   lastSeen: Record<string, number>;
   intervalS: number;
   readonly?: boolean;
@@ -62,7 +65,7 @@ export function TrackerTable({
                   <div className="t-imei">{t.imei}</div>
                 </td>
                 <td className={`num col-dist ${t.suspect ? 'warn' : ''}`} title={offM !== undefined ? `${offM} m off course` : undefined}>
-                  {t.distance !== undefined ? `${d(t.distance).toFixed(2)} ${unitAbbr(displayUnits)}` : '—'}
+                  {t.distance !== undefined ? `${d(t.distance).toFixed(decimals)} ${unitAbbr(displayUnits)}` : '—'}
                 </td>
                 <td className="col-gps"><GpsChip tracker={t} /></td>
                 <td className="col-batt"><BatteryBar tracker={t} /></td>

@@ -249,6 +249,8 @@ export function MapView({
   selected,
   displayUnits,
   colors,
+  labelOverrides,
+  decimals = 2,
 }: {
   races: RaceSnap[];
   selected?: MapSelection;
@@ -256,6 +258,11 @@ export function MapView({
   displayUnits: Units;
   /** Per-IMEI dot colour, shared with the panels so a dot maps to a row. */
   colors: Record<string, string>;
+  /** Viewer pages name a marker by the role it is covering ("Lead Vehicle"),
+   *  not the device on the bike — the role is what the watcher follows. */
+  labelOverrides?: Record<string, string>;
+  /** Decimals on the marker label; viewers can be given a coarser figure. */
+  decimals?: number;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map>(null);
@@ -433,9 +440,9 @@ export function MapView({
       // reading 0.14 km is just the same distance in miles.
       const dist =
         t.distance !== undefined
-          ? ` · ${toDisplay(t.distance, units, displayUnits).toFixed(2)} ${unitAbbr(displayUnits)}`
+          ? ` · ${toDisplay(t.distance, units, displayUnits).toFixed(decimals)} ${unitAbbr(displayUnits)}`
           : '';
-      label.textContent = `${t.label}${dist}`;
+      label.textContent = `${labelOverrides?.[imei] ?? t.label}${dist}`;
     }
     for (const [imei, m] of markers) {
       if (!seen.has(imei)) {
@@ -470,7 +477,7 @@ export function MapView({
       properties: {},
       geometry: { type: 'LineString', coordinates: sel?.slice && sel.slice.length > 1 ? sel.slice : [] },
     });
-  }, [races, selected, displayUnits, colors, showLabels]);
+  }, [races, selected, displayUnits, colors, showLabels, labelOverrides, decimals]);
 
   return (
     <div className="map-wrap">

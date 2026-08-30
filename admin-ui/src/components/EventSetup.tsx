@@ -141,8 +141,15 @@ export function EventSetup({
               </select>
             </label>
           </div>
+          <p className="hint">
+            <strong>Report interval</strong> is how often you expect each tracker to send, and it
+            only sets what counts as late: ages turn amber at 2 missed reports and red at 4, and a
+            role offers its backup at 6. It does not configure the devices — that is set on the
+            tracker itself. The snap window is how far along the course a fix is allowed to land:
+            back/ahead is how much the window moves per fix, initial is the slice before the gun.
+          </p>
           <div className="form-row">
-            <label>
+            <label title="How often you expect each tracker to report. Does not configure the devices — it is what the console measures lateness against.">
               Report interval (s)
               <NumberField value={cfg.reportIntervalS ?? 10} onCommit={(n) => edit((c) => (c.reportIntervalS = n))} />
             </label>
@@ -153,6 +160,36 @@ export function EventSetup({
             <label>
               Window ahead
               <NumberField value={cfg.snapDefaults.maxInc} onCommit={(n) => edit((c) => (c.snapDefaults.maxInc = n))} />
+            </label>
+            <label title="Decimals on the full viewer page (/watch)">
+              Viewer decimals
+              <select
+                value={cfg.viewerPrecision?.full ?? 2}
+                onChange={(e) =>
+                  edit((c) => {
+                    c.viewerPrecision = { ...(c.viewerPrecision ?? { full: 2, board: 2 }), full: Number(e.target.value) };
+                  })
+                }
+              >
+                <option value={0}>0 (5 km)</option>
+                <option value={1}>1 (5.1 km)</option>
+                <option value={2}>2 (5.12 km)</option>
+              </select>
+            </label>
+            <label title="Decimals on the distances-only page (/watch/distances)">
+              Distances decimals
+              <select
+                value={cfg.viewerPrecision?.board ?? 2}
+                onChange={(e) =>
+                  edit((c) => {
+                    c.viewerPrecision = { ...(c.viewerPrecision ?? { full: 2, board: 2 }), board: Number(e.target.value) };
+                  })
+                }
+              >
+                <option value={0}>0 (5 km)</option>
+                <option value={1}>1 (5.1 km)</option>
+                <option value={2}>2 (5.12 km)</option>
+              </select>
             </label>
             <label>
               Initial window

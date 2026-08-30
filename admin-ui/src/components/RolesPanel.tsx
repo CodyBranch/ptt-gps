@@ -39,6 +39,7 @@ export function RolesPanel({
   race,
   displayUnits,
   colors,
+  decimals = 2,
   lastSeen,
   intervalS,
   simulated,
@@ -53,6 +54,8 @@ export function RolesPanel({
   displayUnits: Units;
   /** Per-IMEI colour, matching the tracker's dot on the map. */
   colors: Record<string, string>;
+  /** Decimals on distances; viewer pages can be set coarser in Setup. */
+  decimals?: number;
   lastSeen: Record<string, number>;
   intervalS: number;
   simulated?: Record<string, SimulatedDistance>;
@@ -152,10 +155,10 @@ export function RolesPanel({
                   ? '—'
                   : onSplits
                     ? roleSim
-                      ? `⏱ ${roleSim.distance.toFixed(2)}`
+                      ? `⏱ ${roleSim.distance.toFixed(decimals)}`
                       : '⏱ waiting for feed'
                     : active?.distance !== undefined
-                      ? `${d(active.distance).toFixed(2)} ${unitAbbr(displayUnits)}`
+                      ? `${d(active.distance).toFixed(decimals)} ${unitAbbr(displayUnits)}`
                       : '—'}
               </span>
             </div>
@@ -237,7 +240,7 @@ export function RolesPanel({
                   <BatteryBar tracker={t} />
                   <GpsChip tracker={t} />
                   <span className="t-dist">
-                    {t?.distance !== undefined ? `${d(t.distance).toFixed(2)} ${unitAbbr(displayUnits)}` : '—'}
+                    {t?.distance !== undefined ? `${d(t.distance).toFixed(decimals)} ${unitAbbr(displayUnits)}` : '—'}
                   </span>
                   <span className={`t-age ${ageClass(age, intervalS)}`}>{fmtAge(age)}</span>
                   {!readonly &&

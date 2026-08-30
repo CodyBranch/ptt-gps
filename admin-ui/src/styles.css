@@ -481,6 +481,7 @@ button.mini.has-issues { border-color: var(--warn); color: var(--warn); font-wei
 /* pushes the publishing switch to the right-hand end of the bar */
 .event-subnav .spacer { flex: 1; }
 .subnav-races { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
+.subnav-race-select { display: none; }
 .event-subnav button {
   background: var(--panel); color: var(--text); border: 1px solid var(--border);
   padding: 4px 12px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 7px;
@@ -730,15 +731,20 @@ button.linklike {
   .event-subnav { padding-left: 52px; }
   /* let the publish switch wrap with the tabs instead of being pushed off */
   .event-subnav .spacer { display: none; }
-  /* Races swipe sideways on one line; Setup and the publish switch keep their
-     own line below. A ten-race meet then costs the same two rows as a two-race
-     one, instead of wrapping a fifth of the screen away from the map. */
-  .subnav-races {
-    flex: 1 0 100%; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none;
-    -webkit-overflow-scrolling: touch;
+  /* One race picker instead of a row of tabs. Tabs of different widths wrapped
+     into two or three ragged rows as soon as an event had a few races, and ate
+     the top of the screen; this is one line whatever the race count. */
+  .event-subnav { flex-wrap: nowrap; gap: 8px; padding: 8px 10px 8px 52px; }
+  .subnav-races { display: none; }
+  .subnav-race-select {
+    display: block; flex: 1 1 auto; min-width: 0; height: 32px; padding: 0 8px;
+    background: var(--panel); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; font-size: 13px; font-weight: 600;
   }
-  .subnav-races::-webkit-scrollbar { display: none; }
-  .subnav-races button { flex: none; }
+  /* the word would crowd the row; the gear reads well enough on its own */
+  .subnav-setup .btn-word { display: none; }
+  .subnav-setup { flex: none; padding: 4px 9px; }
+  .event-subnav .publish-toggle { flex: none; }
   /* The page title clears the fixed hamburger, and the bar wraps: as a single
      nowrap row its controls — the owner filter, "+ Add device", Save — were
      pushed past the screen edge with no way to scroll to them. */
@@ -758,6 +764,9 @@ button.linklike {
      its content's, so a card with a long line held the column wider than the
      screen and the right edge was simply clipped away. */
   .setup-grid { grid-template-columns: minmax(0, 1fr); padding: 10px; }
+  /* Three fields to a row left each about 107px, which cuts the year off a
+     date and the tail off a select. Two to a row on a tablet... */
+  .form-row label { min-width: 150px; }
   .events-list { grid-template-columns: minmax(0, 1fr); padding: 10px; }
   .setup-grid section, .events-list > * { min-width: 0; }
   /* The table must fit the screen rather than scroll sideways. GPS lock and
@@ -779,6 +788,16 @@ button.linklike {
   .tracker-table button.mini { padding: 4px 7px; font-size: 11px; }
   .tracker-table .fleet-actions, .tracker-table td:last-child { text-align: right; }
   .batt-pct { display: none; } /* bar + color carry the info on phones */
+  /* ...except in the fleet list, where the exact charge is half the reason to
+     look. Printed inside the cell it costs no extra column. */
+  .fleet-table .batt { position: relative; }
+  .fleet-table .batt-shell { width: 46px; height: 16px; border-radius: 4px; }
+  .fleet-table .batt-pct {
+    display: block; position: absolute; inset: 0; min-width: 0;
+    font-size: 10px; font-weight: 700; line-height: 16px; text-align: center;
+    color: var(--text); text-shadow: 0 0 3px var(--bg), 0 0 2px var(--bg);
+  }
+  .fleet-table .batt.low .batt-pct { color: var(--text); }
   /* The fleet table was 767px wide and simply clipped at the screen edge. Model,
      owner and the event badges all appear when you open a device, and owner is
      a filter above the table anyway — so the phone keeps the three things you
@@ -1123,3 +1142,68 @@ button.mini.on { border-color: var(--warn); color: var(--warn); }
 }
 .loose-tracker { display: inline-flex; align-items: center; gap: 5px; }
 .loose-tracker .t-name { flex: none; }
+
+
+/* ---------------------------------------------------------------------------
+ * Distances-only viewer (/watch/distances)
+ *
+ * Read at arm's length or across a room: one figure per role, big, with the
+ * bar repeating it for people who take in a shape faster than a number.
+ * ------------------------------------------------------------------------ */
+.board { padding: 14px 16px 24px; max-width: 1100px; margin: 0 auto; width: 100%; overflow-y: auto; }
+.board-race + .board-race { margin-top: 22px; }
+.board-race-head {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  padding-bottom: 8px; border-bottom: 1px solid var(--border); margin-bottom: 12px;
+}
+.board-race-head h2 { font-size: 20px; }
+.board-course { color: var(--dim); font-size: 13px; margin-left: auto; }
+
+.board-rows { display: flex; flex-direction: column; gap: 10px; }
+.board-row {
+  background: var(--panel); border: 1px solid var(--border); border-left: 4px solid var(--accent);
+  border-radius: 10px; padding: 12px 16px;
+}
+.board-row.stale { border-left-color: var(--bad); }
+.board-row.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.board-row[title] { cursor: pointer; }
+/* the board sits where the race panel does, so it gets that column's width */
+.board-aside .board { padding: 12px 14px 20px; }
+.board-row.uncovered { border-left-color: var(--border); opacity: 0.6; }
+
+.board-labels { display: flex; align-items: baseline; gap: 8px; }
+.board-role { font-size: 15px; font-weight: 700; letter-spacing: 0.2px; }
+.board-vehicle { color: var(--dim); font-size: 12.5px; }
+
+.board-figure { display: flex; align-items: baseline; gap: 7px; margin: 2px 0 8px; }
+.board-value { font-size: 46px; font-weight: 800; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.board-unit { font-size: 17px; font-weight: 600; color: var(--dim); }
+.board-none { font-size: 19px; color: var(--dim); font-weight: 600; padding: 8px 0 4px; }
+
+.board-bar { height: 6px; background: var(--panel2); border-radius: 3px; overflow: hidden; }
+.board-bar-fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width 0.4s ease; }
+.board-row.stale .board-bar-fill { background: var(--bad); }
+.board-warn { margin-top: 7px; color: var(--bad); font-size: 12.5px; font-weight: 600; }
+
+/* Which viewer flavour is on screen. */
+.view-mode { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.view-mode button {
+  background: var(--panel); color: var(--dim); border: none; border-radius: 0;
+  padding: 4px 10px; font-size: 12px; cursor: pointer;
+}
+.view-mode button.on { background: var(--accent); color: #fff; font-weight: 600; }
+
+@media (max-width: 900px) {
+  .board { padding: 12px 12px 20px; }
+  .board-value { font-size: 40px; }
+  .board-race-head h2 { font-size: 18px; }
+  .board-course { margin-left: 0; flex-basis: 100%; }
+}
+
+/* ...and one to a row on a phone, where even two abbreviates the wider
+   controls. Nothing here is worth reading at half a value. */
+@media (max-width: 560px) {
+  .form-row { gap: 8px; }
+  .form-row label { flex: 1 1 100%; min-width: 0; }
+  .form-row input, .form-row select { width: 100%; }
+}

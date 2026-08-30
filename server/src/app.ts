@@ -379,6 +379,7 @@ export class App {
         name: this.cfg.name,
         meetId: this.cfg.meetId,
         reportIntervalS: this.cfg.reportIntervalS,
+        viewerPrecision: this.cfg.viewerPrecision,
         startDate: this.cfg.startDate,
         endDate: this.cfg.endDate,
       },

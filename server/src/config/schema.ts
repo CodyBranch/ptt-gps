@@ -94,6 +94,12 @@ export const FirebaseTargetSchema = z.object({
   flavor: z.enum(['ptt', 'krush']),
 });
 
+/** Per-view decimal places: the full viewer and the distances board differ. */
+export const ViewerPrecisionSchema = z.object({
+  full: z.number().int().min(0).max(2).default(2),
+  board: z.number().int().min(0).max(2).default(2),
+});
+
 export const EventSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -111,6 +117,13 @@ export const EventSchema = z.object({
    * fresh/aging/stale coloring on packet age (fleet reports every 5–10 s).
    */
   reportIntervalS: z.number().positive().default(10),
+  /**
+   * Decimal places on the distances the viewer pages show. The operator console
+   * always reads 2 — it is a working instrument. What gets read aloud or put on
+   * a screen is a different question: "5.1 km" is often the honest precision
+   * for a moto's position, and "5" is what an announcer wants.
+   */
+  viewerPrecision: ViewerPrecisionSchema.prefault({}),
   listeners: z
     .array(z.object({ name: z.string(), port: z.number().int() }))
     .default([{ name: 'queclink', port: 1000 }]),
