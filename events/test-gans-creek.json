@@ -49,29 +49,21 @@
     {
       "key": "lead",
       "label": "Lead Vehicle",
-      "trackers": [
-        "868239051004294",
-        "860201060910745"
-      ],
       "cmd": 0,
-      "clockSlot": 1
+      "clockSlot": 1,
+      "vehicle": "lead"
     },
     {
       "key": "trail",
       "label": "Trail Vehicle",
-      "trackers": [
-        "868239051003577",
-        "860201060924902"
-      ],
-      "cmd": 1
+      "cmd": 1,
+      "vehicle": "trail"
     },
     {
       "key": "timer",
       "label": "Timer",
-      "trackers": [
-        "860201060898288"
-      ],
-      "cmd": 2
+      "cmd": 2,
+      "vehicle": "timer"
     }
   ],
   "snapDefaults": {
@@ -93,6 +85,31 @@
       "name": "Men's 8k",
       "course": "courses/gans-8k.geojson",
       "units": "miles"
+    }
+  ],
+  "vehicles": [
+    {
+      "key": "lead",
+      "label": "Lead Vehicle",
+      "trackers": [
+        "868239051004294",
+        "860201060910745"
+      ]
+    },
+    {
+      "key": "trail",
+      "label": "Trail Vehicle",
+      "trackers": [
+        "868239051003577",
+        "860201060924902"
+      ]
+    },
+    {
+      "key": "timer",
+      "label": "Timer",
+      "trackers": [
+        "860201060898288"
+      ]
     }
   ]
 }

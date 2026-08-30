@@ -258,6 +258,53 @@ export function migrateRaceMarkersToCourses(
   }
 }
 
+/**
+ * Lift `roles[].trackers` into first-class vehicles.
+ *
+ * Roles used to be both the publishing identity and the hardware list, which
+ * only holds while a vehicle covers one thing all day. Each old role becomes a
+ * vehicle carrying the same trackers, and the role points at it — identical
+ * behaviour, but coverage can now be reassigned without touching hardware.
+ */
+const NEWLINE = String.fromCharCode(10);
+
+export function migrateRolesToVehicles(eventsDir: string): void {
+  for (const f of fs.readdirSync(eventsDir)) {
+    if (!f.endsWith('.json')) continue;
+    const full = path.join(eventsDir, f);
+    let json: Record<string, unknown>;
+    try {
+      json = JSON.parse(fs.readFileSync(full, 'utf8'));
+    } catch {
+      continue;
+    }
+    const roles = (json.roles as Array<Record<string, unknown>>) ?? [];
+    const needs = roles.some((r) => Array.isArray(r.trackers));
+    if (!needs) continue;
+
+    const vehicles = (json.vehicles as Array<Record<string, unknown>>) ?? [];
+    const byTrackers = new Map(vehicles.map((v) => [JSON.stringify(v.trackers), String(v.key)]));
+    for (const role of roles) {
+      if (!Array.isArray(role.trackers)) continue;
+      const fingerprint = JSON.stringify(role.trackers);
+      // Two roles sharing a tracker list were one vehicle all along.
+      let key = byTrackers.get(fingerprint);
+      if (!key) {
+        key = String(role.key);
+        let n = 2;
+        while (vehicles.some((v) => v.key === key)) key = `${String(role.key)}-${n++}`;
+        vehicles.push({ key, label: String(role.label ?? role.key), trackers: role.trackers });
+        byTrackers.set(fingerprint, key);
+      }
+      role.vehicle = key;
+      delete role.trackers;
+    }
+    json.vehicles = vehicles;
+    fs.writeFileSync(full, JSON.stringify(json, null, 2) + NEWLINE);
+    console.log(`[events] ${f}: lifted ${vehicles.length} vehicle(s) out of its roles`);
+  }
+}
+
 /** Which events reference which tracker IMEIs (for the fleet page). */
 export function eventRosters(
   dir: string,

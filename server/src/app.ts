@@ -356,6 +356,7 @@ export class App {
       courseLength: engine.course.length,
       sessionId: this.sessions.get(raceId) ?? null,
       roles: engine.roles,
+      vehicles: engine.vehicles,
       trackers: [...engine.trackers.values()].map((s) => ({
         ...publicTrackerState(s),
         slice: engine.sliceFor(s.imei),

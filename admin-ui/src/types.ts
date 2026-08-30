@@ -45,9 +45,17 @@ export interface TrackerPub {
   health?: TrackerHealth;
 }
 
+export interface Vehicle {
+  key: string;
+  label: string;
+  trackers: string[];
+}
+
 export interface RoleState {
   key: string;
   label: string;
+  /** Which vehicle is covering this role right now. */
+  vehicle: string;
   trackers: string[];
   activeImei: string;
   /** Which feed publishes the role's headline distance. */
@@ -66,6 +74,8 @@ export interface RaceSnap {
   courseLength: number;
   sessionId: number | null;
   roles: RoleState[];
+  /** The meet's vehicles, so coverage can be reassigned from the race view. */
+  vehicles: Vehicle[];
   trackers: TrackerPub[];
 }
 
@@ -112,10 +122,11 @@ export interface EventConfigT {
   listeners: Array<{ name: string; port: number }>;
   firebase: Array<{ connection: string; flavor: 'ptt' | 'krush' }>;
   trackers: Array<{ imei: string; label: string; hasBattery: boolean }>;
+  vehicles: Array<{ key: string; label: string; trackers: string[] }>;
   roles: Array<{
     key: string;
     label: string;
-    trackers: string[];
+    vehicle: string;
     cmd?: number;
     clockSlot?: number;
     mapEvent?: string;

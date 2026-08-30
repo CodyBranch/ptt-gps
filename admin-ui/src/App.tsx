@@ -292,6 +292,9 @@ export default function App() {
         ask={ask}
         onActivate={(roleKey, imei) => api.setActive(r.eventId, r.raceId, roleKey, imei).catch(oops('Failover failed'))}
         onSetSource={(roleKey, source) => api.setSource(r.eventId, r.raceId, roleKey, source).catch(oops('Source switch failed'))}
+        onVehicle={(roleKey, vehicle) =>
+          api.setVehicle(r.eventId, r.raceId, roleKey, vehicle).catch(oops('Reassignment failed'))
+        }
       />
       <TrackerTable
         race={r}

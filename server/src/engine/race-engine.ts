@@ -1,5 +1,5 @@
 import * as turf from '@turf/turf';
-import type { EventConfig, RaceConfig, RoleConfig, SnapConfig, TrackerConfig } from '../config/schema.js';
+import type { EventConfig, RaceConfig, RoleConfig, SnapConfig, TrackerConfig, VehicleConfig } from '../config/schema.js';
 import { resolveRace } from '../config/schema.js';
 import { loadCourse, type Course } from './course.js';
 import { initialWindow, snapFix, windowSlice, type SnapWindow } from './snap.js';
@@ -23,6 +23,9 @@ export interface TrackerState {
 }
 
 export interface RoleState extends RoleConfig {
+  /** The assigned vehicle's trackers, primary first — resolved at build time
+   *  and swapped wholesale when the role is reassigned to another vehicle. */
+  trackers: string[];
   activeImei: string;
   /**
    * Which feed publishes this role's headline distance: the active tracker's
@@ -54,6 +57,8 @@ export class RaceEngine {
   readonly snap: SnapConfig;
   readonly trackers = new Map<string, TrackerState>();
   readonly roles: RoleState[];
+  /** The meet's vehicles, so coverage can be reassigned while racing. */
+  readonly vehicles: VehicleConfig[];
   status: RaceStatus = 'scheduled';
 
   private trackerCfg = new Map<string, TrackerConfig>();
@@ -62,7 +67,8 @@ export class RaceEngine {
   constructor(event: EventConfig, race: RaceConfig, hooks: EngineHooks) {
     this.race = race;
     this.hooks = hooks;
-    const { trackers, roles, snap } = resolveRace(event, race);
+    const { trackers, vehicles, roles, snap } = resolveRace(event, race);
+    this.vehicles = vehicles;
     this.snap = snap;
     this.course = loadCourse(race.course, race.units);
     for (const t of trackers) {
@@ -157,6 +163,36 @@ export class RaceEngine {
       }
     }
     this.hooks.onSessionEvent(this.race.id, 'status', { from: prev, to: status, by });
+  }
+
+  /**
+   * Hand a role to a different vehicle mid-race.
+   *
+   * The role keeps its output bindings, so the scoreboard slot it feeds does
+   * not move — only the hardware behind it does. Every rostered tracker has
+   * been computing all along, so the incoming vehicle arrives with a warm snap
+   * window rather than re-acquiring from the start line.
+   */
+  setVehicle(roleKey: string, vehicleKey: string, by?: string): void {
+    const role = this.roles.find((r) => r.key === roleKey);
+    if (!role) throw new Error(`Unknown role: ${roleKey}`);
+    const vehicle = this.vehicles.find((v) => v.key === vehicleKey);
+    if (!vehicle) throw new Error(`Unknown vehicle: ${vehicleKey}`);
+    if (vehicle.trackers.length === 0) throw new Error(`Vehicle ${vehicleKey} has no trackers in this race`);
+    const from = role.vehicle;
+    if (from === vehicleKey) return;
+    role.vehicle = vehicleKey;
+    role.trackers = vehicle.trackers;
+    role.activeImei = vehicle.trackers[0];
+    this.hooks.onSessionEvent(this.race.id, 'role-vehicle', { role: roleKey, from, to: vehicleKey, by });
+    const state = this.trackers.get(role.activeImei);
+    if (state) this.hooks.onTrackerUpdate(this.race.id, state);
+  }
+
+  /** Which roles a vehicle is covering right now — two at once is legal during
+   *  a handover but worth flagging, since only one can be the truth. */
+  rolesFor(vehicleKey: string): RoleState[] {
+    return this.roles.filter((r) => r.vehicle === vehicleKey);
   }
 
   setActive(roleKey: string, imei: string, by?: string): void {

@@ -44,6 +44,7 @@ export function RolesPanel({
   ask,
   onActivate,
   onSetSource,
+  onVehicle,
 }: {
   race: RaceSnap;
   displayUnits: Units;
@@ -54,8 +55,10 @@ export function RolesPanel({
   ask: (req: ConfirmRequest) => void;
   onActivate: (roleKey: string, imei: string) => void;
   onSetSource: (roleKey: string, source: 'gps' | 'splits') => void;
+  onVehicle: (roleKey: string, vehicle: string) => void;
 }) {
   const byImei = new Map(race.trackers.map((t) => [t.imei, t]));
+  const vehicleLabel = (key: string) => race.vehicles.find((v) => v.key === key)?.label || key;
   const d = (v: number) => toDisplay(v, race.units, displayUnits);
   return (
     <div className="roles-panel">
@@ -104,6 +107,41 @@ export function RolesPanel({
                     ? `${d(active.distance).toFixed(2)} ${unitAbbr(displayUnits)}`
                     : '—'}
               </span>
+            </div>
+            {/* Which vehicle is covering this role — the swap that moves
+                coverage between motos without touching the output bindings. */}
+            <div className="role-vehicle-line">
+              <span className="dim">Covered by</span>
+              {readonly ? (
+                <span className="role-vehicle-name">{vehicleLabel(role.vehicle)}</span>
+              ) : (
+                <select
+                  value={role.vehicle}
+                  onChange={(e) => {
+                    const to = e.target.value;
+                    if (to === role.vehicle) return;
+                    ask({
+                      title: `Hand ${role.label} to ${vehicleLabel(to)}?`,
+                      body:
+                        `${vehicleLabel(to)} takes over this role's output immediately. ` +
+                        'Its scoreboard slot and map channel do not change.',
+                      confirmLabel: 'Reassign',
+                      onConfirm: () => onVehicle(role.key, to),
+                    });
+                  }}
+                >
+                  {race.vehicles.map((v) => (
+                    <option key={v.key} value={v.key}>
+                      {v.label || v.key}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {race.roles.filter((r) => r.vehicle === role.vehicle).length > 1 && (
+                <span className="warn-text" title="This vehicle is covering more than one role">
+                  ⚠ also on {race.roles.filter((r) => r.vehicle === role.vehicle && r.key !== role.key).map((r) => r.label).join(', ')}
+                </span>
+              )}
             </div>
             {activeStale && role.trackers.length > 1 && (
               <div className="failover-hint">Active tracker stale — switch to backup?</div>

@@ -44,9 +44,13 @@ function makeConfig(): EventConfig {
       { imei: LEAD_B, label: 'Lead B' },
       { imei: CHASE_A, label: 'Chase A' },
     ],
+    vehicles: [
+      { key: 'lead-car', label: 'Lead Car', trackers: [LEAD_A, LEAD_B] },
+      { key: 'chase-car', label: 'Chase Car', trackers: [CHASE_A] },
+    ],
     roles: [
-      { key: 'lead', label: 'Leader', trackers: [LEAD_A, LEAD_B], cmd: 0, clockSlot: 1, mapEvent: 'elite_women' },
-      { key: 'chase', label: 'Chase', trackers: [CHASE_A], cmd: 1, mapEvent: 'elite_women_chase' },
+      { key: 'lead', label: 'Leader', vehicle: 'lead-car', cmd: 0, clockSlot: 1, mapEvent: 'elite_women' },
+      { key: 'chase', label: 'Chase', vehicle: 'chase-car', cmd: 1, mapEvent: 'elite_women_chase' },
     ],
     races: [
       { id: 'r1', name: 'Race 1', course: 'course.kml' },
@@ -165,6 +169,56 @@ describe('RaceEngine', () => {
     engine.onFix(fixAt(engine, LEAD_A, 0.57, T0 + 12_000)); // old primary no longer publishes
     expect(published.map((p) => p.imei)).toEqual([LEAD_A, LEAD_B]);
     expect(events.some((e) => e.type === 'active-tracker')).toBe(true);
+  });
+
+  it('reassigns a role to another vehicle without moving its output bindings', () => {
+    const { engine, published, events } = makeEngine();
+    engine.setStatus('armed');
+    engine.setStatus('live');
+    engine.onFix(fixAt(engine, LEAD_A, 0.4, T0));
+    expect(published.map((p) => p.imei)).toEqual([LEAD_A]);
+
+    // the chase car takes over the lead role mid-race
+    engine.setVehicle('lead', 'chase-car', 'op');
+    const lead = engine.roles.find((r) => r.key === 'lead')!;
+    expect(lead.vehicle).toBe('chase-car');
+    expect(lead.activeImei).toBe(CHASE_A);
+    // the publishing identity is untouched — the scoreboard slot does not move
+    expect(lead.clockSlot).toBe(1);
+    expect(lead.cmd).toBe(0);
+    expect(events.some((e) => e.type === 'role-vehicle')).toBe(true);
+
+    published.length = 0;
+    engine.onFix(fixAt(engine, CHASE_A, 0.5, T0 + 10_000));
+    // It is now covering the lead role as well as its own, and honestly feeds
+    // both — a handover state the operator is expected to resolve, which
+    // rolesFor() surfaces rather than the engine silently picking one.
+    expect(published.map((p) => p.role).sort()).toEqual(['chase', 'lead']);
+    expect(engine.rolesFor('chase-car').map((r) => r.key).sort()).toEqual(['chase', 'lead']);
+
+    // and the vehicle that handed over publishes nothing for the lead role
+    published.length = 0;
+    engine.onFix(fixAt(engine, LEAD_A, 0.6, T0 + 20_000));
+    expect(published).toHaveLength(0);
+  });
+
+  it('a vehicle taking over arrives with a warm window, not from the start', () => {
+    const { engine } = makeEngine();
+    engine.setStatus('armed');
+    // the chase car has been computing all along, though it published nothing
+    engine.onFix(fixAt(engine, CHASE_A, 0.4, T0));
+    engine.onFix(fixAt(engine, CHASE_A, 0.9, T0 + 10_000));
+    const before = engine.trackers.get(CHASE_A)!.distance;
+    expect(before).toBeCloseTo(0.9, 1);
+
+    engine.setVehicle('lead', 'chase-car', 'op');
+    // reassignment does not disturb where it already is on the course
+    expect(engine.trackers.get(CHASE_A)!.distance).toBeCloseTo(0.9, 1);
+  });
+
+  it('rejects assigning a role to an unknown vehicle', () => {
+    const { engine } = makeEngine();
+    expect(() => engine.setVehicle('lead', 'nope', 'op')).toThrow(/Unknown vehicle/);
   });
 
   it('rejects activating a tracker not in the role', () => {

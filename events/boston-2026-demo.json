@@ -58,53 +58,41 @@
     {
       "key": "womens_lead",
       "label": "Women's Lead",
-      "trackers": [
-        "015181000128000",
-        "860201060937540"
-      ],
       "cmd": 0,
       "mapEvent": "elite_women",
-      "clockSlot": 1
+      "clockSlot": 1,
+      "vehicle": "womens_lead"
     },
     {
       "key": "mens_lead",
       "label": "Men's Lead",
-      "trackers": [
-        "015181000121005",
-        "860201060917112"
-      ],
       "cmd": 2,
       "mapEvent": "elite_men",
-      "clockSlot": 3
+      "clockSlot": 3,
+      "vehicle": "mens_lead"
     },
     {
       "key": "womens_wc",
       "label": "Women's Wheelchair",
-      "trackers": [
-        "860201060919175"
-      ],
       "cmd": 4,
       "mapEvent": "womens_wheelchair",
-      "clockSlot": 2
+      "clockSlot": 2,
+      "vehicle": "womens_wc"
     },
     {
       "key": "mens_wc",
       "label": "Men's Wheelchair",
-      "trackers": [
-        "860201066749444"
-      ],
       "cmd": 5,
       "mapEvent": "mens_wheelchair",
-      "clockSlot": 4
+      "clockSlot": 4,
+      "vehicle": "mens_wc"
     },
     {
       "key": "media",
       "label": "Media Car",
-      "trackers": [
-        "865134050946566"
-      ],
       "cmd": 16,
-      "mapEvent": "abc"
+      "mapEvent": "abc",
+      "vehicle": "media"
     }
   ],
   "snapDefaults": {
@@ -126,6 +114,45 @@
       "name": "Wheelchair",
       "course": "courses/boston-marathon.kml",
       "units": "miles"
+    }
+  ],
+  "vehicles": [
+    {
+      "key": "womens_lead",
+      "label": "Women's Lead",
+      "trackers": [
+        "015181000128000",
+        "860201060937540"
+      ]
+    },
+    {
+      "key": "mens_lead",
+      "label": "Men's Lead",
+      "trackers": [
+        "015181000121005",
+        "860201060917112"
+      ]
+    },
+    {
+      "key": "womens_wc",
+      "label": "Women's Wheelchair",
+      "trackers": [
+        "860201060919175"
+      ]
+    },
+    {
+      "key": "mens_wc",
+      "label": "Men's Wheelchair",
+      "trackers": [
+        "860201066749444"
+      ]
+    },
+    {
+      "key": "media",
+      "label": "Media Car",
+      "trackers": [
+        "865134050946566"
+      ]
     }
   ]
 }

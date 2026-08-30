@@ -253,8 +253,72 @@ export function EventSetup({
                   ✕
                 </button>
               </div>
+              <label className="role-vehicle">
+                Covered by
+                <select
+                  value={role.vehicle}
+                  onChange={(e) => edit((c) => (c.roles[ri].vehicle = e.target.value))}
+                >
+                  {!cfg.vehicles.some((v) => v.key === role.vehicle) && (
+                    <option value={role.vehicle}>{role.vehicle || '— pick a vehicle —'}</option>
+                  )}
+                  {cfg.vehicles.map((v) => (
+                    <option key={v.key} value={v.key}>
+                      {v.label || v.key}
+                    </option>
+                  ))}
+                </select>
+                {cfg.roles.filter((r) => r.vehicle === role.vehicle).length > 1 && (
+                  <span className="warn-text" title="Two roles are assigned to the same vehicle">
+                    ⚠ shared
+                  </span>
+                )}
+              </label>
+            </div>
+          ))}
+          <button
+            className="mini"
+            onClick={() => edit((c) => c.roles.push({ key: '', label: '', vehicle: c.vehicles[0]?.key ?? '' }))}
+          >
+            + Add role
+          </button>
+
+          <h4>Vehicles</h4>
+          <p className="hint">
+            The cars, motos and vans that carry trackers. A role above is assigned to one of these, and swapping
+            that assignment mid-race moves coverage without touching hardware — ★ is the vehicle's primary
+            tracker, the rest are its failover backups.
+          </p>
+          {cfg.vehicles.map((vehicle, vi) => (
+            <div className="role-edit" key={vi}>
+              <div className="form-row">
+                <label>
+                  Key
+                  <input value={vehicle.key} onChange={(e) => edit((c) => (c.vehicles[vi].key = e.target.value))} />
+                </label>
+                <label>
+                  Label
+                  <input value={vehicle.label} onChange={(e) => edit((c) => (c.vehicles[vi].label = e.target.value))} />
+                </label>
+                <button
+                  className="mini danger self-end"
+                  onClick={() =>
+                    ask({
+                      title: `Remove vehicle "${vehicle.label || vehicle.key}"?`,
+                      body: cfg.roles.some((r) => r.vehicle === vehicle.key)
+                        ? 'A role is assigned to it and will need reassigning before this saves.'
+                        : undefined,
+                      confirmLabel: 'Remove',
+                      danger: true,
+                      onConfirm: () => edit((c) => c.vehicles.splice(vi, 1)),
+                    })
+                  }
+                >
+                  ✕
+                </button>
+              </div>
               <div className="role-trackers-edit">
-                {role.trackers.map((imei, ti) => {
+                {vehicle.trackers.map((imei, ti) => {
                   const t = cfg.trackers.find((x) => x.imei === imei);
                   return (
                     <span className="chip" key={imei}>
@@ -265,7 +329,7 @@ export function EventSetup({
                           title="Move up (first = primary)"
                           onClick={() =>
                             edit((c) => {
-                              const arr = c.roles[ri].trackers;
+                              const arr = c.vehicles[vi].trackers;
                               [arr[ti - 1], arr[ti]] = [arr[ti], arr[ti - 1]];
                             })
                           }
@@ -273,26 +337,26 @@ export function EventSetup({
                           ↑
                         </button>
                       )}
-                      <button onClick={() => edit((c) => c.roles[ri].trackers.splice(ti, 1))}>✕</button>
+                      <button onClick={() => edit((c) => c.vehicles[vi].trackers.splice(ti, 1))}>✕</button>
                     </span>
                   );
                 })}
                 <TrackerPicker
                   placeholder="+ match tracker…"
                   eventId={cfg.id}
-                  options={fleet.filter((f) => !f.retired && !role.trackers.includes(f.imei))}
+                  options={fleet.filter((f) => !f.retired && !vehicle.trackers.includes(f.imei))}
                   onPick={(imei) =>
                     edit((c) => {
                       addToRoster(c, imei);
-                      c.roles[ri].trackers.push(imei);
+                      c.vehicles[vi].trackers.push(imei);
                     })
                   }
                 />
               </div>
             </div>
           ))}
-          <button className="mini" onClick={() => edit((c) => c.roles.push({ key: '', label: '', trackers: [] }))}>
-            + Add role
+          <button className="mini" onClick={() => edit((c) => c.vehicles.push({ key: '', label: '', trackers: [] }))}>
+            + Add vehicle
           </button>
 
           <h4>Event roster</h4>
@@ -316,7 +380,9 @@ export function EventSetup({
                           edit((c) => {
                             const imei = c.trackers[i].imei;
                             c.trackers.splice(i, 1);
-                            for (const r of c.roles) r.trackers = r.trackers.filter((x) => x !== imei);
+                            // dropping a tracker from the roster takes it off
+                            // whichever vehicle was carrying it
+                            for (const v of c.vehicles) v.trackers = v.trackers.filter((x) => x !== imei);
                           })
                         }
                       >

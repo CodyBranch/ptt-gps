@@ -20,9 +20,17 @@ export function parseEventConfig(
   const raw = parsed.data;
 
   const imeis = new Set(raw.trackers.map((t) => t.imei));
+  for (const vehicle of raw.vehicles) {
+    for (const imei of vehicle.trackers) {
+      if (!imeis.has(imei)) {
+        throw new Error(`Vehicle "${vehicle.key}" references unknown tracker IMEI ${imei}`);
+      }
+    }
+  }
+  const vehicleKeys = new Set(raw.vehicles.map((v) => v.key));
   for (const role of raw.roles) {
-    for (const imei of role.trackers) {
-      if (!imeis.has(imei)) throw new Error(`Role "${role.key}" references unknown tracker IMEI ${imei}`);
+    if (!vehicleKeys.has(role.vehicle)) {
+      throw new Error(`Role "${role.key}" is assigned to unknown vehicle "${role.vehicle}"`);
     }
   }
   const raceIds = new Set<string>();

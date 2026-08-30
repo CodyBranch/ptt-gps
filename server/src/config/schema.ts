@@ -9,14 +9,30 @@ export const TrackerSchema = z.object({
   hasBattery: z.boolean().default(true),
 });
 
+/**
+ * A physical vehicle carrying trackers — a lead car, a moto, a timing van.
+ *
+ * It exists as its own thing because coverage moves: at a criterium four motos
+ * swap which race they are shooting through the day, and reassigning one is a
+ * property of the vehicle, not of the hardware bolted to it. Its trackers are
+ * ordered primary-first and all compute continuously, so failover within the
+ * vehicle and reassignment of the vehicle are separate moves.
+ */
+export const VehicleSchema = z.object({
+  key: z.string(),
+  label: z.string(),
+  trackers: z.array(z.string()).min(1),
+});
+
 export const RoleSchema = z.object({
   key: z.string(),
   label: z.string(),
   /**
-   * Ordered tracker list: primary first, then backups. All compute
-   * continuously; exactly one is "active" (published) at a time.
+   * Which vehicle is currently covering this role. The role owns the output
+   * bindings below and keeps them whoever is assigned, so a scoreboard slot
+   * stays fixed while the vehicle behind it changes mid-race.
    */
-  trackers: z.array(z.string()).min(1),
+  vehicle: z.string(),
   /** Legacy Firebase command number — GPSMap/<cmd> path (krush flavor). */
   cmd: z.number().int().optional(),
   /** Legacy event name written into GPSMap payloads, e.g. "elite_women". */
@@ -97,6 +113,7 @@ export const EventSchema = z.object({
     .default([{ name: 'queclink', port: 1000 }]),
   firebase: z.array(FirebaseTargetSchema).default([]),
   trackers: z.array(TrackerSchema),
+  vehicles: z.array(VehicleSchema).default([]),
   roles: z.array(RoleSchema),
   snapDefaults: SnapSchema.prefault({}),
   /** A freshly created event legitimately has no races yet — add them in Setup. */
@@ -106,6 +123,7 @@ export const EventSchema = z.object({
 export type EventConfig = z.infer<typeof EventSchema>;
 export type RaceConfig = z.infer<typeof RaceSchema>;
 export type RoleConfig = z.infer<typeof RoleSchema>;
+export type VehicleConfig = z.infer<typeof VehicleSchema>;
 export type TrackerConfig = z.infer<typeof TrackerSchema>;
 export type SnapConfig = z.infer<typeof SnapSchema>;
 export type FirebaseTarget = z.infer<typeof FirebaseTargetSchema>;
@@ -118,16 +136,26 @@ export function convertUnits(value: number, from: z.infer<typeof Units>, to: z.i
   return from === 'miles' ? value / MI_PER_KM : value * MI_PER_KM;
 }
 
-/** Effective roster/roles/snap for a race after applying meet-level inheritance. */
+/** A role with its assigned vehicle's trackers resolved onto it. */
+export interface ResolvedRole extends RoleConfig {
+  trackers: string[];
+}
+
+/** Effective roster/vehicles/roles/snap for a race after meet-level inheritance. */
 export function resolveRace(event: EventConfig, race: RaceConfig) {
   const excluded = new Set(race.excludeTrackers ?? []);
   const trackers = [...event.trackers, ...(race.extraTrackers ?? [])].filter(
     (t) => !excluded.has(t.imei),
   );
   const imeis = new Set(trackers.map((t) => t.imei));
-  const roles = (race.roles ?? event.roles)
-    .map((r) => ({ ...r, trackers: r.trackers.filter((i) => imeis.has(i)) }))
+  // Vehicles are the meet's physical assets, shared by every race in it.
+  const vehicles = event.vehicles
+    .map((v) => ({ ...v, trackers: v.trackers.filter((i) => imeis.has(i)) }))
+    .filter((v) => v.trackers.length > 0);
+  const byKey = new Map(vehicles.map((v) => [v.key, v]));
+  const roles: ResolvedRole[] = (race.roles ?? event.roles)
+    .map((r) => ({ ...r, trackers: byKey.get(r.vehicle)?.trackers ?? [] }))
     .filter((r) => r.trackers.length > 0);
   const snap = { ...event.snapDefaults, ...(race.snap ?? {}) };
-  return { trackers, roles, snap };
+  return { trackers, vehicles, roles, snap };
 }

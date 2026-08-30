@@ -317,6 +317,18 @@ export function startApi(
     act((req) => eventApp(req).lifecycle(req.params.raceId as string, req.body.action, req.body.atMs, req.operator)),
   );
 
+  /** Hand a role to a different vehicle — the coverage swap, not a failover. */
+  ex.post(
+    '/api/events/:eventId/races/:raceId/roles/:roleKey/vehicle',
+    act((req) => {
+      const app = eventApp(req);
+      const engine = app.engines.get(req.params.raceId as string);
+      if (!engine) throw new Error('unknown race');
+      engine.setVehicle(req.params.roleKey as string, String(req.body?.vehicle ?? ''), req.operator);
+      broadcast('race', app.raceSnapshot(req.params.raceId as string));
+    }),
+  );
+
   ex.post(
     '/api/events/:eventId/races/:raceId/roles/:roleKey/active',
     act((req) => {

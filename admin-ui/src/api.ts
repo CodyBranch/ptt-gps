@@ -38,6 +38,9 @@ export const api = {
   setActive: (eventId: string, raceId: string, roleKey: string, imei: string) =>
     post(`/api/events/${eventId}/races/${raceId}/roles/${roleKey}/active`, { imei }),
 
+  setVehicle: (eventId: string, raceId: string, roleKey: string, vehicle: string) =>
+    post(`/api/events/${eventId}/races/${raceId}/roles/${roleKey}/vehicle`, { vehicle }),
+
   setSource: (eventId: string, raceId: string, roleKey: string, source: 'gps' | 'splits') =>
     post(`/api/events/${eventId}/races/${raceId}/roles/${roleKey}/source`, { source }),
 
