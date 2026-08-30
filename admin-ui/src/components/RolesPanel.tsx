@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { toDisplay, unitAbbr } from '../api';
 import type { RaceSnap, SimulatedDistance, TrackerPub, Units } from '../types';
 import type { ConfirmRequest } from './Confirm';
@@ -37,6 +38,7 @@ export function fmtAge(age: number | undefined): string {
 export function RolesPanel({
   race,
   displayUnits,
+  colors,
   lastSeen,
   intervalS,
   simulated,
@@ -45,9 +47,12 @@ export function RolesPanel({
   onActivate,
   onSetSource,
   onVehicle,
+  onMoveTracker,
 }: {
   race: RaceSnap;
   displayUnits: Units;
+  /** Per-IMEI colour, matching the tracker's dot on the map. */
+  colors: Record<string, string>;
   lastSeen: Record<string, number>;
   intervalS: number;
   simulated?: Record<string, SimulatedDistance>;
@@ -56,11 +61,14 @@ export function RolesPanel({
   onActivate: (roleKey: string, imei: string) => void;
   onSetSource: (roleKey: string, source: 'gps' | 'splits') => void;
   onVehicle: (roleKey: string, vehicle: string) => void;
+  onMoveTracker: (imei: string, vehicle: string) => void;
 }) {
   const byImei = new Map(race.trackers.map((t) => [t.imei, t]));
   const vehicles = race.vehicles ?? [];
   const vehicleLabel = (key: string) => vehicles.find((v) => v.key === key)?.label || key;
   const d = (v: number) => toDisplay(v, race.units, displayUnits);
+  // which tracker row has its "move to another vehicle" picker open
+  const [moving, setMoving] = useState<string | null>(null);
   return (
     <div className="roles-panel">
       {/* Vehicle-first: a moto is a physical thing carrying trackers, and it is
@@ -188,6 +196,28 @@ export function RolesPanel({
               const t = byImei.get(imei);
               const isActive = role?.activeImei === imei;
               const age = packetAgeS(imei, lastSeen, t);
+
+              /** The tracker turned out to be on a different bike than we thought. */
+              const move = (to: string) => {
+                setMoving(null);
+                if (to === vehicle.key) return;
+                const target = vehicles.find((v) => v.key === to);
+                ask({
+                  title: to
+                    ? `Move ${t?.label ?? imei} to ${target?.label ?? to}?`
+                    : `Take ${t?.label ?? imei} off ${vehicle.label}?`,
+                  body:
+                    (to
+                      ? `It stops counting for ${vehicle.label} and starts counting for ${target?.label ?? to}. `
+                      : `It stops counting for any vehicle but keeps reporting. `) +
+                    'Its distance and window are kept — same device on the same course — and the change applies to every race in this event.' +
+                    (isActive && role ? ` ${role.label} falls back to this vehicle's next tracker.` : ''),
+                  confirmLabel: to ? 'Move' : 'Take off',
+                  danger: !to,
+                  onConfirm: () => onMoveTracker(imei, to),
+                });
+              };
+
               return (
                 <div
                   key={imei}
@@ -202,6 +232,7 @@ export function RolesPanel({
                   }
                 >
                   <span className={`radio ${isActive ? 'on' : ''}`} />
+                  <span className="t-swatch" style={{ background: colors[imei] }} />
                   <span className="t-name">{t?.label ?? imei}</span>
                   <BatteryBar tracker={t} />
                   <GpsChip tracker={t} />
@@ -209,12 +240,84 @@ export function RolesPanel({
                     {t?.distance !== undefined ? `${d(t.distance).toFixed(2)} ${unitAbbr(displayUnits)}` : '—'}
                   </span>
                   <span className={`t-age ${ageClass(age, intervalS)}`}>{fmtAge(age)}</span>
+                  {!readonly &&
+                    (moving === imei ? (
+                      <select
+                        className="t-move-pick"
+                        autoFocus
+                        value={vehicle.key}
+                        onClick={(e) => e.stopPropagation()}
+                        onBlur={() => setMoving(null)}
+                        onChange={(e) => move(e.target.value)}
+                      >
+                        {vehicles.map((v) => (
+                          <option key={v.key} value={v.key}>
+                            {v.key === vehicle.key ? `${v.label} (here)` : v.label}
+                          </option>
+                        ))}
+                        <option value="">— no vehicle —</option>
+                      </select>
+                    ) : (
+                      <button
+                        className="t-move"
+                        title="Wrong bike? Move this tracker to another vehicle"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setMoving(imei);
+                        }}
+                      >
+                        ⇄
+                      </button>
+                    ))}
                 </div>
               );
             })}
           </div>
         );
       })}
+
+      {/* Trackers no vehicle is carrying — reporting, but counting for nothing.
+          Without this they would disappear from the panel the moment one was
+          taken off a bike, with no way to put it on another. */}
+      {(() => {
+        const carried = new Set(vehicles.flatMap((v) => v.trackers));
+        const loose = race.trackers.filter((t) => !carried.has(t.imei));
+        if (loose.length === 0 || vehicles.length === 0) return null;
+        return (
+          <div className="roles-loose">
+            <span className="dim">Not on a vehicle:</span>
+            {loose.map((t) => (
+              <span key={t.imei} className="loose-tracker">
+                <span className="t-swatch" style={{ background: colors[t.imei] }} />
+                <span className="t-name">{t.label ?? t.imei}</span>
+                {readonly ? null : (
+                  <select
+                    className="t-move-pick"
+                    value=""
+                    onChange={(e) => {
+                      const to = e.target.value;
+                      if (!to) return;
+                      ask({
+                        title: `Put ${t.label ?? t.imei} on ${vehicleLabel(to)}?`,
+                        body: 'It starts counting for that vehicle. Its distance and window are kept, and the change applies to every race in this event.',
+                        confirmLabel: 'Put on',
+                        onConfirm: () => onMoveTracker(t.imei, to),
+                      });
+                    }}
+                  >
+                    <option value="">put on…</option>
+                    {vehicles.map((v) => (
+                      <option key={v.key} value={v.key}>
+                        {v.label}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </span>
+            ))}
+          </div>
+        );
+      })()}
 
       {/* Roles nobody is on. The gap is the point, so it is stated plainly. */}
       {race.roles.filter((r) => !r.vehicle).length > 0 && (

@@ -112,8 +112,11 @@ describe('meet-level inheritance', () => {
     cfg.races[1].excludeTrackers = [CHASE_A];
     const overridden = resolveRace(cfg, cfg.races[1]);
     expect(overridden.trackers).toHaveLength(2);
-    // chase role loses its only tracker → dropped from the race entirely
-    expect(overridden.roles.map((r) => r.key)).toEqual(['lead']);
+    // The chase role loses its only tracker but is KEPT: a role nobody is
+    // covering is a gap the crew has to see, not something to hide by
+    // dropping the row. The console lists it under "Not being covered".
+    expect(overridden.roles.map((r) => r.key)).toEqual(['lead', 'chase']);
+    expect(overridden.roles.find((r) => r.key === 'chase')!.trackers).toEqual([]);
   });
 });
 
@@ -214,6 +217,51 @@ describe('RaceEngine', () => {
     engine.setVehicle('lead', 'chase-car', 'op');
     // reassignment does not disturb where it already is on the course
     expect(engine.trackers.get(CHASE_A)!.distance).toBeCloseTo(0.9, 1);
+  });
+
+  it('moves a tracker to another vehicle without disturbing its tracking', () => {
+    const { engine } = makeEngine();
+    engine.setStatus('armed');
+    engine.onFix(fixAt(engine, LEAD_B, 0.4, T0));
+    const before = engine.trackers.get(LEAD_B)!;
+    expect(before.distance).toBeCloseTo(0.4, 1);
+    const window = { ...before.window };
+
+    // LEAD_B turns out to be bolted to the chase bike, not the lead one
+    engine.moveTracker(LEAD_B, 'chase-car', 'op');
+    expect(engine.vehicles.find((v) => v.key === 'lead-car')!.trackers).toEqual([LEAD_A]);
+    expect(engine.vehicles.find((v) => v.key === 'chase-car')!.trackers).toContain(LEAD_B);
+    // Same device on the same course, so its window and distance carry over:
+    // the correction is to the label of what is carrying it, nothing more.
+    expect(engine.trackers.get(LEAD_B)!.distance).toBeCloseTo(0.4, 1);
+    expect(engine.trackers.get(LEAD_B)!.window).toEqual(window);
+    // and the roles now reflect what their vehicles actually carry
+    expect(engine.roles.find((r) => r.key === 'lead')!.trackers).toEqual([LEAD_A]);
+    expect(engine.roles.find((r) => r.key === 'chase')!.trackers).toContain(LEAD_B);
+  });
+
+  it('a role whose publishing tracker is moved away falls back to its primary', () => {
+    const { engine } = makeEngine();
+    engine.setStatus('armed');
+    engine.setActive('lead', LEAD_B, 'op');
+    expect(engine.roles.find((r) => r.key === 'lead')!.activeImei).toBe(LEAD_B);
+
+    engine.moveTracker(LEAD_B, 'chase-car', 'op');
+    // it cannot keep publishing the lead from a bike that is not on the lead
+    expect(engine.roles.find((r) => r.key === 'lead')!.activeImei).toBe(LEAD_A);
+  });
+
+  it('detaches a tracker from every vehicle when moved to none', () => {
+    const { engine } = makeEngine();
+    engine.moveTracker(LEAD_B, '', 'op');
+    expect(engine.vehicles.every((v) => !v.trackers.includes(LEAD_B))).toBe(true);
+    // still on the roster and still tracked — just not carried by anything
+    expect(engine.trackers.has(LEAD_B)).toBe(true);
+  });
+
+  it('rejects moving a tracker that is not in the race', () => {
+    const { engine } = makeEngine();
+    expect(() => engine.moveTracker('999999999999999', 'chase-car')).toThrow(/not in race/);
   });
 
   it('rejects assigning a role to an unknown vehicle', () => {

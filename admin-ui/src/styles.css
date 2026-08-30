@@ -183,7 +183,7 @@ aside {
 .source-toggle button.on { background: var(--accent); color: #fff; }
 .role-head .role-dist { margin-left: 8px; }
 .role-dist.from-splits { color: var(--warn); }
-.role-tracker { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
+.role-tracker { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 3px 0; }
 .role-tracker label { display: flex; align-items: center; gap: 7px; flex: 1; cursor: pointer; }
 .role-tracker.is-active .t-label { color: var(--ok); font-weight: 700; }
 .t-dist { font-variant-numeric: tabular-nums; color: var(--dim); min-width: 48px; text-align: right; }
@@ -206,6 +206,11 @@ aside {
 .tracker-table .t-label { font-weight: 600; }
 .tracker-table .t-imei { color: var(--dim); font-size: 11px; }
 .tracker-table .num { font-variant-numeric: tabular-nums; text-align: right; }
+/* Numbers are right-aligned, so the headers naming them must be too — left-aligned
+   they drift to the far side of a wide column and stop reading as its label. */
+.tracker-table th.col-dist, .tracker-table th.col-age, .tracker-table th.col-window {
+  text-align: right;
+}
 .tracker-table .warn { color: var(--warn); font-weight: 700; }
 .window-cell { white-space: nowrap; font-size: 12px; color: var(--dim); }
 .clamp-badge {
@@ -754,6 +759,14 @@ button.linklike {
   .tracker-table button.mini { padding: 4px 7px; font-size: 11px; }
   .tracker-table .fleet-actions, .tracker-table td:last-child { text-align: right; }
   .batt-pct { display: none; } /* bar + color carry the info on phones */
+  /* The move picker cannot fit beside a full tracker row at phone width — it
+     pushed the card past the screen edge, where it was clipped out of reach.
+     Given its own line it stays readable and the card still fits. */
+  /* declared after the desktop rule further down, so it needs the extra class
+     to win on specificity rather than order */
+  .roles-panel .role-tracker .t-move-pick {
+    flex: 1 0 100%; max-width: none; height: 28px; margin: 2px 0 4px;
+  }
   .dialog, .dialog-confirm { width: calc(100vw - 32px); max-width: 400px; }
 }
 
@@ -1029,3 +1042,40 @@ button.mini.on { border-color: var(--warn); color: var(--warn); }
   background: var(--panel2); border: 1px solid var(--border); border-left: 3px solid var(--warn);
   border-radius: 7px;
 }
+
+/* The tie between a dot on the map and a row in the list. Same colour, same
+   device — with eight motos on one course the names alone do not do it. */
+.t-swatch {
+  flex: none; display: inline-block; width: 9px; height: 9px; margin-right: 6px;
+  border-radius: 50%; background: var(--dim);
+  box-shadow: 0 0 0 1.5px var(--panel), 0 0 0 2.5px rgba(0, 0, 0, 0.25);
+  vertical-align: baseline;
+}
+.tracker-table .t-label .t-swatch { margin-right: 5px; }
+
+/* Map labels off: the dot stays, the name goes. */
+.map-marker.no-label .map-marker-label { display: none; }
+.map-label-toggle { font-variant: none; }
+
+/* "wrong bike" correction: quiet until hovered, so it never competes with the
+   distances that are the reason to look at this panel */
+.role-tracker .t-move {
+  flex: none; width: 20px; padding: 0; line-height: 18px;
+  background: none; border: 1px solid transparent; border-radius: 5px;
+  color: var(--dim); font-size: 12px; cursor: pointer; opacity: 0.45;
+}
+.role-tracker:hover .t-move { opacity: 1; }
+.role-tracker .t-move:hover { color: var(--text); border-color: var(--border); background: var(--panel2); }
+.roles-panel .t-move-pick {
+  flex: none; max-width: 120px; height: 22px; padding: 0 4px;
+  font-size: 11.5px; border-radius: 5px;
+  border: 1px solid var(--border); background: var(--panel2); color: var(--text);
+}
+
+.roles-loose {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  margin: 4px 10px 10px; padding: 8px 11px; font-size: 12.5px;
+  background: var(--panel2); border: 1px solid var(--border); border-radius: 7px;
+}
+.loose-tracker { display: inline-flex; align-items: center; gap: 5px; }
+.loose-tracker .t-name { flex: none; }

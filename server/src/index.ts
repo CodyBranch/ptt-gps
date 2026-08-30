@@ -103,6 +103,32 @@ function unloadEvent(eventId: string): void {
 }
 
 /** Rebuild one loaded event's App from an edited config. */
+/**
+ * Move a tracker to another vehicle without rebuilding anything.
+ *
+ * The config is corrected on disk so the fix survives a restart — which
+ * matters most here, since a restart mid-race replays from the config — while
+ * the running engines are patched in place so no window or distance is lost.
+ */
+function moveTracker(eventId: string, imei: string, vehicleKey: string, by?: string): void {
+  const manager = managers.get(eventId);
+  const app = apps.get(eventId);
+  if (!manager || !app) throw new Error(`Event "${eventId}" is not active`);
+  if (!manager.raw.trackers.some((t) => t.imei === imei)) {
+    throw new Error(`Tracker ${imei} is not on this event's roster`);
+  }
+  if (vehicleKey !== '' && !manager.raw.vehicles.some((v) => v.key === vehicleKey)) {
+    throw new Error(`Unknown vehicle "${vehicleKey}"`);
+  }
+  const raw = JSON.parse(JSON.stringify(manager.raw)) as typeof manager.raw;
+  for (const v of raw.vehicles) v.trackers = v.trackers.filter((t) => t !== imei);
+  const target = raw.vehicles.find((v) => v.key === vehicleKey);
+  if (target) target.trackers.push(imei);
+  manager.update(raw);
+  app.moveTracker(imei, vehicleKey, by);
+  console.log(`[${eventId}] tracker ${imei} moved to ${vehicleKey || 'no vehicle'}${by ? ` by ${by}` : ''}`);
+}
+
 function rebuildEvent(eventId: string, json: unknown): void {
   const manager = managers.get(eventId);
   if (!manager) throw new Error(`Event "${eventId}" is not active`);
@@ -275,6 +301,7 @@ const ctx: ServerContext = {
   loadEvent,
   unloadEvent,
   rebuildEvent,
+  moveTracker,
   snapshotAll,
   snapshotFor,
   onSimulatedDistance,

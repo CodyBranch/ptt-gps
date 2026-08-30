@@ -42,6 +42,7 @@ export interface ServerContext {
   loadEvent: (file: string) => App;
   unloadEvent: (eventId: string) => void;
   rebuildEvent: (eventId: string, json: unknown) => void;
+  moveTracker: (eventId: string, imei: string, vehicleKey: string, by?: string) => void;
   snapshotAll: () => unknown;
   snapshotFor: (eventId: string) => unknown;
   onSimulatedDistance: (data: Record<string, unknown>) => void;
@@ -315,6 +316,23 @@ export function startApi(
   ex.post(
     '/api/events/:eventId/races/:raceId/lifecycle',
     act((req) => eventApp(req).lifecycle(req.params.raceId as string, req.body.action, req.body.atMs, req.operator)),
+  );
+
+  /**
+   * Move a tracker onto another vehicle mid-race — the fix for one bolted to
+   * the wrong bike. Empty vehicle detaches it from all of them.
+   */
+  ex.post(
+    '/api/events/:eventId/trackers/:imei/vehicle',
+    act((req: OpRequest) => {
+      ctx.moveTracker(
+        req.params.eventId as string,
+        req.params.imei as string,
+        String(req.body?.vehicle ?? ''),
+        req.operator,
+      );
+      broadcastSnapshot();
+    }),
   );
 
   /** Hand a role to a different vehicle — the coverage swap, not a failover. */

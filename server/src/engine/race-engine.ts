@@ -199,6 +199,43 @@ export class RaceEngine {
     if (state) this.hooks.onTrackerUpdate(this.race.id, state);
   }
 
+  /**
+   * Move a tracker onto another vehicle while the race runs.
+   *
+   * Trackers get bolted to the wrong bike, and that is only discovered once
+   * everything is moving — by which time setup is locked because rebuilding
+   * the engines would throw away every window. This edits the assignment in
+   * place instead. The tracker's own snap state is deliberately untouched: it
+   * is the same device on the same course, so it keeps its window and distance
+   * and only the label of what is carrying it changes.
+   */
+  moveTracker(imei: string, toVehicleKey: string, by?: string): void {
+    if (!this.trackers.has(imei)) throw new Error(`Tracker ${imei} is not in race ${this.race.id}`);
+    if (toVehicleKey !== '' && !this.vehicles.some((v) => v.key === toVehicleKey)) {
+      throw new Error(`Unknown vehicle: ${toVehicleKey}`);
+    }
+    const from = this.vehicles.find((v) => v.trackers.includes(imei))?.key ?? null;
+    if (from === (toVehicleKey || null)) return;
+
+    for (const v of this.vehicles) v.trackers = v.trackers.filter((t) => t !== imei);
+    const target = this.vehicles.find((v) => v.key === toVehicleKey);
+    if (target) target.trackers.push(imei);
+
+    // Roles follow whatever their vehicle now carries. A role whose active
+    // tracker just left falls back to its vehicle's primary rather than
+    // publishing from a device that is no longer on it.
+    for (const role of this.roles) {
+      const veh = this.vehicles.find((v) => v.key === role.vehicle);
+      role.trackers = veh?.trackers ?? [];
+      if (!role.activeImei || !role.trackers.includes(role.activeImei)) {
+        role.activeImei = role.trackers[0];
+      }
+    }
+    this.hooks.onSessionEvent(this.race.id, 'tracker-moved', { imei, from, to: toVehicleKey || null, by });
+    const state = this.trackers.get(imei);
+    if (state) this.hooks.onTrackerUpdate(this.race.id, state);
+  }
+
   /** Which roles a vehicle is covering right now — two at once is legal during
    *  a handover but worth flagging, since only one can be the truth. */
   rolesFor(vehicleKey: string): RoleState[] {

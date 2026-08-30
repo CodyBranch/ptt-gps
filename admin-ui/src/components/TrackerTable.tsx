@@ -6,6 +6,7 @@ import { ageClass, fmtAge, packetAgeS } from './RolesPanel';
 export function TrackerTable({
   race,
   displayUnits,
+  colors,
   lastSeen,
   intervalS,
   readonly,
@@ -15,6 +16,8 @@ export function TrackerTable({
 }: {
   race: RaceSnap;
   displayUnits: Units;
+  /** Per-IMEI colour, matching the tracker's dot on the map. */
+  colors: Record<string, string>;
   lastSeen: Record<string, number>;
   intervalS: number;
   readonly?: boolean;
@@ -52,6 +55,7 @@ export function TrackerTable({
               >
                 <td>
                   <div className="t-label">
+                    <span className="t-swatch" style={{ background: colors[t.imei] }} />
                     {t.label}
                     {gaps > 0 && <span className="gap-badge" title={`${gaps} frames lost upstream`}>{gaps}⚡</span>}
                   </div>

@@ -2,6 +2,7 @@ import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { useEffect, useRef, useState } from 'react';
 import { api, toDisplay, unitAbbr } from '../api';
+import { MARKER_COLORS } from '../colors';
 import type { RaceSnap, TrackerPub, Units } from '../types';
 
 export interface CourseMarker {
@@ -28,7 +29,6 @@ const STYLES = {
 } as const;
 type StyleKey = keyof typeof STYLES;
 
-const MARKER_COLORS = ['#e8484d', '#2f7ded', '#1fa860', '#c85fd4', '#e8842f', '#12a5a5', '#96981f', '#777'];
 const COURSE_COLORS = ['#2f7ded', '#1fa860', '#c85fd4', '#e8842f', '#12a5a5'];
 
 export interface MapSelection {
@@ -248,11 +248,14 @@ export function MapView({
   races,
   selected,
   displayUnits,
+  colors,
 }: {
   races: RaceSnap[];
   selected?: MapSelection;
   /** Marker labels read in the console's units, like every other distance. */
   displayUnits: Units;
+  /** Per-IMEI dot colour, shared with the panels so a dot maps to a row. */
+  colors: Record<string, string>;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map>(null);
@@ -260,6 +263,9 @@ export function MapView({
   const coursesRef = useRef(new Map<string, { line: GeoJSON.Feature; markers: CourseMarker[] }>());
   const loadedKeyRef = useRef<string>(null);
   const [styleKey, setStyleKey] = useState<StyleKey>('streets');
+  // With a full field of motos the name+distance labels overlap into an
+  // unreadable pile; the colours alone are enough to tell them apart.
+  const [showLabels, setShowLabels] = useState(true);
 
   /** (Re-)add per-race course layers + the window-slice layer (lost on setStyle). */
   const applyCourseLayers = (fit: boolean) => {
@@ -390,20 +396,16 @@ export function MapView({
 
     // Union of trackers across races, deduped by IMEI (one physical device =
     // one marker). Prefer the selected race's copy, else the first with a fix.
-    const byImei = new Map<string, { t: TrackerPub; colorIdx: number; units: Units }>();
-    let idx = 0;
+    const byImei = new Map<string, { t: TrackerPub; units: Units }>();
     for (const race of races) {
       for (const t of race.trackers) {
         const existing = byImei.get(t.imei);
         const preferThis = selected?.imei === t.imei && selected.raceId === race.raceId;
-        if (!existing || preferThis) {
-          byImei.set(t.imei, { t, colorIdx: existing?.colorIdx ?? idx, units: race.units });
-        }
-        if (!existing) idx++;
+        if (!existing || preferThis) byImei.set(t.imei, { t, units: race.units });
       }
     }
 
-    for (const [imei, { t, colorIdx, units }] of byImei) {
+    for (const [imei, { t, units }] of byImei) {
       if (!t.lastFix) continue;
       seen.add(imei);
       let marker = markers.get(imei);
@@ -412,7 +414,7 @@ export function MapView({
         el.className = 'map-marker';
         const dot = document.createElement('div');
         dot.className = 'map-marker-dot';
-        dot.style.background = MARKER_COLORS[colorIdx % MARKER_COLORS.length];
+        dot.style.background = colors[imei] ?? MARKER_COLORS[0];
         const label = document.createElement('div');
         label.className = 'map-marker-label';
         el.append(dot, label);
@@ -423,6 +425,7 @@ export function MapView({
       }
       const el = marker.getElement();
       el.classList.toggle('selected', imei === selected?.imei);
+      el.classList.toggle('no-label', !showLabels);
       el.classList.toggle('suspect', !!t.suspect);
       const label = el.querySelector('.map-marker-label') as HTMLDivElement;
       // The engine measures in the race's units; the label reads in the
@@ -467,7 +470,7 @@ export function MapView({
       properties: {},
       geometry: { type: 'LineString', coordinates: sel?.slice && sel.slice.length > 1 ? sel.slice : [] },
     });
-  }, [races, selected, displayUnits]);
+  }, [races, selected, displayUnits, colors, showLabels]);
 
   return (
     <div className="map-wrap">
@@ -478,6 +481,13 @@ export function MapView({
         </button>
         <button className={styleKey === 'satellite' ? 'on' : ''} onClick={() => switchStyle('satellite')}>
           Satellite
+        </button>
+        <button
+          className={`map-label-toggle ${showLabels ? 'on' : ''}`}
+          title={showLabels ? 'Hide tracker names on the map' : 'Show tracker names on the map'}
+          onClick={() => setShowLabels((v) => !v)}
+        >
+          Labels
         </button>
       </div>
       {races.length > 1 && (

@@ -11,6 +11,7 @@ import { Login, type AuthInfo } from './components/Login';
 import { MapView, type MapSelection } from './components/MapView';
 import { RacePanel } from './components/RacePanel';
 import { RolesPanel } from './components/RolesPanel';
+import { trackerColors } from './colors';
 import { SimPanel, type SimProgress } from './components/SimPanel';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { SystemView } from './components/SystemView';
@@ -280,12 +281,16 @@ export default function App() {
 
   const intervalS = ev?.event.reportIntervalS || 10;
   const snapshotSimulated = state.snapshot.simulated;
+  // Assigned across the whole event, not the filtered view, so a tracker keeps
+  // the same colour when the operator narrows down to one race.
+  const trackerColorMap = trackerColors(ev?.races ?? []);
 
   const racePanels = (r: RaceSnap) => (
     <>
       <RolesPanel
         race={r}
         displayUnits={displayUnits}
+        colors={trackerColorMap}
         lastSeen={state.lastSeen}
         intervalS={intervalS}
         simulated={snapshotSimulated}
@@ -296,10 +301,14 @@ export default function App() {
         onVehicle={(roleKey, vehicle) =>
           api.setVehicle(r.eventId, r.raceId, roleKey, vehicle).catch(oops('Reassignment failed'))
         }
+        onMoveTracker={(imei, vehicle) =>
+          api.moveTracker(r.eventId, imei, vehicle).catch(oops('Move failed'))
+        }
       />
       <TrackerTable
         race={r}
         displayUnits={displayUnits}
+        colors={trackerColorMap}
         lastSeen={state.lastSeen}
         intervalS={intervalS}
         readonly={viewer}
@@ -382,7 +391,7 @@ export default function App() {
             </div>
           ))}
         </aside>
-        <MapView races={races} selected={selected} displayUnits={displayUnits} />
+        <MapView races={races} selected={selected} displayUnits={displayUnits} colors={trackerColorMap} />
       </div>
     );
   };

@@ -325,6 +325,12 @@ export class App {
     return recovered;
   }
 
+  /** Apply a tracker's reassignment to every race in this event. */
+  moveTracker(imei: string, toVehicleKey: string, by?: string): void {
+    for (const engine of this.engines.values()) engine.moveTracker(imei, toVehicleKey, by);
+    for (const raceId of this.engines.keys()) this.out.emit('race', this.raceSnapshot(raceId));
+  }
+
   /** Flip this app's publishing (global switch calls every loaded app). */
   setPublishing(enabled: boolean, by?: string): void {
     if (enabled === this.publishEnabled) return;

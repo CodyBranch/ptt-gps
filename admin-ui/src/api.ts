@@ -41,6 +41,11 @@ export const api = {
   setVehicle: (eventId: string, raceId: string, roleKey: string, vehicle: string) =>
     post(`/api/events/${eventId}/races/${raceId}/roles/${roleKey}/vehicle`, { vehicle }),
 
+  /** Correct which vehicle is carrying a tracker. Event-scoped: the device is
+   *  physically on one bike, so the move applies to every race at once. */
+  moveTracker: (eventId: string, imei: string, vehicle: string) =>
+    post(`/api/events/${eventId}/trackers/${imei}/vehicle`, { vehicle }),
+
   setSource: (eventId: string, raceId: string, roleKey: string, source: 'gps' | 'splits') =>
     post(`/api/events/${eventId}/races/${raceId}/roles/${roleKey}/source`, { source }),
 

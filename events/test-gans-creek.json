@@ -45,48 +45,6 @@
       "hasBattery": true
     }
   ],
-  "roles": [
-    {
-      "key": "lead",
-      "label": "Lead Vehicle",
-      "cmd": 0,
-      "clockSlot": 1,
-      "vehicle": "lead"
-    },
-    {
-      "key": "trail",
-      "label": "Trail Vehicle",
-      "cmd": 1,
-      "vehicle": "trail"
-    },
-    {
-      "key": "timer",
-      "label": "Timer",
-      "cmd": 2,
-      "vehicle": "timer"
-    }
-  ],
-  "snapDefaults": {
-    "minInc": 0.2,
-    "maxInc": 0.2,
-    "initialMax": 0.5,
-    "maxOffCourse": 0.25,
-    "fwdTolerance": 0.02
-  },
-  "races": [
-    {
-      "id": "womens-6k",
-      "name": "Women's 6k",
-      "course": "courses/gans-6k.geojson",
-      "units": "miles"
-    },
-    {
-      "id": "mens-8k",
-      "name": "Men's 8k",
-      "course": "courses/gans-8k.geojson",
-      "units": "miles"
-    }
-  ],
   "vehicles": [
     {
       "key": "lead",
@@ -110,6 +68,48 @@
       "trackers": [
         "860201060898288"
       ]
+    }
+  ],
+  "roles": [
+    {
+      "key": "lead",
+      "label": "Lead Vehicle",
+      "vehicle": "lead",
+      "cmd": 0,
+      "clockSlot": 1
+    },
+    {
+      "key": "trail",
+      "label": "Trail Vehicle",
+      "vehicle": "trail",
+      "cmd": 1
+    },
+    {
+      "key": "timer",
+      "label": "Timer",
+      "vehicle": "timer",
+      "cmd": 2
+    }
+  ],
+  "snapDefaults": {
+    "minInc": 0.2,
+    "maxInc": 0.2,
+    "initialMax": 0.5,
+    "maxOffCourse": 0.25,
+    "fwdTolerance": 0.02
+  },
+  "races": [
+    {
+      "id": "womens-6k",
+      "name": "Women's 6k",
+      "course": "courses/gans-6k.geojson",
+      "units": "miles"
+    },
+    {
+      "id": "mens-8k",
+      "name": "Men's 8k",
+      "course": "courses/gans-8k.geojson",
+      "units": "miles"
     }
   ]
 }
