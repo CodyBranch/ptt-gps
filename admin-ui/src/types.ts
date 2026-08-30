@@ -122,6 +122,8 @@ export interface EventConfigT {
   }>;
   snapDefaults: { minInc: number; maxInc: number; initialMax: number; maxOffCourse: number; fwdTolerance: number };
   races: Array<{ id: string; name: string; course: string; units: Units }>;
+  /** Read-only: is this event currently running? Setup works either way. */
+  _active?: boolean;
 }
 
 export interface EventListing {

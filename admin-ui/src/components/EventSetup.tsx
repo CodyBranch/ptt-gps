@@ -3,6 +3,7 @@ import { api } from '../api';
 import type { ConfirmRequest } from './Confirm';
 import type { CourseInfo, EventConfigT, FirebaseConn, FleetRow } from '../types';
 import { Toast } from './Toast';
+import { TrackerPicker } from './TrackerPicker';
 
 /**
  * Setup for one active event: details & dates, Firebase outputs, what we're
@@ -56,7 +57,7 @@ export function EventSetup({
     try {
       await api.putConfig(eventId, cfg);
       setDirty(false);
-      setMsg({ kind: 'ok', text: 'Saved — engines rebuilt.' });
+      setMsg({ kind: 'ok', text: cfg._active === false ? 'Saved.' : 'Saved — engines rebuilt.' });
       onSaved();
       reload();
     } catch (err) {
@@ -95,7 +96,7 @@ export function EventSetup({
           Discard changes
         </button>
         <button className="mini primary" onClick={save} disabled={!dirty}>
-          Save & rebuild
+          {cfg._active === false ? 'Save' : 'Save & rebuild'}
         </button>
       </div>
 
@@ -219,6 +220,15 @@ export function EventSetup({
             Define the roles, then match each to fleet trackers — ★ first is the primary, the rest are
             failover backups in order.
           </p>
+          <p className="hint">
+            <strong>Clock slot</strong> (1–4) is which scoreboard readout the role's distance feeds:
+            it writes <span className="mono">distanceComplete</span> to Meta/Clock and{' '}
+            <span className="mono">Distance</span> to PTT-Scoreboard, numbered by the slot (slot 1 uses the
+            un-numbered keys). Leave it blank and the distance never reaches the clock.{' '}
+            <strong>Map cmd</strong> and <strong>Map event</strong> are the Krush map feed: together they write{' '}
+            <span className="mono">GPSMap/&lt;cmd&gt;</span> with that event name. Both are needed — a cmd
+            without an event name publishes nothing — and they only apply to a Krush-flavour Firebase output.
+          </p>
           {cfg.roles.map((role, ri) => (
             <div className="role-edit" key={ri}>
               <div className="form-row">
@@ -230,7 +240,7 @@ export function EventSetup({
                   Label
                   <input value={role.label} onChange={(e) => edit((c) => (c.roles[ri].label = e.target.value))} />
                 </label>
-                <label>
+                <label title="Krush map feed channel: writes GPSMap/<cmd>. Needs Map event set too.">
                   Map cmd
                   <input
                     className="w-num"
@@ -238,7 +248,7 @@ export function EventSetup({
                     onChange={(e) => edit((c) => (c.roles[ri].cmd = e.target.value === '' ? undefined : Number(e.target.value)))}
                   />
                 </label>
-                <label>
+                <label title="Scoreboard readout 1–4: distanceComplete<slot> on Meta/Clock, Distance<slot> on PTT-Scoreboard. Blank = not published to the clock.">
                   Clock slot
                   <input
                     className="w-num"
@@ -248,7 +258,7 @@ export function EventSetup({
                     }
                   />
                 </label>
-                <label>
+                <label title="Event name written into the GPSMap payload, e.g. elite_women. Krush feed only.">
                   Map event
                   <input value={role.mapEvent ?? ''} onChange={(e) => edit((c) => (c.roles[ri].mapEvent = e.target.value || undefined))} />
                 </label>
@@ -280,32 +290,17 @@ export function EventSetup({
                     </span>
                   );
                 })}
-                <select
-                  value=""
-                  onChange={(e) => {
-                    const imei = e.target.value;
-                    if (imei) {
-                      edit((c) => {
-                        addToRoster(c, imei);
-                        c.roles[ri].trackers.push(imei);
-                      });
-                    }
-                  }}
-                >
-                  <option value="">+ match tracker…</option>
-                  {fleet
-                    .filter((f) => !f.retired && !role.trackers.includes(f.imei))
-                    .map((f) => {
-                      const other = f.events.some((e) => e.id !== cfg.id);
-                      return (
-                        <option key={f.imei} value={f.imei}>
-                          {f.label}
-                          {rosterImeis.has(f.imei) ? '' : ' (fleet)'}
-                          {other ? ' — ⚠ in another event' : ''}
-                        </option>
-                      );
-                    })}
-                </select>
+                <TrackerPicker
+                  placeholder="+ match tracker…"
+                  eventId={cfg.id}
+                  options={fleet.filter((f) => !f.retired && !role.trackers.includes(f.imei))}
+                  onPick={(imei) =>
+                    edit((c) => {
+                      addToRoster(c, imei);
+                      c.roles[ri].trackers.push(imei);
+                    })
+                  }
+                />
               </div>
             </div>
           ))}
@@ -346,24 +341,12 @@ export function EventSetup({
               })}
             </tbody>
           </table>
-          <select
-            value=""
-            onChange={(e) => {
-              if (e.target.value) edit((c) => addToRoster(c, e.target.value));
-            }}
-          >
-            <option value="">+ Add from fleet…</option>
-            {fleet
-              .filter((f) => !f.retired && !rosterImeis.has(f.imei))
-              .map((f) => {
-                const other = f.events.some((e) => e.id !== cfg.id);
-                return (
-                  <option key={f.imei} value={f.imei}>
-                    {f.label} ({f.imei}){other ? ' — ⚠ in another event' : ''}
-                  </option>
-                );
-              })}
-          </select>
+          <TrackerPicker
+            placeholder="+ Add from fleet…"
+            eventId={cfg.id}
+            options={fleet.filter((f) => !f.retired && !rosterImeis.has(f.imei))}
+            onPick={(imei) => edit((c) => addToRoster(c, imei))}
+          />
         </section>
 
         <section>

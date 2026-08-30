@@ -15,7 +15,7 @@ import {
   renameCourseIn,
   deleteCourseIn,
   readCourseIn,
-  type ConfigManager,
+  ConfigManager,
 } from '../config/manager.js';
 import { loadCourse, placeMarkers, locateOnCourse } from '../engine/course.js';
 import type { Forwarder } from '../ingest/forwarder.js';
@@ -215,6 +215,21 @@ export function startApi(ctx: ServerContext, port: number): { httpServer: http.S
     return m;
   };
 
+  /**
+   * Config access for any event on disk, running or not — next weekend's meet
+   * gets built and checked over during the week, and having to activate it
+   * (starting engines and binding listeners) just to edit it is the wrong
+   * trade. An inactive event is edited straight through its file; a running one
+   * still goes through its live manager so the engines rebuild.
+   */
+  const configFor = (eventId: string): { manager: ConfigManager; active: boolean } => {
+    const loaded = ctx.managers.get(eventId);
+    if (loaded) return { manager: loaded, active: true };
+    const found = listEvents(ctx.eventsDir).find((e) => e.id === eventId && !e.error);
+    if (!found) throw new Error(`Unknown event "${eventId}"`);
+    return { manager: new ConfigManager(path.join(ctx.eventsDir, found.file)), active: false };
+  };
+
   // Self-service password change (any signed-in operator; viewers have no password)
   ex.post(
     '/api/me/password',
@@ -360,7 +375,8 @@ export function startApi(ctx: ServerContext, port: number): { httpServer: http.S
 
   ex.get('/api/events/:eventId/config', (req, res) => {
     try {
-      res.json(eventManager(req).raw);
+      const { manager, active } = configFor(req.params.eventId as string);
+      res.json({ ...manager.raw, _active: active });
     } catch (err) {
       res.status(404).json({ ok: false, error: (err as Error).message });
     }
@@ -370,12 +386,21 @@ export function startApi(ctx: ServerContext, port: number): { httpServer: http.S
     '/api/events/:eventId/config',
     auth.adminOnly,
     act((req: OpRequest) => {
-      const app = eventApp(req);
-      if (app.hasActiveRaces()) throw new Error('A race is armed or live — finish or reset it before editing setup');
-      const manager = eventManager(req);
+      const eventId = req.params.eventId as string;
+      const { manager, active } = configFor(eventId);
+      if (active && eventApp(req).hasActiveRaces()) {
+        throw new Error('A race is armed or live — finish or reset it before editing setup');
+      }
       const before = new Set(manager.raw.trackers.map((t) => t.imei));
-      ctx.rebuildEvent(req.params.eventId as string, req.body);
-      const raw = [...ctx.managers.values()].find((m) => m.raw.id === (req.body as { id?: string })?.id)?.raw ?? manager.raw;
+      // Editing a file that no engine is reading needs no rebuild.
+      // the UI round-trips the read-only _active flag; it is not part of the config
+      const body = { ...(req.body as Record<string, unknown>) };
+      delete body._active;
+      if (active) ctx.rebuildEvent(eventId, body);
+      else manager.update(body);
+      const raw = active
+        ? ([...ctx.managers.values()].find((m) => m.raw.id === (req.body as { id?: string })?.id)?.raw ?? manager.raw)
+        : manager.raw;
       const after = new Set(raw.trackers.map((t) => t.imei));
       for (const imei of after) {
         if (!before.has(imei)) ctx.store.recordAssignment(imei, raw.id, raw.name, 'added', req.operator);

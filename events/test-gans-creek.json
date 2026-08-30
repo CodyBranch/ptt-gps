@@ -1,0 +1,17 @@
+{
+  "listeners": [
+    {
+      "name": "queclink",
+      "port": 1000
+    }
+  ],
+  "firebase": [],
+  "trackers": [],
+  "roles": [],
+  "races": [],
+  "id": "test-gans-creek",
+  "name": "Test Gans Creek",
+  "meetId": 0,
+  "startDate": "2026-09-26",
+  "endDate": "2026-09-26"
+}

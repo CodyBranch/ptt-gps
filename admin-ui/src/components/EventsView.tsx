@@ -187,9 +187,15 @@ export function EventsView({
               </button>
             </>
           ) : (
-            <button className="mini primary" onClick={() => activate(e)}>
-              Activate
-            </button>
+            <>
+              <button className="mini primary" onClick={() => activate(e)}>
+                Activate
+              </button>
+              {/* build it during the week; activate on meet day */}
+              <button className="mini" onClick={() => onOpenSetup(e.id)}>
+                ⚙ Setup
+              </button>
+            </>
           )}
         </div>
       </div>

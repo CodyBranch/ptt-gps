@@ -192,7 +192,12 @@ export default function App() {
   }, [auth]);
 
   const events = state.snapshot?.events ?? [];
-  const ev = useMemo(() => events.find((e) => e.event.id === eventId) ?? events[0], [events, eventId]);
+  // Strictly the event asked for: falling back to events[0] made an inactive
+  // event look active and showed another event's publish switch.
+  const ev = useMemo(
+    () => (eventId ? events.find((e) => e.event.id === eventId) : events[0]),
+    [events, eventId],
+  );
 
   if (auth === 'checking') return <div className="loading">Checking sign-in…</div>;
   if (auth === 'out') return <Login onSuccess={(a) => setAuth(a)} />;
@@ -248,6 +253,11 @@ export default function App() {
   const dialogTracker = dialogRace?.trackers.find((t) => t.imei === windowDialog?.imei);
 
   const eventRaceView = () => {
+    // Setup works for any event, running or not: next weekend's meet gets built
+    // during the week, and activating it just to edit would start its engines.
+    if (eventTab === 'setup' && admin && !viewer && eventId) {
+      return <EventSetup eventId={eventId} ask={ask} onSaved={() => setEventTab(ev ? 'all' : 'setup')} />;
+    }
     if (!ev) {
       return (
         <div className="loading">
@@ -255,8 +265,16 @@ export default function App() {
         </div>
       );
     }
-    if (eventTab === 'setup' && admin && !viewer) {
-      return <EventSetup eventId={ev.event.id} ask={ask} onSaved={() => setEventTab('all')} />;
+
+    if (!ev) {
+      return (
+        <div className="loading">
+          <span>
+            This event is not active
+            {admin ? ' — activate it from the Events page to start tracking.' : '.'}
+          </span>
+        </div>
+      );
     }
     const shown = eventTab === 'all' ? ev.races : ev.races.filter((r) => r.raceId === eventTab);
     const races = shown.length > 0 ? shown : ev.races;
@@ -415,6 +433,16 @@ export default function App() {
       </aside>
 
       <div className="content">
+      {page === 'event' && !ev && eventId && admin && !viewer && (
+        <nav className="event-subnav">
+          <span className="event-chip">{eventId}</span>
+          <span className="dim">not active — setup only, nothing is tracking</span>
+          <span className="spacer" />
+          <button className="mini" onClick={() => setPage('events')}>
+            Events →
+          </button>
+        </nav>
+      )}
       {page === 'event' && ev && (
         <nav className="event-subnav">
           {ev.races.length > 1 && (
