@@ -47,7 +47,15 @@ export interface ServerContext {
   onSimulatedDistance: (data: Record<string, unknown>) => void;
 }
 
-export function startApi(ctx: ServerContext, port: number): { httpServer: http.Server; io: SocketIOServer; broadcast: (event: string, payload: unknown) => void } {
+export function startApi(
+  ctx: ServerContext,
+  port: number,
+): {
+  httpServer: http.Server;
+  io: SocketIOServer;
+  broadcast: (event: string, payload: unknown) => void;
+  emitRaw: (raw: string | Buffer, source: string, ip: string) => void;
+} {
   const ex = express();
   ex.use(express.json({ limit: '5mb' }));
 
@@ -77,6 +85,30 @@ export function startApi(ctx: ServerContext, port: number): { httpServer: http.S
     if (typeof eid === 'string') io.to('all-events').to(`ev:${eid}`).emit(event, payload);
     else io.emit(event, payload);
   };
+  /**
+   * Raw wire traffic, sent only to consoles that asked for it.
+   *
+   * Every frame from every tracker is a lot of chatter to push at every
+   * connected browser on the off-chance someone is debugging, so the log view
+   * subscribes and unsubscribes as it opens and closes.
+   */
+  const RAW_ROOM = 'raw-wire';
+  const emitRaw = (raw: string | Buffer, source: string, ip: string): void => {
+    const room = io.sockets.adapter.rooms.get(RAW_ROOM);
+    if (!room || room.size === 0) return;
+    const binary = Buffer.isBuffer(raw);
+    io.to(RAW_ROOM).emit('raw', {
+      tMs: Date.now(),
+      source,
+      ip,
+      binary,
+      bytes: binary ? (raw as Buffer).length : Buffer.byteLength(raw as string),
+      // binary frames are unreadable as text — hex is what you compare against
+      // the protocol doc
+      text: binary ? (raw as Buffer).toString('hex').replace(/(..)/g, '$1 ').trim() : (raw as string).trim(),
+    });
+  };
+
   const broadcastSnapshot = (): void => {
     io.to('all-events').emit('snapshot', ctx.snapshotAll());
     for (const id of ctx.apps.keys()) io.to(`ev:${id}`).emit('snapshot', ctx.snapshotFor(id));
@@ -111,6 +143,13 @@ export function startApi(ctx: ServerContext, port: number): { httpServer: http.S
       socket.join('all-events');
       socket.emit('snapshot', ctx.snapshotAll());
     }
+    // Wire log subscription — operators only, and never a viewer PIN session.
+    socket.on('raw:subscribe', () => {
+      if (socket.data.ingest || socket.data.role === 'viewer') return;
+      socket.join(RAW_ROOM);
+    });
+    socket.on('raw:unsubscribe', () => socket.leave(RAW_ROOM));
+
     // Legacy NYC split feed: raceTimeUpdate { tracker, distance, raceTime }.
     socket.on('raceTimeUpdate', (data) => {
       if (socket.data.ingest || (socket.data.role && socket.data.role !== 'viewer')) {
@@ -951,5 +990,5 @@ export function startApi(ctx: ServerContext, port: number): { httpServer: http.S
   httpServer.listen(port, () => {
     console.log(`[api] http + socket.io on :${port}`);
   });
-  return { httpServer, io, broadcast };
+  return { httpServer, io, broadcast, emitRaw };
 }

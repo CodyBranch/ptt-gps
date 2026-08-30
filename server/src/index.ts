@@ -216,7 +216,10 @@ function syncListeners(): void {
       {
         onFix,
         onTelemetry,
-        onRawFrame: (raw) => forwarder.write(raw),
+        onRawFrame: (raw, src, ip) => {
+          forwarder.write(raw);
+          emitRaw(raw, src, ip);
+        },
         onConnection: (event, ip, source) => {
           console.log(`[${source}] ${ip} ${event}`);
           out.emit('connection', { event, ip, source, tMs: Date.now() });
@@ -251,7 +254,7 @@ const ctx: ServerContext = {
   onSimulatedDistance,
 };
 
-const { broadcast } = startApi(ctx, Number(arg('api-port', '8080')));
+const { broadcast, emitRaw } = startApi(ctx, Number(arg('api-port', '8080')));
 emitFn = broadcast;
 
 // Markers used to live on each race; they belong to the course, which is

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
-import { io } from 'socket.io-client';
+import { io, type Socket } from 'socket.io-client';
 import { api } from './api';
 import { ConfirmDialog, type ConfirmRequest } from './components/Confirm';
 import { EventSetup } from './components/EventSetup';
@@ -13,6 +13,7 @@ import { RacePanel } from './components/RacePanel';
 import { RolesPanel } from './components/RolesPanel';
 import { SimPanel, type SimProgress } from './components/SimPanel';
 import { SystemView } from './components/SystemView';
+import { WireLog } from './components/WireLog';
 import { TrackerTable } from './components/TrackerTable';
 import { WindowDialog } from './components/WindowDialog';
 import type { RaceSnap, SimulatedDistance, Snapshot, TrackerPub, Units } from './types';
@@ -83,7 +84,7 @@ function reducer(state: State, action: Action): State {
 const VIEWER_URL =
   window.location.pathname === '/watch' || new URLSearchParams(window.location.search).has('viewer');
 
-type Page = 'home' | 'event' | 'events' | 'courses' | 'fleet' | 'system' | 'sim';
+type Page = 'home' | 'event' | 'events' | 'courses' | 'fleet' | 'system' | 'sim' | 'wire';
 
 /**
  * The console keeps its place in the address bar, so a refresh returns you to
@@ -96,7 +97,7 @@ interface Route {
   eventTab: string;
 }
 
-const TOP_PAGES: Page[] = ['events', 'courses', 'fleet', 'system', 'sim'];
+const TOP_PAGES: Page[] = ['events', 'courses', 'fleet', 'system', 'sim', 'wire'];
 
 function parseRoute(pathname: string): Route {
   const [first, second, third] = pathname.replace(/^\/+|\/+$/g, '').split('/');
@@ -138,6 +139,8 @@ export default function App() {
   const [pwDialog, setPwDialog] = useState(false);
   const [accountMenu, setAccountMenu] = useState(false);
   const accountRef = useRef<HTMLDivElement>(null);
+  // held so the wire log can subscribe to the raw feed on the same connection
+  const [socket, setSocket] = useState<Socket | null>(null);
   const [, tick] = useReducer((n: number) => n + 1, 0);
   const ask = (req: ConfirmRequest) => setConfirm(req);
   const go = (p: Page) => {
@@ -214,6 +217,7 @@ export default function App() {
   useEffect(() => {
     if (auth === 'checking' || auth === 'out') return;
     const socket = io();
+    setSocket(socket);
     socket.on('connect', () => dispatch({ type: 'connected', connected: true }));
     socket.on('connect_error', (err) => {
       if (/not authenticated/i.test(err.message)) setAuth('out');
@@ -426,6 +430,9 @@ export default function App() {
               <button className={`side-item ${page === 'system' ? 'active' : ''}`} onClick={() => go('system')}>
                 <span className="side-icon">⚙</span> System
               </button>
+              <button className={`side-item ${page === 'wire' ? 'active' : ''}`} onClick={() => go('wire')}>
+                <span className="side-icon">📡</span> Wire log
+              </button>
               <button className={`side-item ${page === 'sim' ? 'active' : ''}`} onClick={() => go('sim')}>
                 <span className="side-icon">🧪</span> Sim
                 {simProgress?.running && <span className="status-dot live" />}
@@ -564,6 +571,8 @@ export default function App() {
         <CoursesView displayUnits={displayUnits} ask={ask} onOpenEvent={(id) => openEvent(id)} />
       ) : page === 'fleet' && admin && !viewer ? (
         <FleetView readonly={false} />
+      ) : page === 'wire' && !viewer ? (
+        <WireLog socket={socket} />
       ) : page === 'system' && admin && !viewer ? (
         <SystemView ask={ask} />
       ) : page === 'sim' && admin && !viewer ? (
