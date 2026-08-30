@@ -16,6 +16,14 @@ export const GTFRI_22_MULTI =
   ',1,0.0,0,813.0,-113.580000,37.065000,20221028094601,0310,0410,9909,06F23911' +
   ',,100,20221028094602,75C4$';
 
+/**
+ * Real frame from a GL3xx at the 2026 Philadelphia Cycling Classic: powered on
+ * and on the network (cell, 100% battery, 4186 mV) but with no satellite lock
+ * yet, so accuracy is 0 and the whole position block is blank.
+ */
+export const REAL_GTFRI_NO_FIX =
+  '+RESP:GTFRI,930402,860931070051870,,0,0,1,0,,,,,,,0310,0410,0122,00701613,22,0,4186,100,1,0,0,20260830052230,0493';
+
 export const REAL_GTFRI_22_NEXT =
   '+RESP:GTFRI,F50A01,015181000128000,,0,0,1,1,0.0,0,811.5,-113.582319,37.063092,20221028094546,0310,0410,9909,06F23911,,100,20221028094547,75C5$';
 

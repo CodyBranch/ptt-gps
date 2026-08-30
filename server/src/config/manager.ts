@@ -259,8 +259,10 @@ export function migrateRaceMarkersToCourses(
 }
 
 /** Which events reference which tracker IMEIs (for the fleet page). */
-export function eventRosters(dir: string): Array<{ id: string; name: string; file: string; imeis: string[] }> {
-  const out: Array<{ id: string; name: string; file: string; imeis: string[] }> = [];
+export function eventRosters(
+  dir: string,
+): Array<{ id: string; name: string; file: string; imeis: string[]; endDate?: string }> {
+  const out: Array<{ id: string; name: string; file: string; imeis: string[]; endDate?: string }> = [];
   for (const f of fs.readdirSync(dir)) {
     if (!f.endsWith('.json')) continue;
     try {
@@ -270,6 +272,7 @@ export function eventRosters(dir: string): Array<{ id: string; name: string; fil
         name: String(json.name ?? f),
         file: f,
         imeis: Array.isArray(json.trackers) ? json.trackers.map((t: { imei?: unknown }) => String(t?.imei ?? '')) : [],
+        endDate: typeof json.endDate === 'string' ? json.endDate : undefined,
       });
     } catch {
       /* invalid files are reported by listEvents */

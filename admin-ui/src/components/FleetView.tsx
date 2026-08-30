@@ -23,6 +23,7 @@ export function FleetView({ readonly }: { readonly: boolean }) {
   const [query, setQuery] = useState('');
   const [ownerFilter, setOwnerFilter] = useState('all');
   const [showRetired, setShowRetired] = useState(false);
+  const [showUnknown, setShowUnknown] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>('label');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string }>();
@@ -136,6 +137,27 @@ export function FleetView({ readonly }: { readonly: boolean }) {
           </button>
         )}
       </div>
+      {(() => {
+        // Devices on the air that nobody has registered are the thing you need
+        // to see first at a start line, not something to find below 58 rows.
+        const unknown = devices.filter((dv) => !fleetImeis.has(dv.imei));
+        if (unknown.length === 0) return null;
+        const live = unknown.filter((dv) => dv.last_received_ms && Date.now() - dv.last_received_ms < 120_000);
+        return (
+          <div className="fleet-unknown">
+            <span className="fleet-unknown-mark">!</span>
+            <span>
+              <strong>{unknown.length}</strong> device{unknown.length === 1 ? ' is' : 's are'} reporting but not in
+              the fleet{live.length > 0 ? ` — ${live.length} in the last two minutes` : ''}. They are tracked and
+              logged either way; adding them gives them names and owners.
+            </span>
+            <span className="spacer" />
+            <button className="mini" onClick={() => setShowUnknown(!showUnknown)}>
+              {showUnknown ? 'Hide' : 'Show'}
+            </button>
+          </div>
+        );
+      })()}
       <div className="fleet-count">
         {visible.length === fleet.length
           ? `${fleet.length} device${fleet.length === 1 ? '' : 's'}`
@@ -181,6 +203,13 @@ export function FleetView({ readonly }: { readonly: boolean }) {
                     {f.events.length > 1 && (
                       <span className="multi-event-warn" title={`In ${f.events.length} events: ${f.events.map((e) => e.name).join(', ')}`}>
                         ⚠
+                      </span>
+                    )}
+                    {/* finished events are not a current commitment, but say
+                        they exist so the history is discoverable */}
+                    {(f.pastEvents ?? 0) > 0 && (
+                      <span className="dim past-events" title="Finished events — see the device's history">
+                        +{f.pastEvents} past
                       </span>
                     )}
                   </td>
@@ -246,7 +275,7 @@ export function FleetView({ readonly }: { readonly: boolean }) {
                 </button>
               </div>
 
-              {devices.filter((dv) => !fleetImeis.has(dv.imei)).length > 0 && (
+              {showUnknown && devices.filter((dv) => !fleetImeis.has(dv.imei)).length > 0 && (
                 <>
                   <h4>Seen on the wire, not in the fleet</h4>
                   <table className="setup-table dim-table">

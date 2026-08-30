@@ -172,6 +172,11 @@ function onFix(fix: Fix): void {
 function onTelemetry(t: Telemetry): void {
   if (t.imei) lastSeen.set(t.imei, Date.now());
   store.recordTelemetry(t);
+  // A no-fix report still tells us the device is on and how charged it is.
+  if (t.imei && t.type.endsWith(':no-fix')) {
+    const battery = typeof t.detail?.battery === 'number' ? t.detail.battery : undefined;
+    store.noteDeviceHeard(t.imei, Date.now(), battery, undefined, t.source);
+  }
   out.emit('telemetry', { imei: t.imei, type: t.type, tUtcMs: t.tUtcMs, source: t.source, receivedAtMs: Date.now() });
 }
 

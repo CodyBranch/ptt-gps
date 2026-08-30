@@ -732,13 +732,23 @@ export function startApi(
     const rosters = eventRosters(ctx.eventsDir);
     const loaded = new Set(ctx.apps.keys());
     const issueCounts = ctx.store.openIssueCounts();
-    const rows = (ctx.store.listFleet() as Array<Record<string, unknown>>).map((f) => ({
-      ...f,
-      events: rosters
-        .filter((r) => r.imeis.includes(f.imei as string))
-        .map((r) => ({ id: r.id, name: r.name, active: loaded.has(r.id) })),
-      openIssues: issueCounts.get(f.imei as string) ?? 0,
-    }));
+    // A device that ran a meet three years ago is not "in" that event any more.
+    // Only what is running or still to come counts; past assignments live in the
+    // device's history, which is where you go looking for them.
+    const today = new Date().toISOString().slice(0, 10);
+    const current = rosters.filter((r) => loaded.has(r.id) || !r.endDate || r.endDate >= today);
+    const rows = (ctx.store.listFleet() as Array<Record<string, unknown>>).map((f) => {
+      const mine = rosters.filter((r) => r.imeis.includes(f.imei as string));
+      return {
+        ...f,
+        events: current
+          .filter((r) => r.imeis.includes(f.imei as string))
+          .map((r) => ({ id: r.id, name: r.name, active: loaded.has(r.id) })),
+        /** How many finished events also used it — the history dialog has the detail. */
+        pastEvents: mine.length - current.filter((r) => r.imeis.includes(f.imei as string)).length,
+        openIssues: issueCounts.get(f.imei as string) ?? 0,
+      };
+    });
     res.json(rows);
   });
 

@@ -98,12 +98,42 @@ export function parseAsciiFrame(
   const countNumber = countHex && /^[0-9a-fA-F]+$/.test(countHex) ? parseInt(countHex, 16) : undefined;
   const imei = f[2] ?? '';
 
+  // A GTFRI with an empty position block is a live report from a device that
+  // has no satellite lock yet — accuracy 0 and blank lat/lon/time, but real
+  // cell, battery and send-time data. It is not a fix and never was one, so it
+  // goes out as telemetry rather than being discarded: before a start the crew
+  // needs to see that a tracker is switched on and charged while it waits for
+  // a lock.
+  const firstTime = parseQueclinkTime(f[HEADER + 6] ?? '');
+  const firstLat = num(f[HEADER + 5]);
+  const firstLon = num(f[HEADER + 4]);
+  if (points === 1 && (!Number.isFinite(firstTime) || firstLat === undefined || firstLon === undefined)) {
+    const sendTime = parseQueclinkTime(layout === 'gtfri-22' ? (f[tail + 2] ?? '') : (f[tail + 7] ?? ''));
+    return {
+      fixes: [],
+      telemetry: {
+        type: `${head}:no-fix`,
+        imei,
+        tUtcMs: Number.isFinite(sendTime) ? sendTime : undefined,
+        detail: {
+          battery,
+          batteryMv: num(layout === 'gtfri-22' ? f[tail + 1] : f[tail + 2]),
+          accuracy: num(f[HEADER]),
+          cell: { mcc: f[HEADER + 7], mnc: f[HEADER + 8], lac: f[HEADER + 9], cellId: f[HEADER + 10] },
+        },
+        source,
+        raw,
+      },
+    };
+  }
+
   const fixes: Fix[] = [];
   for (let b = 0; b < points; b++) {
     const i = HEADER + BLOCK * b;
     const lon = num(f[i + 4]);
     const lat = num(f[i + 5]);
     const tUtcMs = parseQueclinkTime(f[i + 6] ?? '');
+    const accuracy = num(f[i + 0]);
     fixes.push({
       imei,
       lat: lat ?? NaN,
@@ -112,9 +142,14 @@ export function parseAsciiFrame(
       tUtcMs,
       speedKmh: num(f[i + 1]),
       azimuth: num(f[i + 2]),
-      accuracy: num(f[i + 0]),
+      accuracy,
       battery,
-      fixValid: lat !== undefined && lon !== undefined && Number.isFinite(tUtcMs),
+      // Accuracy 0 means the unit has no current lock and is repeating the
+      // last position it managed to get — often hours old. Coordinates being
+      // present does not make it a fix, and feeding it to the engine would
+      // teleport a vehicle back to wherever it last saw satellites.
+      fixValid:
+        lat !== undefined && lon !== undefined && Number.isFinite(tUtcMs) && (accuracy ?? 0) > 0,
       buffered: head.startsWith('+BUFF'),
       // The count number identifies the frame, so it belongs to the last block:
       // gap detection must not see one frame as several missing ones.

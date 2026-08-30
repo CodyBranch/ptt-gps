@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { parseAsciiFrame, parseQueclinkTime } from '../src/ingest/parsers/ascii-gtfri.js';
 import { parseBinaryFrame } from '../src/ingest/parsers/binary-pro.js';
 import { FixGate } from '../src/ingest/hygiene.js';
-import { GTFRI_22_MULTI, GTFRI_27, MIRROR_ACK, MIRROR_ASCII, PRO_REPORT, REAL_GTFRI_22 } from './fixtures.js';
+import { GTFRI_22_MULTI, GTFRI_27, MIRROR_ACK, MIRROR_ASCII, PRO_REPORT, REAL_GTFRI_22, REAL_GTFRI_NO_FIX } from './fixtures.js';
 
 /** Most frames carry one position; these tests assert on that one. */
 const fixesOf = (...args: Parameters<typeof parseAsciiFrame>) => parseAsciiFrame(...args).fixes;
@@ -99,6 +99,31 @@ describe('ascii GTFRI parser', () => {
     }
   });
 
+  it('reports a device with no satellite lock as live telemetry, not a fix', () => {
+    const { fixes, telemetry } = parseAsciiFrame(REAL_GTFRI_NO_FIX, 'queclink', NOW);
+    expect(fixes).toHaveLength(0); // no position: nothing for the engine
+    expect(telemetry!.type).toBe('+RESP:GTFRI:no-fix');
+    expect(telemetry!.imei).toBe('860931070051870');
+    // the parts that are real still come through, so the crew sees a charged
+    // tracker waiting for a lock rather than a silent one
+    expect(telemetry!.detail!.battery).toBe(100);
+    expect(telemetry!.detail!.batteryMv).toBe(4186);
+    expect(telemetry!.tUtcMs).toBe(Date.UTC(2026, 7, 30, 5, 22, 30));
+  });
+
+  it('treats accuracy 0 as no live fix, even with coordinates present', () => {
+    // Real frame from Philadelphia: the unit has no lock and is repeating a
+    // position from eight hours earlier. Coordinates are there; a fix is not.
+    const repeat =
+      '+RESP:GTFRI,930402,860931070051201,,0,1,1,0,3.8,308,3.6,-75.177145,39.962538,20260829210408,' +
+      '0310,0260,56E3,00AE340C,31,0,3800,54,1,0,0,20260830052802,0AB6';
+    const [fix] = fixesOf(repeat, 'queclink', NOW);
+    expect(fix).toBeDefined();
+    expect(fix.fixValid).toBe(false); // the gate drops it before the engine
+    expect(fix.battery).toBe(54); // but the battery is real and still useful
+    expect(new FixGate().accept(fix)).toEqual({ ok: false, reason: 'no-fix' });
+  });
+
   it('routes non-GTFRI frames to telemetry (GV500 ACK relays etc.)', () => {
     const { fixes, telemetry } = parseAsciiFrame(MIRROR_ACK, 'mirror', NOW);
     expect(fixes).toHaveLength(0);
@@ -113,11 +138,15 @@ describe('ascii GTFRI parser', () => {
     expect(telemetry!.type).toContain('unknown-layout(23 fields');
   });
 
-  it('marks empty coordinates as fixValid=false', () => {
+  it('emits no fix at all when the coordinates are empty', () => {
+    // Even with a GPS time present, a frame carrying no position is not a fix;
+    // it is a device reporting in without a lock.
     const noCoords =
       '+RESP:GTFRI,F50A01,015181000128000,,0,0,1,0,0.0,0,,,,20221028094541,0310,0410,9909,06F23911,,100,20221028094542,75C4$';
-    const [fix] = fixesOf(noCoords, 'test', NOW);
-    expect(fix!.fixValid).toBe(false);
+    const { fixes, telemetry } = parseAsciiFrame(noCoords, 'test', NOW);
+    expect(fixes).toHaveLength(0);
+    expect(telemetry!.type).toBe('+RESP:GTFRI:no-fix');
+    expect(telemetry!.detail!.battery).toBe(100);
   });
 });
 

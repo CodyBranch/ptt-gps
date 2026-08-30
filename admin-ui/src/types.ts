@@ -158,7 +158,9 @@ export interface FleetRow {
   protocol: string | null;
   last_lat: number | null;
   last_lon: number | null;
+  /** Running or still-to-come events only; finished ones live in the history. */
   events: Array<{ id: string; name: string; active: boolean }>;
+  pastEvents?: number;
   openIssues: number;
 }
 

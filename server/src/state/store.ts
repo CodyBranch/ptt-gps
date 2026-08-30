@@ -237,6 +237,25 @@ export class Store {
     return () => (stmt ??= this.db.prepare(sql));
   }
 
+  /**
+   * A device heard from without a position — no satellite lock yet. Keeps the
+   * fleet's last-seen and battery current so a tracker waiting for a lock reads
+   * as alive and charged rather than as never having reported.
+   */
+  noteDeviceHeard(imei: string, receivedAtMs: number, battery?: number, protocol?: string, source?: string): void {
+    this.db
+      .prepare(
+        `INSERT INTO devices (imei, last_received_ms, battery, protocol, source)
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(imei) DO UPDATE SET
+           last_received_ms = excluded.last_received_ms,
+           battery = COALESCE(excluded.battery, devices.battery),
+           protocol = COALESCE(excluded.protocol, devices.protocol),
+           source = COALESCE(excluded.source, devices.source)`,
+      )
+      .run(imei, receivedAtMs, battery ?? null, protocol ?? null, source ?? null);
+  }
+
   recordFix(fix: Fix, accepted: boolean, rejectReason?: string): void {
     this.stmts.insertFix().run({
       ...fix,
@@ -253,6 +272,11 @@ export class Store {
       accepted: accepted ? 1 : 0,
       rejectReason: rejectReason ?? null,
     });
+    // Anything that reaches us proves the device is alive and tells us its
+    // battery, whether or not the fix survives the gate — a tracker repeating a
+    // stale position is still on the air, and the fleet must show that rather
+    // than reading as never heard from. Only an accepted fix moves its position.
+    this.noteDeviceHeard(fix.imei, fix.receivedAtMs, fix.battery, fix.protocol, fix.source);
     if (accepted) {
       this.stmts.upsertDevice().run({
         imei: fix.imei,
