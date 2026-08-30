@@ -791,22 +791,18 @@ button.linklike {
   .tracker-table .t-imei { font-size: 10px; }
   .tracker-table button.mini { padding: 4px 7px; font-size: 11px; }
   .tracker-table .fleet-actions, .tracker-table td:last-child { text-align: right; }
-  .batt-pct { display: none; } /* bar + color carry the info elsewhere */
-  /* ...except where the exact charge is half the reason to look: the fleet
-     list and the vehicle cards. Printed inside the bar it costs no width,
-     which is why it was dropped on phones in the first place. */
-  .fleet-table .batt, .role-tracker .batt { position: relative; }
-  .fleet-table .batt-shell, .role-tracker .batt-shell {
-    width: 46px; height: 16px; border-radius: 4px;
-  }
-  .fleet-table .batt-pct, .role-tracker .batt-pct {
-    display: block; position: absolute; inset: 0; min-width: 0;
+  /* The charge is half the reason to look at a battery, so the phone keeps the
+     number — printed inside the meter, where it costs no width. One rule for
+     every meter in the console: the fleet list, the vehicle cards and the
+     device dialog all read the same way. */
+  .batt { position: relative; }
+  .batt-shell { width: 46px; height: 16px; border-radius: 4px; }
+  .batt-pct {
+    position: absolute; inset: 0; min-width: 0;
     font-size: 10px; font-weight: 700; line-height: 16px; text-align: center;
     color: var(--text); text-shadow: 0 0 3px var(--bg), 0 0 2px var(--bg);
   }
-  .fleet-table .batt.low .batt-pct, .role-tracker .batt.low .batt-pct { color: var(--text); }
-  /* The device dialog has a whole stat cell for it — no need to overlay. */
-  .dialog .batt-pct { display: inline; }
+  .batt.low .batt-pct { color: var(--text); }
   /* The fleet table was 767px wide and simply clipped at the screen edge. Model,
      owner and the event badges all appear when you open a device, and owner is
      a filter above the table anyway — so the phone keeps the three things you
