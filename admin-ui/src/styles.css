@@ -247,7 +247,11 @@ button.mini.primary { background: var(--brand-red); border-color: var(--brand-re
 .dialog-confirm { width: 340px; }
 .dialog-window { width: 420px; }
 .dialog-device { width: 460px; max-width: calc(100vw - 32px); }
-.mini-map { height: 260px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); margin-bottom: 8px; }
+.mini-map-wrap { position: relative; margin-bottom: 8px; }
+.mini-map { height: 260px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); }
+/* smaller than the main map's, so it does not crowd a 260px-tall map */
+.map-style-toggle.mini { top: 8px; left: 8px; }
+.map-style-toggle.mini button { padding: 4px 9px; font-size: 11px; }
 .device-coords { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; font-size: 13px; }
 .device-notes { color: var(--dim); font-size: 13px; margin: 6px 0 10px; }
 .fleet-table tbody tr { cursor: pointer; }
@@ -801,6 +805,8 @@ button.linklike {
     color: var(--text); text-shadow: 0 0 3px var(--bg), 0 0 2px var(--bg);
   }
   .fleet-table .batt.low .batt-pct, .role-tracker .batt.low .batt-pct { color: var(--text); }
+  /* The device dialog has a whole stat cell for it — no need to overlay. */
+  .dialog .batt-pct { display: inline; }
   /* The fleet table was 767px wide and simply clipped at the screen edge. Model,
      owner and the event badges all appear when you open a device, and owner is
      a filter above the table anyway — so the phone keeps the three things you

@@ -39,11 +39,18 @@ export interface MapSelection {
   imei: string;
 }
 
-/** Small single-marker live map for the device detail dialog. */
+/**
+ * Small single-marker live map for the device detail dialog.
+ *
+ * Satellite matters more here than anywhere else: this map answers "where is
+ * that tracker", and a bare street map tells you nothing when the answer is
+ * "in the third trailer behind the school" or "under the trees by the creek".
+ */
 export function MiniMap({ lat, lon }: { lat: number; lon: number }) {
   const ref = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map>(null);
   const markerRef = useRef<mapboxgl.Marker>(null);
+  const [styleKey, setStyleKey] = useState<StyleKey>('streets');
 
   useEffect(() => {
     const map = new mapboxgl.Map({ container: ref.current!, style: STYLES.streets, center: [lon, lat], zoom: 14 });
@@ -59,7 +66,26 @@ export function MiniMap({ lat, lon }: { lat: number; lon: number }) {
     mapRef.current?.easeTo({ center: [lon, lat], duration: 500 });
   }, [lat, lon]);
 
-  return <div className="mini-map" ref={ref} />;
+  /** The marker is a DOM element, so it rides through a style swap untouched. */
+  const switchStyle = (key: StyleKey) => {
+    if (key === styleKey) return;
+    setStyleKey(key);
+    mapRef.current?.setStyle(STYLES[key]);
+  };
+
+  return (
+    <div className="mini-map-wrap">
+      <div className="mini-map" ref={ref} />
+      <div className="map-style-toggle mini">
+        <button className={styleKey === 'streets' ? 'on' : ''} onClick={() => switchStyle('streets')}>
+          Map
+        </button>
+        <button className={styleKey === 'satellite' ? 'on' : ''} onClick={() => switchStyle('satellite')}>
+          Satellite
+        </button>
+      </div>
+    </div>
+  );
 }
 
 /**
