@@ -1,4 +1,6 @@
-import { useEffect, useReducer, useState } from 'react';
+import { useEffect, useReducer, useState, type ReactNode } from 'react';
+
+type SortKey = 'label' | 'imei' | 'model' | 'owner' | 'battery' | 'seen' | 'events';
 import { api } from '../api';
 import { MiniMap } from './MapView';
 import type { DeviceAssignment, DeviceIssue, DeviceRow, FleetRow, Owner } from '../types';
@@ -17,6 +19,11 @@ export function FleetView({ readonly }: { readonly: boolean }) {
   const [historyImei, setHistoryImei] = useState<string>();
   const [detailImei, setDetailImei] = useState<string>();
   const [editImei, setEditImei] = useState<string>(); // '' = new device
+  const [query, setQuery] = useState('');
+  const [ownerFilter, setOwnerFilter] = useState('all');
+  const [showRetired, setShowRetired] = useState(false);
+  const [sortKey, setSortKey] = useState<SortKey>('label');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string }>();
 
   const reload = () => {
@@ -37,6 +44,56 @@ export function FleetView({ readonly }: { readonly: boolean }) {
   const fleetByImei = new Map(fleet.map((f) => [f.imei, f]));
   const fmtSeen = (ms: number | null) => (ms ? new Date(ms).toLocaleString() : 'never');
 
+  // --- find a device in a fleet of dozens -------------------------------
+  const ownerNames = [...new Set(fleet.map((f) => f.owner).filter(Boolean))].sort() as string[];
+  const q = query.trim().toLowerCase();
+  const visible = fleet
+    .filter((f) => {
+      if (ownerFilter !== 'all' && (f.owner ?? '') !== ownerFilter) return false;
+      if (!showRetired && f.retired) return false;
+      if (!q) return true;
+      // one box for the two ways people identify a tracker: what it's called
+      // and the number printed on it — plus model, so "GL320" narrows too
+      return [f.label, f.imei, f.model, f.owner, f.notes]
+        .some((v) => (v ?? '').toString().toLowerCase().includes(q));
+    })
+    .sort((a, b) => {
+      const dir = sortDir === 'asc' ? 1 : -1;
+      switch (sortKey) {
+        case 'imei':
+          return dir * a.imei.localeCompare(b.imei);
+        case 'model':
+          return dir * (a.model ?? '').localeCompare(b.model ?? '');
+        case 'owner':
+          return dir * (a.owner ?? '').localeCompare(b.owner ?? '');
+        case 'battery':
+          return dir * ((a.seen_battery ?? -1) - (b.seen_battery ?? -1));
+        case 'seen':
+          return dir * ((a.last_received_ms ?? 0) - (b.last_received_ms ?? 0));
+        case 'events':
+          return dir * (a.events.length - b.events.length);
+        default:
+          // labels are "PTT-3" / "Krush-12": compare numerically so 10 doesn't
+          // sort between 1 and 2
+          return dir * a.label.localeCompare(b.label, undefined, { numeric: true, sensitivity: 'base' });
+      }
+    });
+
+  const sortBy = (key: SortKey) => {
+    if (key === sortKey) setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
+    else {
+      setSortKey(key);
+      // most recent ping and fullest battery first are the useful defaults
+      setSortDir(key === 'seen' || key === 'battery' || key === 'events' ? 'desc' : 'asc');
+    }
+  };
+  const Th = ({ k, children, className }: { k: SortKey; children: ReactNode; className?: string }) => (
+    <th className={`sortable ${className ?? ''}`} onClick={() => sortBy(k)}>
+      {children}
+      <span className="sort-caret">{sortKey === k ? (sortDir === 'asc' ? '▲' : '▼') : ''}</span>
+    </th>
+  );
+
   const detail = detailImei !== undefined ? fleetByImei.get(detailImei) : undefined;
   const editing = editImei !== undefined && editImei !== '' ? fleetByImei.get(editImei) : undefined;
 
@@ -46,20 +103,60 @@ export function FleetView({ readonly }: { readonly: boolean }) {
         <span className="setup-title">Tracker fleet</span>
         {msg && <span className={`setup-msg ${msg.kind}`}>{msg.text}</span>}
         <span className="spacer" />
+        <input
+          className="fleet-search"
+          placeholder="Search name, IMEI, model…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        {query && (
+          <button className="mini" title="Clear search" onClick={() => setQuery('')}>
+            ✕
+          </button>
+        )}
+        <select className="fleet-filter" value={ownerFilter} onChange={(e) => setOwnerFilter(e.target.value)}>
+          <option value="all">All owners</option>
+          {ownerNames.map((o) => (
+            <option key={o} value={o}>
+              {o}
+            </option>
+          ))}
+          <option value="">No owner</option>
+        </select>
+        <button
+          className={`mini ${showRetired ? 'on' : ''}`}
+          title="Retired devices stay in the fleet for history"
+          onClick={() => setShowRetired(!showRetired)}
+        >
+          Retired
+        </button>
         {!readonly && (
           <button className="mini primary" onClick={() => setEditImei('')}>
             + Add device
           </button>
         )}
       </div>
+      <div className="fleet-count">
+        {visible.length === fleet.length
+          ? `${fleet.length} device${fleet.length === 1 ? '' : 's'}`
+          : `${visible.length} of ${fleet.length} devices`}
+      </div>
       <div className="setup-grid one-col">
         <section>
           <table className="setup-table fleet-table">
             <thead>
-              <tr><th>Device</th><th>Model</th><th>Owner</th><th>Battery</th><th>Latest ping</th><th>Events</th><th></th></tr>
+              <tr>
+                <Th k="label">Device</Th>
+                <Th k="model">Model</Th>
+                <Th k="owner">Owner</Th>
+                <Th k="battery">Battery</Th>
+                <Th k="seen">Latest ping</Th>
+                <Th k="events">Events</Th>
+                <th></th>
+              </tr>
             </thead>
             <tbody>
-              {fleet.map((f) => (
+              {visible.map((f) => (
                 <tr key={f.imei} className={f.retired ? 'retired-row' : ''} onClick={() => setDetailImei(f.imei)}>
                   <td>
                     <div className="t-label">
