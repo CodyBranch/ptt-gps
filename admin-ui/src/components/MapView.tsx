@@ -29,6 +29,9 @@ const STYLES = {
 } as const;
 type StyleKey = keyof typeof STYLES;
 
+/** Band around the vehicles that stays lit during a live race. */
+const BAND_BEHIND = { miles: 1, kilometers: 1.6 };
+const BAND_AHEAD = { miles: 5, kilometers: 8 };
 const COURSE_COLORS = ['#2f7ded', '#1fa860', '#c85fd4', '#e8842f', '#12a5a5'];
 
 export interface MapSelection {
@@ -231,6 +234,49 @@ export const MARKER_LABEL_PAINT: mapboxgl.SymbolLayerSpecification['paint'] = {
   'text-halo-width': 1.6,
 };
 
+/**
+ * How far apart the unit posts have to be before they are worth drawing.
+ *
+ * A lap course is traced once per lap, so one street corner carries a mile
+ * mark from every lap — a 124-mile race piles ~124 labels onto one loop. Zoomed
+ * out you want the round numbers; zoomed in you want them all.
+ */
+const STEPS = [25, 10, 5, 2, 1];
+
+export function markerStepFor(zoom: number, courseLength?: number): number {
+  const byZoom = zoom < 9 ? 25 : zoom < 11 ? 10 : zoom < 12.5 ? 5 : zoom < 14 ? 2 : 1;
+  // A 6k has five posts in total; thinning them by 25 leaves none, which is
+  // not decluttering, it is deleting the course. Never coarser than roughly a
+  // quarter of the course, so a short one keeps its marks at any zoom.
+  if (!courseLength) return byZoom;
+  const byLength = STEPS.find((s) => s <= courseLength / 4) ?? 1;
+  return Math.min(byZoom, byLength);
+}
+
+/**
+ * Which markers to draw right now.
+ *
+ * Start, finish, timing points and hand-placed marks are always drawn — there
+ * are few of them and each one was put there deliberately. Only the unit posts
+ * are thinned: by zoom, and during a live race to a band around where the
+ * vehicles actually are, since lap one's marks are noise by lap four.
+ */
+export function visibleMarkers(
+  markers: CourseMarker[],
+  zoom: number,
+  band?: { from: number; to: number; units: 'miles' | 'kilometers' },
+  courseLength?: number,
+): CourseMarker[] {
+  const step = markerStepFor(zoom, courseLength);
+  return markers.filter((m) => {
+    if (m.kind !== 'unit') return true;
+    // posts can be in either unit on the same course; compare in the band's
+    const at = band ? toDisplay(m.at, m.units ?? band.units, band.units) : m.at;
+    if (band && (at < band.from || at > band.to)) return false;
+    return Math.abs(m.at / step - Math.round(m.at / step)) < 0.01;
+  });
+}
+
 function setMarkerData(map: mapboxgl.Map, markers: CourseMarker[]) {
   const src = map.getSource('preview-markers') as mapboxgl.GeoJSONSource | undefined;
   src?.setData({
@@ -273,6 +319,8 @@ export function MapView({
   // With a full field of motos the name+distance labels overlap into an
   // unreadable pile; the colours alone are enough to tell them apart.
   const [showLabels, setShowLabels] = useState(true);
+  // drives how densely the course posts are drawn; see visibleMarkers
+  const [zoom, setZoom] = useState(11);
 
   /** (Re-)add per-race course layers + the window-slice layer (lost on setStyle). */
   const applyCourseLayers = (fit: boolean) => {
@@ -350,6 +398,7 @@ export function MapView({
       zoom: 11,
     });
     map.addControl(new mapboxgl.NavigationControl(), 'top-right');
+    map.on('zoomend', () => setZoom(map.getZoom()));
     mapRef.current = map;
     return () => map.remove();
   }, []);
@@ -455,18 +504,29 @@ export function MapView({
       const src = map.getSource(`markers-${race.raceId}`) as mapboxgl.GeoJSONSource | undefined;
       if (!src) continue;
       const course = coursesRef.current.get(race.raceId);
-      src.setData(
-        race.status === 'live' && course
-          ? {
-              type: 'FeatureCollection',
-              features: course.markers.map((m) => ({
-                type: 'Feature',
-                properties: { label: m.label, kind: m.kind, units: m.units ?? '' },
-                geometry: { type: 'Point', coordinates: [m.lon, m.lat] },
-              })),
-            }
-          : emptyFc,
-      );
+      if (race.status !== 'live' || !course) {
+        src.setData(emptyFc);
+        continue;
+      }
+      // The band follows the vehicles: a little behind the last one so a mark
+      // just passed is still on screen, and further ahead because what is
+      // coming up is what anyone is actually asking about.
+      const distances = race.trackers.map((t) => t.distance).filter((d): d is number => d !== undefined);
+      const band = distances.length
+        ? {
+            from: Math.min(...distances) - BAND_BEHIND[race.units],
+            to: Math.max(...distances) + BAND_AHEAD[race.units],
+            units: race.units,
+          }
+        : undefined;
+      src.setData({
+        type: 'FeatureCollection',
+        features: visibleMarkers(course.markers, zoom, band, race.courseLength).map((m) => ({
+          type: 'Feature',
+          properties: { label: m.label, kind: m.kind, units: m.units ?? '' },
+          geometry: { type: 'Point', coordinates: [m.lon, m.lat] },
+        })),
+      });
     }
 
     const selRace = races.find((r) => r.raceId === selected?.raceId);
@@ -477,7 +537,7 @@ export function MapView({
       properties: {},
       geometry: { type: 'LineString', coordinates: sel?.slice && sel.slice.length > 1 ? sel.slice : [] },
     });
-  }, [races, selected, displayUnits, colors, showLabels, labelOverrides, decimals]);
+  }, [races, selected, displayUnits, colors, showLabels, labelOverrides, decimals, zoom]);
 
   return (
     <div className="map-wrap">
