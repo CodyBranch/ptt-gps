@@ -77,3 +77,25 @@ flavor), `<meet>/GPS/<imei>`.
 2. Copy an existing event JSON: set `meetId`, tracker IMEIs/labels, roles, races.
 3. `npm run dev:server -- --event events/<new>.json` and verify with the simulator
    before race day.
+
+## Manual
+
+The operator manual is written once, in `admin-ui/src/manual.ts`, and rendered
+twice: as the **Help** page in the console (bottom of the sidebar) and as a
+printed PDF. Because both read the same file, the page and the paper cannot
+drift apart.
+
+Rebuilding it takes two steps. The first drives a headless Chrome over the
+DevTools protocol to re-shoot every screenshot, running the simulator while it
+works so the race pages show a race actually running:
+
+```bash
+npm run docs:capture -- --user <admin> --pass <password>
+npm run manual
+```
+
+`docs:capture` needs the server running and an admin login; it arms, starts and
+then resets the test race itself, and puts the event back as it found it. Add
+`--only <shot-name>` to re-take a single screenshot. `manual` then rebuilds
+`admin-ui/public/docs/primetime-gps-manual.pdf`, which the Help page links to.
+Run `npm run build -w admin-ui` afterwards so the console serves the new files.

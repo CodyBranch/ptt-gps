@@ -15,3 +15,8 @@ data/
 *serviceaccount*.json
 *firebase-adminsdk*.json
 secrets/
+
+# The standalone manual HTML is an 11 MB intermediate on the way to the PDF —
+# the in-app Help page shows the same content. Regenerate with:
+#   npm run manual
+admin-ui/public/docs/primetime-gps-manual.html

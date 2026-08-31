@@ -7,6 +7,7 @@ import { CoursesView } from './components/CoursesView';
 import { DistanceBoard } from './components/DistanceBoard';
 import { EventsView } from './components/EventsView';
 import { FleetView } from './components/FleetView';
+import { HelpView } from './components/HelpView';
 import { HomeView } from './components/HomeView';
 import { Login, type AuthInfo } from './components/Login';
 import { MapView, type MapSelection } from './components/MapView';
@@ -97,7 +98,7 @@ const BOARD_URL =
   window.location.pathname === '/watch/distances' ||
   new URLSearchParams(window.location.search).get('viewer') === 'distances';
 
-type Page = 'home' | 'event' | 'events' | 'courses' | 'fleet' | 'system' | 'sim' | 'wire';
+type Page = 'home' | 'event' | 'events' | 'courses' | 'fleet' | 'system' | 'sim' | 'wire' | 'help';
 
 /**
  * The console keeps its place in the address bar, so a refresh returns you to
@@ -110,7 +111,7 @@ interface Route {
   eventTab: string;
 }
 
-const TOP_PAGES: Page[] = ['events', 'courses', 'fleet', 'system', 'sim', 'wire'];
+const TOP_PAGES: Page[] = ['events', 'courses', 'fleet', 'system', 'sim', 'wire', 'help'];
 
 /** The tab strip's status dot, for a native <option> that cannot be styled:
  *  filled is running, half is armed and ready, hollow is waiting, tick is done. */
@@ -566,6 +567,13 @@ export default function App() {
             </>
           )}
         </nav>
+        {!viewer && (
+          <div className="sidebar-help">
+            <button className={`side-item ${page === 'help' ? 'active' : ''}`} onClick={() => go('help')}>
+              <span className="side-icon">❓</span> Help
+            </button>
+          </div>
+        )}
         <div className="sidebar-footer" ref={accountRef}>
           {accountMenu && (
             <div className="account-menu">
@@ -747,6 +755,8 @@ export default function App() {
         <CoursesView displayUnits={displayUnits} ask={ask} onOpenEvent={(id) => openEvent(id)} />
       ) : page === 'fleet' && admin && !viewer ? (
         <FleetView readonly={false} />
+      ) : page === 'help' && !viewer ? (
+        <HelpView />
       ) : page === 'wire' && !viewer ? (
         <WireLog socket={socket} />
       ) : page === 'system' && admin && !viewer ? (

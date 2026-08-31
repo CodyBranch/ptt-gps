@@ -11,6 +11,8 @@
     "dev:server": "npm run dev -w server",
     "dev:ui": "npm run dev -w admin-ui",
     "test": "npm run test -w server && npm run test -w admin-ui",
-    "build": "npm run build -w server && npm run build -w admin-ui"
+    "build": "npm run build -w server && npm run build -w admin-ui",
+    "docs:capture": "node tools/capture-docs.mjs",
+    "manual": "node tools/build-manual.mjs"
   }
 }
