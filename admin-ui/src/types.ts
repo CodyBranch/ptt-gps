@@ -262,3 +262,40 @@ export interface DeviceRow {
   protocol: string | null;
   source: string | null;
 }
+
+/** A RaceResult timing box — decoder, TrackBox or Ubidium. */
+export interface DecoderPub {
+  deviceId: string;
+  name: string;
+  type: string;
+  connected: boolean;
+  lat?: number;
+  lon?: number;
+  battery?: number;
+  temperature?: number;
+  firmware?: string;
+  fileNo?: string;
+  recordsCount?: number;
+  hasPower?: boolean;
+  inTimingMode?: boolean;
+  timeRunning?: boolean;
+  inStandby?: boolean;
+  readerHealthy?: boolean;
+  readerTemperature?: number;
+  timeSource?: string;
+  errorFlags?: string;
+  deviceTime?: string;
+  requestTime?: string;
+  received?: string;
+  seenMs: number;
+}
+
+export interface DecoderStatus {
+  configured: boolean;
+  enabled: boolean;
+  customerId?: number;
+  intervalS: number;
+  lastPollMs?: number;
+  lastError?: string;
+  deviceCount: number;
+}

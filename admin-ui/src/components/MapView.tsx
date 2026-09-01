@@ -3,7 +3,7 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 import { useEffect, useRef, useState } from 'react';
 import { api, toDisplay, unitAbbr } from '../api';
 import { MARKER_COLORS } from '../colors';
-import type { RaceSnap, TrackerPub, Units } from '../types';
+import type { DecoderPub, RaceSnap, TrackerPub, Units } from '../types';
 
 export interface CourseMarker {
   at: number;
@@ -38,6 +38,117 @@ export interface MapSelection {
   raceId: string;
   imei: string;
 }
+
+/**
+ * A timing box on the map. Square rather than round so it cannot be mistaken
+ * for a vehicle at a glance, and hollow when the box is offline — the state you
+ * are looking for is "which ones are dark".
+ */
+function decoderEl(d: DecoderPub, selected: boolean): HTMLDivElement {
+  const el = document.createElement('div');
+  el.className = `decoder-marker ${d.connected ? 'on' : 'off'} ${selected ? 'selected' : ''}`;
+  const box = document.createElement('div');
+  box.className = 'decoder-marker-box';
+  const label = document.createElement('div');
+  label.className = 'decoder-marker-label';
+  label.textContent = d.name;
+  el.append(box, label);
+  return el;
+}
+
+/**
+ * Standalone map of every timing box, for the Decoders page. Fits itself to
+ * whatever has a position; boxes without one simply do not appear.
+ */
+export function DecoderMap({
+  decoders,
+  selected,
+  onSelect,
+}: {
+  decoders: DecoderPub[];
+  selected?: string;
+  onSelect?: (deviceId: string) => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<mapboxgl.Map>(null);
+  const markersRef = useRef(new Map<string, mapboxgl.Marker>());
+  const fittedRef = useRef(false);
+  const [styleKey, setStyleKey] = useState<StyleKey>('streets');
+
+  useEffect(() => {
+    const map = new mapboxgl.Map({
+      container: ref.current!,
+      style: STYLES.streets,
+      center: [-92.33, 38.9],
+      zoom: 10,
+    });
+    map.addControl(new mapboxgl.NavigationControl(), 'top-right');
+    mapRef.current = map;
+    return () => map.remove();
+  }, []);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const markers = markersRef.current;
+    const seen = new Set<string>();
+    const bounds = new mapboxgl.LngLatBounds();
+
+    for (const d of decoders) {
+      if (d.lat === undefined || d.lon === undefined || (d.lat === 0 && d.lon === 0)) continue;
+      seen.add(d.deviceId);
+      bounds.extend([d.lon, d.lat]);
+      let m = markers.get(d.deviceId);
+      if (!m) {
+        const el = decoderEl(d, d.deviceId === selected);
+        el.addEventListener('click', (e) => {
+          e.stopPropagation();
+          onSelect?.(d.deviceId);
+        });
+        m = new mapboxgl.Marker({ element: el }).setLngLat([d.lon, d.lat]).addTo(map);
+        markers.set(d.deviceId, m);
+      } else {
+        m.setLngLat([d.lon, d.lat]);
+        const el = m.getElement();
+        el.className = `decoder-marker ${d.connected ? 'on' : 'off'} ${d.deviceId === selected ? 'selected' : ''}`;
+        const label = el.querySelector('.decoder-marker-label');
+        if (label) label.textContent = d.name;
+      }
+    }
+    for (const [id, m] of markers) {
+      if (!seen.has(id)) {
+        m.remove();
+        markers.delete(id);
+      }
+    }
+    // fit once, so the operator's panning is not undone on every poll
+    if (!fittedRef.current && !bounds.isEmpty()) {
+      map.fitBounds(bounds, { padding: 60, maxZoom: 15 });
+      fittedRef.current = true;
+    }
+  }, [decoders, selected, onSelect]);
+
+  const switchStyle = (key: StyleKey) => {
+    if (key === styleKey) return;
+    setStyleKey(key);
+    mapRef.current?.setStyle(STYLES[key]);
+  };
+
+  return (
+    <div className="mini-map-wrap decoder-map-wrap">
+      <div className="mini-map decoder-map-canvas" ref={ref} />
+      <div className="map-style-toggle mini">
+        <button className={styleKey === 'streets' ? 'on' : ''} onClick={() => switchStyle('streets')}>
+          Map
+        </button>
+        <button className={styleKey === 'satellite' ? 'on' : ''} onClick={() => switchStyle('satellite')}>
+          Satellite
+        </button>
+      </div>
+    </div>
+  );
+}
+
 
 /**
  * Small single-marker live map for the device detail dialog.
@@ -323,6 +434,7 @@ export function MapView({
   colors,
   labelOverrides,
   decimals = 2,
+  decoders,
 }: {
   races: RaceSnap[];
   selected?: MapSelection;
@@ -335,6 +447,8 @@ export function MapView({
   labelOverrides?: Record<string, string>;
   /** Decimals on the marker label; viewers can be given a coarser figure. */
   decimals?: number;
+  /** RaceResult timing boxes, drawn alongside the vehicles when asked for. */
+  decoders?: DecoderPub[];
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map>(null);
@@ -347,6 +461,10 @@ export function MapView({
   const [showLabels, setShowLabels] = useState(true);
   // drives how densely the course posts are drawn; see visibleMarkers
   const [zoom, setZoom] = useState(11);
+  // Timing boxes are off by default: they are course furniture, and the map is
+  // primarily about where the vehicles are.
+  const [showDecoders, setShowDecoders] = useState(false);
+  const decoderMarkersRef = useRef(new Map<string, mapboxgl.Marker>());
 
   /** (Re-)add per-race course layers + the window-slice layer (lost on setStyle). */
   const applyCourseLayers = (fit: boolean) => {
@@ -565,6 +683,36 @@ export function MapView({
     });
   }, [races, selected, displayUnits, colors, showLabels, labelOverrides, decimals, zoom]);
 
+  // timing boxes, as their own marker set so they never disturb the vehicles
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const markers = decoderMarkersRef.current;
+    const wanted = showDecoders ? (decoders ?? []) : [];
+    const seen = new Set<string>();
+    for (const d of wanted) {
+      if (d.lat === undefined || d.lon === undefined || (d.lat === 0 && d.lon === 0)) continue;
+      seen.add(d.deviceId);
+      let m = markers.get(d.deviceId);
+      if (!m) {
+        m = new mapboxgl.Marker({ element: decoderEl(d, false) }).setLngLat([d.lon, d.lat]).addTo(map);
+        markers.set(d.deviceId, m);
+      } else {
+        m.setLngLat([d.lon, d.lat]);
+        const el = m.getElement();
+        el.className = `decoder-marker ${d.connected ? 'on' : 'off'}`;
+        const label = el.querySelector('.decoder-marker-label');
+        if (label) label.textContent = d.name;
+      }
+    }
+    for (const [id, m] of markers) {
+      if (!seen.has(id)) {
+        m.remove();
+        markers.delete(id);
+      }
+    }
+  }, [decoders, showDecoders]);
+
   return (
     <div className="map-wrap">
       <div className="map" ref={containerRef} />
@@ -582,6 +730,15 @@ export function MapView({
         >
           Labels
         </button>
+        {decoders && decoders.length > 0 && (
+          <button
+            className={showDecoders ? 'on' : ''}
+            title={`${decoders.filter((d) => d.connected).length} of ${decoders.length} timing boxes online`}
+            onClick={() => setShowDecoders((v) => !v)}
+          >
+            Decoders
+          </button>
+        )}
       </div>
       {races.length > 1 && (
         <div className="map-legend">

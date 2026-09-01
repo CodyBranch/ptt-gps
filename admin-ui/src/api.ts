@@ -46,6 +46,21 @@ export const api = {
   moveTracker: (eventId: string, imei: string, vehicle: string) =>
     post(`/api/events/${eventId}/trackers/${imei}/vehicle`, { vehicle }),
 
+  // --- decoders (RaceResult timing boxes) ---
+  decoders: (): Promise<{
+    decoders: import('./types').DecoderPub[];
+    status: import('./types').DecoderStatus;
+  }> => getJson('/api/decoders'),
+  decoderSettings: (): Promise<{ status: import('./types').DecoderStatus; hasKey: boolean }> =>
+    getJson('/api/decoders/settings'),
+  saveDecoderSettings: (body: { customerId: number; apiKey?: string; intervalS?: number; enabled?: boolean }) =>
+    send('/api/decoders/settings', 'PUT', body),
+  testDecoders: (body: { customerId: number; apiKey?: string }) =>
+    send('/api/decoders/test', 'POST', body) as Promise<{ devices: number }>,
+  pollDecoders: (): Promise<{ decoders: import('./types').DecoderPub[] }> =>
+    send('/api/decoders/poll', 'POST', {}),
+  disconnectDecoders: () => post('/api/decoders/disconnect'),
+
   setSource: (eventId: string, raceId: string, roleKey: string, source: 'gps' | 'splits') =>
     post(`/api/events/${eventId}/races/${raceId}/roles/${roleKey}/source`, { source }),
 

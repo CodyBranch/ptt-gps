@@ -38,6 +38,8 @@ export interface CourseMeta {
  * stream belongs to which race, so a session can be back-dated to recover a
  * missed start.
  */
+import type { DecoderRecord } from '../decoders/raceresult.js';
+
 /** One frame as it came off a port, plus the id the history pages on. */
 export interface WireFrameRow {
   id?: number;
@@ -206,6 +208,23 @@ export class Store {
     )`);
     this.db.exec(`CREATE INDEX IF NOT EXISTS idx_wire_t ON wire_frames(t_ms)`);
     this.db.exec(`CREATE INDEX IF NOT EXISTS idx_wire_imei ON wire_frames(imei, t_ms)`);
+
+    // RaceResult timing boxes on the course — decoders, TrackBoxes, Ubidiums.
+    // One row per device, overwritten each poll: this is "where is it and is it
+    // up", not a history. The raw payload is kept for diagnosis.
+    this.db.exec(`CREATE TABLE IF NOT EXISTS decoders (
+      device_id TEXT PRIMARY KEY,
+      name TEXT, type TEXT,
+      connected INTEGER NOT NULL DEFAULT 0,
+      lat REAL, lon REAL, battery REAL, temperature REAL,
+      firmware TEXT, file_no TEXT, records_count INTEGER,
+      has_power INTEGER, in_timing_mode INTEGER, time_running INTEGER,
+      in_standby INTEGER, reader_healthy INTEGER, reader_temperature REAL,
+      time_source TEXT, error_flags TEXT,
+      device_time TEXT, request_time TEXT, received TEXT,
+      seen_ms INTEGER NOT NULL,
+      raw TEXT
+    )`);
 
     this.db.exec(`CREATE TABLE IF NOT EXISTS owners (
       id INTEGER PRIMARY KEY,
@@ -711,6 +730,104 @@ export class Store {
 
   deleteToken(tokenHash: string): void {
     this.db.prepare(`DELETE FROM auth_tokens WHERE token_hash = ?`).run(tokenHash);
+  }
+
+  // --- decoders (RaceResult) ----------------------------------------------
+
+  upsertDecoders(rows: DecoderRecord[]): void {
+    const stmt = this.db.prepare(
+      `INSERT INTO decoders (device_id, name, type, connected, lat, lon, battery, temperature,
+         firmware, file_no, records_count, has_power, in_timing_mode, time_running, in_standby,
+         reader_healthy, reader_temperature, time_source, error_flags,
+         device_time, request_time, received, seen_ms, raw)
+       VALUES (@device_id, @name, @type, @connected, @lat, @lon, @battery, @temperature,
+         @firmware, @file_no, @records_count, @has_power, @in_timing_mode, @time_running, @in_standby,
+         @reader_healthy, @reader_temperature, @time_source, @error_flags,
+         @device_time, @request_time, @received, @seen_ms, @raw)
+       ON CONFLICT(device_id) DO UPDATE SET
+         name=excluded.name, type=excluded.type, connected=excluded.connected,
+         lat=excluded.lat, lon=excluded.lon, battery=excluded.battery, temperature=excluded.temperature,
+         firmware=excluded.firmware, file_no=excluded.file_no, records_count=excluded.records_count,
+         has_power=excluded.has_power, in_timing_mode=excluded.in_timing_mode,
+         time_running=excluded.time_running, in_standby=excluded.in_standby,
+         reader_healthy=excluded.reader_healthy, reader_temperature=excluded.reader_temperature,
+         time_source=excluded.time_source, error_flags=excluded.error_flags,
+         device_time=excluded.device_time, request_time=excluded.request_time,
+         received=excluded.received, seen_ms=excluded.seen_ms, raw=excluded.raw`,
+    );
+    const b = (v: boolean | undefined) => (v === undefined ? null : v ? 1 : 0);
+    this.db.transaction((list: DecoderRecord[]) => {
+      for (const d of list) {
+        stmt.run({
+          device_id: d.deviceId,
+          name: d.name ?? null,
+          type: d.type ?? null,
+          connected: d.connected ? 1 : 0,
+          lat: d.lat ?? null,
+          lon: d.lon ?? null,
+          battery: d.battery ?? null,
+          temperature: d.temperature ?? null,
+          firmware: d.firmware ?? null,
+          file_no: d.fileNo ?? null,
+          records_count: d.recordsCount ?? null,
+          has_power: b(d.hasPower),
+          in_timing_mode: b(d.inTimingMode),
+          time_running: b(d.timeRunning),
+          in_standby: b(d.inStandby),
+          reader_healthy: b(d.readerHealthy),
+          reader_temperature: d.readerTemperature ?? null,
+          time_source: d.timeSource ?? null,
+          error_flags: d.errorFlags ?? null,
+          device_time: d.deviceTime ?? null,
+          request_time: d.requestTime ?? null,
+          received: d.received ?? null,
+          seen_ms: d.seenMs,
+          raw: d.raw ?? null,
+        });
+      }
+    })(rows);
+  }
+
+  listDecoders(): DecoderRecord[] {
+    const rows = this.db.prepare(`SELECT * FROM decoders ORDER BY name COLLATE NOCASE`).all() as Array<
+      Record<string, unknown>
+    >;
+    const b = (v: unknown) => (v === null || v === undefined ? undefined : v === 1);
+    const n = (v: unknown) => (v === null || v === undefined ? undefined : Number(v));
+    const s = (v: unknown) => (v === null || v === undefined ? undefined : String(v));
+    return rows.map((r) => ({
+      deviceId: String(r.device_id),
+      name: s(r.name) ?? String(r.device_id),
+      type: s(r.type) ?? 'Decoder',
+      connected: r.connected === 1,
+      lat: n(r.lat),
+      lon: n(r.lon),
+      battery: n(r.battery),
+      temperature: n(r.temperature),
+      firmware: s(r.firmware),
+      fileNo: s(r.file_no),
+      recordsCount: n(r.records_count),
+      hasPower: b(r.has_power),
+      inTimingMode: b(r.in_timing_mode),
+      timeRunning: b(r.time_running),
+      inStandby: b(r.in_standby),
+      readerHealthy: b(r.reader_healthy),
+      readerTemperature: n(r.reader_temperature),
+      timeSource: s(r.time_source),
+      errorFlags: s(r.error_flags),
+      deviceTime: s(r.device_time),
+      requestTime: s(r.request_time),
+      received: s(r.received),
+      seenMs: Number(r.seen_ms),
+      raw: s(r.raw) ?? '',
+    }));
+  }
+
+  /** Forget a device that RaceResult no longer lists. */
+  deleteDecodersExcept(keep: string[]): number {
+    if (keep.length === 0) return this.db.prepare(`DELETE FROM decoders`).run().changes;
+    const marks = keep.map(() => '?').join(',');
+    return this.db.prepare(`DELETE FROM decoders WHERE device_id NOT IN (${marks})`).run(...keep).changes;
   }
 
   // --- raw wire log -------------------------------------------------------

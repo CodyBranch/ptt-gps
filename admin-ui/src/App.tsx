@@ -4,6 +4,7 @@ import { api } from './api';
 import { ConfirmDialog, type ConfirmRequest } from './components/Confirm';
 import { EventSetup } from './components/EventSetup';
 import { CoursesView } from './components/CoursesView';
+import { DecodersView } from './components/DecodersView';
 import { DistanceBoard } from './components/DistanceBoard';
 import { EventsView } from './components/EventsView';
 import { FleetView } from './components/FleetView';
@@ -20,7 +21,7 @@ import { SystemView } from './components/SystemView';
 import { WireLog } from './components/WireLog';
 import { TrackerTable } from './components/TrackerTable';
 import { WindowDialog } from './components/WindowDialog';
-import type { RaceSnap, RaceStatus, SimulatedDistance, Snapshot, TrackerPub, Units } from './types';
+import type { DecoderPub, RaceSnap, RaceStatus, SimulatedDistance, Snapshot, TrackerPub, Units } from './types';
 
 interface State {
   snapshot?: Snapshot;
@@ -98,7 +99,7 @@ const BOARD_URL =
   window.location.pathname === '/watch/distances' ||
   new URLSearchParams(window.location.search).get('viewer') === 'distances';
 
-type Page = 'home' | 'event' | 'events' | 'courses' | 'fleet' | 'system' | 'sim' | 'wire' | 'help';
+type Page = 'home' | 'event' | 'events' | 'courses' | 'fleet' | 'decoders' | 'system' | 'sim' | 'wire' | 'help';
 
 /**
  * The console keeps its place in the address bar, so a refresh returns you to
@@ -111,7 +112,7 @@ interface Route {
   eventTab: string;
 }
 
-const TOP_PAGES: Page[] = ['events', 'courses', 'fleet', 'system', 'sim', 'wire', 'help'];
+const TOP_PAGES: Page[] = ['events', 'courses', 'fleet', 'decoders', 'system', 'sim', 'wire', 'help'];
 
 /** The tab strip's status dot, for a native <option> that cannot be styled:
  *  filled is running, half is armed and ready, hollow is waiting, tick is done. */
@@ -167,6 +168,9 @@ export default function App() {
   const accountRef = useRef<HTMLDivElement>(null);
   // held so the wire log can subscribe to the raw feed on the same connection
   const [socket, setSocket] = useState<Socket | null>(null);
+  // Timing boxes are global hardware, so they are fetched once and pushed
+  // thereafter — the race map can draw them over any event's course.
+  const [decoders, setDecoders] = useState<DecoderPub[]>([]);
   const [, tick] = useReducer((n: number) => n + 1, 0);
   const ask = (req: ConfirmRequest) => setConfirm(req);
   const go = (p: Page) => {
@@ -221,6 +225,19 @@ export default function App() {
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
   }, []);
+
+  useEffect(() => {
+    if (!socket) return;
+    api
+      .decoders()
+      .then((r) => setDecoders(r.decoders ?? []))
+      .catch(() => setDecoders([]));
+    const onDecoders = (list: DecoderPub[]) => setDecoders(list);
+    socket.on('decoders', onDecoders);
+    return () => {
+      socket.off('decoders', onDecoders);
+    };
+  }, [socket]);
 
   // Account menu closes on an outside click or Escape, like the other popovers.
   useEffect(() => {
@@ -471,6 +488,7 @@ export default function App() {
             colors={trackerColorMap}
             labelOverrides={viewerLabels}
             decimals={decimals}
+            decoders={decoders}
           />
         </div>
       );
@@ -499,6 +517,7 @@ export default function App() {
           colors={trackerColorMap}
           labelOverrides={viewerLabels}
           decimals={decimals}
+          decoders={decoders}
         />
       </div>
     );
@@ -553,6 +572,9 @@ export default function App() {
               </button>
               <button className={`side-item ${page === 'fleet' ? 'active' : ''}`} onClick={() => go('fleet')}>
                 <span className="side-icon">🚐</span> Fleet
+              </button>
+              <button className={`side-item ${page === 'decoders' ? 'active' : ''}`} onClick={() => go('decoders')}>
+                <span className="side-icon">📶</span> Decoders
               </button>
               <button className={`side-item ${page === 'system' ? 'active' : ''}`} onClick={() => go('system')}>
                 <span className="side-icon">⚙</span> System
@@ -755,6 +777,8 @@ export default function App() {
         <CoursesView displayUnits={displayUnits} ask={ask} onOpenEvent={(id) => openEvent(id)} />
       ) : page === 'fleet' && admin && !viewer ? (
         <FleetView readonly={false} />
+      ) : page === 'decoders' && !viewer ? (
+        <DecodersView socket={socket} admin={admin} ask={ask} />
       ) : page === 'help' && !viewer ? (
         <HelpView />
       ) : page === 'wire' && !viewer ? (

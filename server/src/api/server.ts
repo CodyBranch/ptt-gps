@@ -25,6 +25,7 @@ import type { Store } from '../state/store.js';
 import { resolveRace } from '../config/schema.js';
 import * as turf from '@turf/turf';
 import { SimEngine, type SimTrackerCfg } from '../sim/engine.js';
+import type { DecoderPoller } from '../decoders/poller.js';
 import { AuthService, hashPassword, type Role } from './auth.js';
 import { TunnelManager } from './tunnel.js';
 
@@ -43,6 +44,7 @@ export interface ServerContext {
   unloadEvent: (eventId: string) => void;
   rebuildEvent: (eventId: string, json: unknown) => void;
   updateEvent: (eventId: string, json: unknown) => void;
+  decoders: DecoderPoller;
   moveTracker: (eventId: string, imei: string, vehicleKey: string, by?: string) => void;
   snapshotAll: () => unknown;
   snapshotFor: (eventId: string) => unknown;
@@ -774,6 +776,55 @@ export function startApi(
   );
 
   // --- fleet registry ---
+
+  // --- decoders (RaceResult timing boxes) --------------------------------
+
+  ex.get('/api/decoders', (_req, res) => {
+    res.json({ ok: true, decoders: ctx.store.listDecoders(), status: ctx.decoders.status() });
+  });
+
+  /** Settings never hand the API key back — only whether one is held. */
+  ex.get('/api/decoders/settings', auth.adminOnly, (_req, res) => {
+    res.json({ ok: true, status: ctx.decoders.status(), hasKey: !!ctx.decoders.readConfig()?.apiKey });
+  });
+
+  ex.put(
+    '/api/decoders/settings',
+    auth.adminOnly,
+    act((req: OpRequest) => {
+      const b = req.body as { customerId?: number; apiKey?: string; intervalS?: number; enabled?: boolean };
+      if (!b?.customerId) throw new Error('A customer ID is required');
+      ctx.decoders.saveConfig({
+        customerId: Number(b.customerId),
+        apiKey: b.apiKey,
+        intervalS: Number(b.intervalS),
+        enabled: b.enabled !== false,
+      });
+      return ctx.decoders.status();
+    }),
+  );
+
+  ex.post('/api/decoders/disconnect', auth.adminOnly, (_req, res) => {
+    ctx.decoders.clearConfig();
+    res.json({ ok: true });
+  });
+
+  /** Try credentials without saving them — the same shape as the Firebase test. */
+  ex.post('/api/decoders/test', auth.adminOnly, async (req, res) => {
+    try {
+      const b = req.body as { customerId?: number; apiKey?: string };
+      if (!b?.customerId) throw new Error('A customer ID is required');
+      const r = await ctx.decoders.test({ customerId: Number(b.customerId), apiKey: b.apiKey });
+      res.json({ ok: true, ...r });
+    } catch (err) {
+      res.status(400).json({ ok: false, error: (err as Error).message });
+    }
+  });
+
+  ex.post('/api/decoders/poll', auth.adminOnly, async (_req, res) => {
+    await ctx.decoders.pollOnce();
+    res.json({ ok: true, decoders: ctx.store.listDecoders(), status: ctx.decoders.status() });
+  });
 
   /** Past wire traffic. Paged newest-first on `before` so scrolling back is
    *  stable while new frames keep arriving. */

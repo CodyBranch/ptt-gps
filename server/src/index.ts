@@ -5,6 +5,7 @@ import { ConfigManager, listEvents, migrateRaceMarkersToCourses, migrateRolesToV
 import { App } from './app.js';
 import { Forwarder } from './ingest/forwarder.js';
 import { FixGate } from './ingest/hygiene.js';
+import { DecoderPoller } from './decoders/poller.js';
 import type { Fix, Telemetry } from './ingest/types.js';
 import { FirebaseHub } from './outputs/hub.js';
 import { Store } from './state/store.js';
@@ -311,8 +312,16 @@ function syncListeners(): void {
 
 // --- boot: restore loaded events (or seed from --event / legacy setting) ---
 
+/**
+ * Timing boxes on the course, polled from RaceResult. Separate hardware from
+ * the GPS trackers, but the same question at a meet — is it up, and where is
+ * it — so the console shows them side by side.
+ */
+const decoders = new DecoderPoller(store, (list) => out.emit('decoders', list));
+
 const ctx: ServerContext = {
   store,
+  decoders,
   hub,
   forwarder,
   eventsDir,
@@ -333,6 +342,7 @@ const ctx: ServerContext = {
 
 const { broadcast, emitRaw } = startApi(ctx, Number(arg('api-port', '8080')));
 emitFn = broadcast;
+decoders.start();
 
 // Markers used to live on each race; they belong to the course, which is
 // shared. Lift any that are still in event files into the course library.
