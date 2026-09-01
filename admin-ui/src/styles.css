@@ -1349,13 +1349,19 @@ button.mini.on { border-color: var(--warn); color: var(--warn); }
 .decoder-flag.bad { color: var(--bad); border-color: rgba(231, 5, 24, 0.5); }
 
 .decoder-table .col-clock, .decoder-table .col-seen { white-space: nowrap; }
+.where-place { font-weight: 600; }
+.where-coords { font-size: 10.5px; color: var(--dim); }
+.decoder-table .col-where { min-width: 150px; }
+.decoder-table tr.is-hidden td { opacity: 0.5; }
+.decoder-table .col-hide { text-align: right; white-space: nowrap; }
 
 @media (max-width: 900px) {
   .decoder-map { padding: 0 10px; }
   .decoder-map-canvas { height: 240px; }
   /* type and clock drift are detail; the phone keeps device, battery, state */
-  .decoder-table .col-type, .decoder-table .col-clock { display: none; }
-  .decoder-table .col-device { width: 42%; }
-  .decoder-table .col-batt { width: 18%; }
-  .decoder-table .col-seen { width: 20%; font-size: 11px; }
+  .decoder-table .col-type, .decoder-table .col-clock, .decoder-table .col-seen { display: none; }
+  .decoder-table .col-hide button.mini { padding: 3px 6px; font-size: 10px; }
+  .decoder-table .col-device { width: 40%; }
+  .decoder-table .col-where { width: 34%; min-width: 0; font-size: 11px; }
+  .decoder-table .col-batt { width: 16%; }
 }

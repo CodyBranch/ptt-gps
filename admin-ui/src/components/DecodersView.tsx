@@ -4,6 +4,7 @@ import { api } from '../api';
 import type { DecoderPub, DecoderStatus } from '../types';
 import type { ConfirmRequest } from './Confirm';
 import { DecoderMap } from './MapView';
+import { cachedPlace, reverseGeocodeAll } from '../geocode';
 
 const fmtAge = (ms?: number) => {
   if (!ms) return 'never';
@@ -54,10 +55,12 @@ export function DecodersView({
   const [hasKey, setHasKey] = useState(false);
   const [query, setQuery] = useState('');
   const [onlineOnly, setOnlineOnly] = useState(false);
+  const [showHidden, setShowHidden] = useState(false);
   const [selected, setSelected] = useState<string>();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string>();
+  const [places, setPlaces] = useState<Record<string, string>>({});
   const [, tick] = useState(0);
 
   const load = async () => {
@@ -92,16 +95,56 @@ export function DecodersView({
     return () => clearInterval(t);
   }, []);
 
+  // Turn coordinates into somewhere you recognise. Only boxes that have moved
+  // are looked up — the cache answers for the rest.
+  useEffect(() => {
+    const todo = decoders
+      .filter((d) => d.lat !== undefined && d.lon !== undefined && !(d.lat === 0 && d.lon === 0))
+      .map((d) => ({ id: d.deviceId, lat: d.lat!, lon: d.lon! }))
+      .filter((p) => cachedPlace(p.lat, p.lon) === undefined);
+    // whatever is already known can be shown at once
+    setPlaces((prev) => {
+      const next = { ...prev };
+      for (const d of decoders) {
+        if (d.lat === undefined || d.lon === undefined) continue;
+        const hit = cachedPlace(d.lat, d.lon);
+        if (hit) next[d.deviceId] = hit;
+      }
+      return next;
+    });
+    if (todo.length === 0) return;
+    let live = true;
+    void reverseGeocodeAll(todo, (id, place) => {
+      if (live) setPlaces((prev) => ({ ...prev, [id]: place }));
+    });
+    return () => {
+      live = false;
+    };
+  }, [decoders]);
+
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
     return decoders.filter(
       (d) =>
+        (showHidden ? true : !d.hidden) &&
         (!onlineOnly || d.connected) &&
         (!q || d.name.toLowerCase().includes(q) || d.deviceId.toLowerCase().includes(q) || d.type.toLowerCase().includes(q)),
     );
-  }, [decoders, query, onlineOnly]);
+  }, [decoders, query, onlineOnly, showHidden]);
 
-  const online = decoders.filter((d) => d.connected).length;
+  // Counts and the map are about our own boxes; hidden ones are somebody else's.
+  const ours = decoders.filter((d) => !d.hidden);
+  const online = ours.filter((d) => d.connected).length;
+  const hiddenCount = decoders.length - ours.length;
+
+  const setHidden = async (deviceId: string, hidden: boolean) => {
+    try {
+      await api.setDecoderHidden(deviceId, hidden);
+      setDecoders((prev) => prev.map((d) => (d.deviceId === deviceId ? { ...d, hidden } : d)));
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : String(err));
+    }
+  };
 
   return (
     <div className="setup">
@@ -117,6 +160,15 @@ export function DecodersView({
         <button className={`mini ${onlineOnly ? 'on' : ''}`} onClick={() => setOnlineOnly(!onlineOnly)}>
           Online only
         </button>
+        {(hiddenCount > 0 || showHidden) && (
+          <button
+            className={`mini ${showHidden ? 'on' : ''}`}
+            title="Boxes hidden from this console — usually another timer's, in a shared account"
+            onClick={() => setShowHidden(!showHidden)}
+          >
+            Hidden ({hiddenCount})
+          </button>
+        )}
         {admin && (
           <>
             <button
@@ -147,7 +199,7 @@ export function DecodersView({
       <div className="wire-count">
         {status?.configured ? (
           <>
-            {online} of {decoders.length} online · polling every {status.intervalS}s · last poll{' '}
+            {online} of {ours.length} online · polling every {status.intervalS}s · last poll{' '}
             {fmtAge(status.lastPollMs)}
             {status.enabled === false && <span className="warn-text"> · polling paused</span>}
             {status.lastError && <span className="warn-text"> · {status.lastError}</span>}
@@ -160,9 +212,9 @@ export function DecodersView({
         {msg && <span className="dim"> · {msg}</span>}
       </div>
 
-      {decoders.length > 0 && (
+      {ours.length > 0 && (
         <div className="decoder-map">
-          <DecoderMap decoders={decoders} selected={selected} onSelect={(id: string) => setSelected((c) => (c === id ? undefined : id))} />
+          <DecoderMap decoders={ours} selected={selected} onSelect={(id: string) => setSelected((c) => (c === id ? undefined : id))} />
         </div>
       )}
 
@@ -173,17 +225,19 @@ export function DecodersView({
               <tr>
                 <th className="col-device">Device</th>
                 <th className="col-type">Type</th>
+                <th className="col-where">Location</th>
                 <th className="col-batt">Battery</th>
                 <th>Status</th>
                 <th className="col-clock">Clock</th>
                 <th className="col-seen">Last poll</th>
+                {admin && <th className="col-hide"></th>}
               </tr>
             </thead>
             <tbody>
               {shown.map((d) => (
                 <tr
                   key={d.deviceId}
-                  className={d.deviceId === selected ? 'selected' : ''}
+                  className={`${d.deviceId === selected ? 'selected' : ''} ${d.hidden ? 'is-hidden' : ''}`}
                   onClick={() => setSelected((c) => (c === d.deviceId ? undefined : d.deviceId))}
                 >
                   <td className="col-device">
@@ -194,6 +248,18 @@ export function DecodersView({
                     <div className="t-imei">{d.deviceId}</div>
                   </td>
                   <td className="dim col-type">{d.type}</td>
+                  <td className="col-where">
+                    {d.lat === undefined || d.lon === undefined || (d.lat === 0 && d.lon === 0) ? (
+                      <span className="dim">no position</span>
+                    ) : (
+                      <>
+                        <div className="where-place">{places[d.deviceId] ?? '—'}</div>
+                        <div className="where-coords mono">
+                          {d.lat.toFixed(5)}, {d.lon.toFixed(5)}
+                        </div>
+                      </>
+                    )}
+                  </td>
                   <td className="col-batt">
                     {d.battery === undefined ? (
                       <span className="dim">—</span>
@@ -224,11 +290,29 @@ export function DecodersView({
                     {drift(d) ?? '—'}
                   </td>
                   <td className="dim col-seen">{fmtAge(d.seenMs)}</td>
+                  {admin && (
+                    <td className="col-hide">
+                      <button
+                        className="mini"
+                        title={
+                          d.hidden
+                            ? 'Track this box again'
+                            : 'Hide this box — it keeps coming back from the API but is not yours'
+                        }
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void setHidden(d.deviceId, !d.hidden);
+                        }}
+                      >
+                        {d.hidden ? '↩ Restore' : '✕ Hide'}
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
               {shown.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="dim">
+                  <td colSpan={admin ? 8 : 7} className="dim">
                     {decoders.length === 0 ? 'No decoders yet.' : 'Nothing matches that filter.'}
                   </td>
                 </tr>

@@ -38,6 +38,8 @@ export interface DecoderRecord {
   received?: string;
   /** When this poll happened, by our clock. */
   seenMs: number;
+  /** Set locally to keep another timer's boxes out of the way. */
+  hidden?: boolean;
   raw: string;
 }
 

@@ -821,6 +821,15 @@ export function startApi(
     }
   });
 
+  /** Hide or restore one device — see Store.setDecoderHidden. */
+  ex.post(
+    '/api/decoders/:deviceId/hidden',
+    act((req: OpRequest) => {
+      ctx.store.setDecoderHidden(req.params.deviceId as string, req.body?.hidden !== false);
+      broadcast('decoders', ctx.store.listDecoders());
+    }),
+  );
+
   ex.post('/api/decoders/poll', auth.adminOnly, async (_req, res) => {
     await ctx.decoders.pollOnce();
     res.json({ ok: true, decoders: ctx.store.listDecoders(), status: ctx.decoders.status() });

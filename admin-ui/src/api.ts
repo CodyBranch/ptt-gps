@@ -60,6 +60,8 @@ export const api = {
   pollDecoders: (): Promise<{ decoders: import('./types').DecoderPub[] }> =>
     send('/api/decoders/poll', 'POST', {}),
   disconnectDecoders: () => post('/api/decoders/disconnect'),
+  setDecoderHidden: (deviceId: string, hidden: boolean) =>
+    post(`/api/decoders/${encodeURIComponent(deviceId)}/hidden`, { hidden }),
 
   setSource: (eventId: string, raceId: string, roleKey: string, source: 'gps' | 'splits') =>
     post(`/api/events/${eventId}/races/${raceId}/roles/${roleKey}/source`, { source }),

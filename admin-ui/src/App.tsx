@@ -230,9 +230,11 @@ export default function App() {
     if (!socket) return;
     api
       .decoders()
-      .then((r) => setDecoders(r.decoders ?? []))
+      .then((r) => setDecoders((r.decoders ?? []).filter((d) => !d.hidden)))
       .catch(() => setDecoders([]));
-    const onDecoders = (list: DecoderPub[]) => setDecoders(list);
+    // hidden boxes belong to another timer in a shared account — they never
+    // reach the race map
+    const onDecoders = (list: DecoderPub[]) => setDecoders(list.filter((d) => !d.hidden));
     socket.on('decoders', onDecoders);
     return () => {
       socket.off('decoders', onDecoders);

@@ -288,6 +288,8 @@ export interface DecoderPub {
   requestTime?: string;
   received?: string;
   seenMs: number;
+  /** Hidden locally — another timer's box in a shared account. */
+  hidden?: boolean;
 }
 
 export interface DecoderStatus {

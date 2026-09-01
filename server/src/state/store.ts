@@ -223,8 +223,13 @@ export class Store {
       time_source TEXT, error_flags TEXT,
       device_time TEXT, request_time TEXT, received TEXT,
       seen_ms INTEGER NOT NULL,
-      raw TEXT
+      raw TEXT,
+      hidden INTEGER NOT NULL DEFAULT 0
     )`);
+    const decoderCols = this.db.prepare(`PRAGMA table_info(decoders)`).all() as Array<{ name: string }>;
+    if (!decoderCols.some((c) => c.name === 'hidden')) {
+      this.db.exec(`ALTER TABLE decoders ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0`);
+    }
 
     this.db.exec(`CREATE TABLE IF NOT EXISTS owners (
       id INTEGER PRIMARY KEY,
@@ -754,6 +759,8 @@ export class Store {
          time_source=excluded.time_source, error_flags=excluded.error_flags,
          device_time=excluded.device_time, request_time=excluded.request_time,
          received=excluded.received, seen_ms=excluded.seen_ms, raw=excluded.raw`,
+      // note: `hidden` is deliberately absent — it is our choice about a
+      // device, not something RaceResult tells us, so a poll must not undo it.
     );
     const b = (v: boolean | undefined) => (v === undefined ? null : v ? 1 : 0);
     this.db.transaction((list: DecoderRecord[]) => {
@@ -819,8 +826,21 @@ export class Store {
       requestTime: s(r.request_time),
       received: s(r.received),
       seenMs: Number(r.seen_ms),
+      hidden: r.hidden === 1,
       raw: s(r.raw) ?? '',
     }));
+  }
+
+  /**
+   * Hide a device we do not own. A shared RaceResult account at a big event
+   * carries other timers' boxes, and they keep coming back on every poll —
+   * hiding is a local decision, so it survives polling and restarts.
+   */
+  setDecoderHidden(deviceId: string, hidden: boolean): void {
+    const r = this.db
+      .prepare(`UPDATE decoders SET hidden = ? WHERE device_id = ?`)
+      .run(hidden ? 1 : 0, deviceId);
+    if (r.changes === 0) throw new Error(`Unknown decoder: ${deviceId}`);
   }
 
   /** Forget a device that RaceResult no longer lists. */
