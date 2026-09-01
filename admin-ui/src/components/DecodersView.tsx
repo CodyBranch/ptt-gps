@@ -14,8 +14,15 @@ const fmtAge = (ms?: number) => {
   return `${Math.floor(s / 86400)}d ago`;
 };
 
-/** Device clock against ours at the moment we asked — the drift that matters. */
+/**
+ * Device clock against ours at the moment we asked — the drift that matters.
+ *
+ * Only meaningful while the box is online. For an offline one the reported
+ * time is simply when it was last heard from, so the difference is days and
+ * says nothing about its clock.
+ */
 function drift(d: DecoderPub): string | undefined {
+  if (!d.connected) return undefined;
   if (!d.deviceTime || !d.requestTime) return undefined;
   const a = Date.parse(d.deviceTime);
   const b = Date.parse(d.requestTime);

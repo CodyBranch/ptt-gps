@@ -45,6 +45,15 @@ const num = (v: unknown): number | undefined => {
   const n = typeof v === 'string' ? Number(v) : (v as number);
   return typeof n === 'number' && Number.isFinite(n) ? n : undefined;
 };
+/**
+ * RaceResult reports -1 for a battery it cannot read — mains-powered boxes do
+ * this. Passed through it renders as a flat battery, which would have nine
+ * healthy decoders showing red.
+ */
+const pct = (v: unknown): number | undefined => {
+  const n = num(v);
+  return n === undefined || n < 0 ? undefined : n;
+};
 const bool = (v: unknown): boolean | undefined => {
   if (typeof v === 'boolean') return v;
   if (typeof v === 'number') return v !== 0; // Ubidium reports 0/1
@@ -71,7 +80,7 @@ function normalizeDecoderOrTrackBox(raw: Raw, seenMs: number): DecoderRecord {
     connected: bool(raw.Connected) ?? false,
     lat: num(pos.Latitude),
     lon: num(pos.Longitude),
-    battery: num(raw.BatteryCharge),
+    battery: pct(raw.BatteryCharge),
     temperature: num(raw.Temperature),
     firmware: str(s.Firmware ?? tbx?.Firmware),
     fileNo: str(raw.FileNo),
@@ -109,7 +118,7 @@ function normalizeUbidium(raw: Raw, seenMs: number): DecoderRecord {
     connected,
     lat: num(pos.Latitude),
     lon: num(pos.Longitude),
-    battery: num(power.Battery1?.Level),
+    battery: pct(power.Battery1?.Level),
     temperature: num(raw.System?.Temperature),
     firmware: str(raw.System?.Firmware),
     fileNo: str(data.FileNumber),

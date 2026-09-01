@@ -113,6 +113,16 @@ describe('RaceResult device normalising', () => {
     expect(normalizeDevice({ ...noStatus, ActiveInternal: { Connected: false } }, 1)!.connected).toBe(false);
   });
 
+  it('treats a -1 battery as no reading, not as flat', () => {
+    // Mains-powered boxes report -1. Passed through it renders as a dead
+    // battery and puts a red bar against a perfectly healthy decoder.
+    expect(normalizeDevice({ ...DECODER, BatteryCharge: -1 }, 1)!.battery).toBeUndefined();
+    const ub = { ...UBIDIUM, Power: { Source: 1, Battery1: { Level: -1 } } };
+    expect(normalizeDevice(ub, 1)!.battery).toBeUndefined();
+    // a real reading of 0 is still a real reading
+    expect(normalizeDevice({ ...DECODER, BatteryCharge: 0 }, 1)!.battery).toBe(0);
+  });
+
   it('drops a shape it does not recognise rather than half-reading it', () => {
     expect(normalizeDevice({ Something: 'else' }, 1)).toBeNull();
     expect(normalizeDevice(null as never, 1)).toBeNull();
