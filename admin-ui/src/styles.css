@@ -1329,6 +1329,11 @@ button.mini.on { border-color: var(--warn); color: var(--warn); }
    the left, what is on screen on the right. */
 .decoder-status { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding-bottom: 8px; }
 .decoder-status-text { min-width: 0; }
+/* Devices reaching us that are not on the roster. */
+.unknown-imei { white-space: nowrap; }
+.unknown-detail { font-size: 12px; }
+.unknown-action { text-align: right; white-space: nowrap; }
+
 .decoder-counts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-left: auto; }
 .decoder-count {
   display: inline-flex; align-items: baseline; gap: 6px; padding: 3px 9px;
@@ -1376,6 +1381,20 @@ button.mini.on { border-color: var(--warn); color: var(--warn); }
 .decoder-table .col-hide { text-align: right; white-space: nowrap; }
 
 @media (max-width: 900px) {
+  /* IMEI, description and the button will not sit on one line at 375px, so the
+     row becomes a small card: the device above what is known about it, with the
+     action out at the edge. */
+  .dim-table, .dim-table tbody, .dim-table tr, .dim-table td { display: block; }
+  .dim-table tr {
+    display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: center;
+    padding: 9px 10px; margin-bottom: 7px;
+    background: var(--panel2); border: 1px solid var(--border); border-radius: 8px;
+  }
+  .dim-table td { padding: 0; border: none; }
+  .dim-table .unknown-imei { grid-column: 1; grid-row: 1; font-size: 12.5px; }
+  .dim-table .unknown-detail { grid-column: 1; grid-row: 2; font-size: 11px; }
+  .dim-table .unknown-action { grid-column: 2; grid-row: 1 / span 2; }
+
   .decoder-map { padding: 0 10px; }
   /* on a phone the chips wrap under the status line rather than squeezing it */
   .decoder-counts { margin-left: 0; gap: 5px; }

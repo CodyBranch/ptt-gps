@@ -299,11 +299,16 @@ export function FleetView({ readonly }: { readonly: boolean }) {
                         .filter((dv) => !fleetImeis.has(dv.imei))
                         .map((dv) => (
                           <tr key={dv.imei}>
-                            <td className="mono">{dv.imei}</td>
-                            <td>{dv.protocol}</td>
-                            <td>{dv.battery != null ? `${dv.battery}%` : ''}</td>
-                            <td>{fmtSeen(dv.last_received_ms)}</td>
-                            <td>
+                            <td className="mono unknown-imei">{dv.imei}</td>
+                            {/* One cell rather than three: a protocol, a battery
+                                and a timestamp are one description of a device,
+                                and as separate columns they cannot fit a phone. */}
+                            <td className="unknown-detail dim">
+                              {[dv.protocol, dv.battery != null ? `${dv.battery}%` : null, fmtSeen(dv.last_received_ms)]
+                                .filter(Boolean)
+                                .join(' · ')}
+                            </td>
+                            <td className="unknown-action">
                               <button
                                 className="mini"
                                 onClick={async () => {
