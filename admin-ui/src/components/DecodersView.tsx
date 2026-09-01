@@ -62,6 +62,7 @@ export function DecodersView({
   const [query, setQuery] = useState('');
   const [onlineOnly, setOnlineOnly] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
+  const [view, setView] = useState<{ north: number; south: number; east: number; west: number }>();
   const [selected, setSelected] = useState<string>();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -143,6 +144,27 @@ export function DecodersView({
   const online = ours.filter((d) => d.connected).length;
   const hiddenCount = decoders.length - ours.length;
 
+  /**
+   * What is on screen, by family. Zoomed out that is the whole fleet; zoomed
+   * onto one event it is the boxes at that event, which is the count you
+   * actually want when you are standing at it.
+   */
+  const inView = useMemo(() => {
+    const rows = ours.filter((d) => {
+      if (d.lat === undefined || d.lon === undefined || (d.lat === 0 && d.lon === 0)) return false;
+      if (!view) return true;
+      return d.lat <= view.north && d.lat >= view.south && d.lon <= view.east && d.lon >= view.west;
+    });
+    const byType = new Map<string, { total: number; online: number }>();
+    for (const d of rows) {
+      const e = byType.get(d.type) ?? { total: 0, online: 0 };
+      e.total++;
+      if (d.connected) e.online++;
+      byType.set(d.type, e);
+    }
+    return [...byType.entries()].sort((a, b) => b[1].total - a[1].total);
+  }, [ours, view]);
+
   const setHidden = async (deviceId: string, hidden: boolean) => {
     try {
       await api.setDecoderHidden(deviceId, hidden);
@@ -218,9 +240,27 @@ export function DecodersView({
         {msg && <span className="dim"> · {msg}</span>}
       </div>
 
+      {inView.length > 0 && (
+        <div className="decoder-counts">
+          {inView.map(([type, c]) => (
+            <span className="decoder-count" key={type}>
+              <span className="decoder-count-n">{c.total}</span>
+              <span className="decoder-count-type">{type}</span>
+              <span className={`decoder-count-on ${c.online > 0 ? 'live' : ''}`}>{c.online} online</span>
+            </span>
+          ))}
+          <span className="dim decoder-count-note">in view</span>
+        </div>
+      )}
+
       {ours.length > 0 && (
         <div className="decoder-map">
-          <DecoderMap decoders={ours} selected={selected} onSelect={(id: string) => setSelected((c) => (c === id ? undefined : id))} />
+          <DecoderMap
+            decoders={ours}
+            selected={selected}
+            onSelect={(id: string) => setSelected((c) => (c === id ? undefined : id))}
+            onViewport={setView}
+          />
         </div>
       )}
 

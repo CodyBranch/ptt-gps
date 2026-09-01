@@ -64,10 +64,13 @@ export function DecoderMap({
   decoders,
   selected,
   onSelect,
+  onViewport,
 }: {
   decoders: DecoderPub[];
   selected?: string;
   onSelect?: (deviceId: string) => void;
+  /** Reports the visible area so the page can count what is on screen. */
+  onViewport?: (b: { north: number; south: number; east: number; west: number }) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map>(null);
@@ -75,6 +78,9 @@ export function DecoderMap({
   const fittedRef = useRef(false);
   // what was selected last render, so a deselect can be told from a re-render
   const prevSelectedRef = useRef<string | undefined>(undefined);
+  // held in a ref so the map's listener never closes over a stale callback
+  const viewportRef = useRef(onViewport);
+  viewportRef.current = onViewport;
   const [styleKey, setStyleKey] = useState<StyleKey>('streets');
 
   useEffect(() => {
@@ -85,6 +91,14 @@ export function DecoderMap({
       zoom: 10,
     });
     map.addControl(new mapboxgl.NavigationControl(), 'top-right');
+    // Report the visible area after any pan, zoom or fly, and once on load.
+    const report = () => {
+      const b = map.getBounds();
+      if (!b) return;
+      viewportRef.current?.({ north: b.getNorth(), south: b.getSouth(), east: b.getEast(), west: b.getWest() });
+    };
+    map.on('moveend', report);
+    map.once('load', report);
     mapRef.current = map;
     return () => map.remove();
   }, []);
