@@ -229,7 +229,12 @@ export function DecodersView({
             >
               ⟳ Poll now
             </button>
-            <button className="mini primary" onClick={() => setSettingsOpen(true)}>
+            {/* A call to action only until it is connected; after that it is
+                settings, and settings should not be the loudest thing here. */}
+            <button
+              className={`mini ${status?.configured ? '' : 'primary'}`}
+              onClick={() => setSettingsOpen(true)}
+            >
               ⚙ RaceResult
             </button>
           </>

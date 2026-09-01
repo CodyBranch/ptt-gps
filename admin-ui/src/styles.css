@@ -760,6 +760,18 @@ button.linklike {
   .setup-bar { padding-left: 52px; flex-wrap: wrap; gap: 8px; }
   .setup-bar .spacer { display: none; }
   .setup-bar .fleet-search { flex: 1 0 100%; min-width: 0; }
+  /* Desktop controls sized to their labels wrap into a ragged staircase on a
+     phone. Pairing them to half-width each gives a tidy grid, and a lone one
+     takes the full row rather than sitting stranded beside empty space. */
+  .setup-bar > button,
+  .setup-bar > select,
+  .setup-bar > .linkbtn {
+    /* half the row minus the gap — at 50%-4px a pair overflowed by a
+       pixel or two and the second control dropped to its own line */
+    flex: 1 1 calc(50% - 6px); min-width: 0; min-height: 38px;
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 8px 10px; font-size: 13px;
+  }
   .race-panel { margin-left: 0; width: 100%; }
 
   .main { flex-direction: column; }
