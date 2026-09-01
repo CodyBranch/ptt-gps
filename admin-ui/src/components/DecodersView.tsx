@@ -40,24 +40,6 @@ function lastOnline(received?: string): { text: string; title?: string } {
 }
 
 /**
- * Device clock against ours at the moment we asked — the drift that matters.
- *
- * Only meaningful while the box is online. For an offline one the reported
- * time is simply when it was last heard from, so the difference is days and
- * says nothing about its clock.
- */
-function drift(d: DecoderPub): string | undefined {
-  if (!d.connected) return undefined;
-  if (!d.deviceTime || !d.requestTime) return undefined;
-  const a = Date.parse(d.deviceTime);
-  const b = Date.parse(d.requestTime);
-  if (!Number.isFinite(a) || !Number.isFinite(b)) return undefined;
-  const secs = Math.round((a - b) / 1000);
-  if (Math.abs(secs) < 1) return 'in step';
-  return `${secs > 0 ? '+' : ''}${secs}s`;
-}
-
-/**
  * RaceResult timing boxes — decoders, TrackBoxes and Ubidiums.
  *
  * These are the boxes on the course, not the trackers on the vehicles, but at
@@ -252,7 +234,6 @@ export function DecodersView({
                 <th className="col-where">Location</th>
                 <th className="col-batt">Battery</th>
                 <th>Status</th>
-                <th className="col-clock">Clock</th>
                 <th className="col-seen">Last online</th>
                 {admin && <th className="col-hide"></th>}
               </tr>
@@ -288,7 +269,13 @@ export function DecodersView({
                     {d.battery === undefined ? (
                       <span className="dim">—</span>
                     ) : (
-                      <span className={`batt ${d.battery < 20 ? 'low' : d.battery < 60 ? 'mid' : 'high'}`}>
+                      // dimmed when offline: the reading is from whenever the box
+                      // last reported, which may be a year ago
+                      <span
+                        className={`batt ${d.battery < 20 ? 'low' : d.battery < 60 ? 'mid' : 'high'} ${
+                          d.connected ? '' : 'stale'
+                        }`}
+                      >
                         <span className="batt-shell">
                           <span className="batt-fill" style={{ width: `${Math.min(100, Math.max(0, d.battery))}%` }} />
                         </span>
@@ -300,18 +287,22 @@ export function DecodersView({
                     <span className={`decoder-state ${d.connected ? 'on' : 'off'}`}>
                       {d.connected ? 'Online' : 'Offline'}
                     </span>
-                    {d.inStandby && <span className="decoder-flag">standby</span>}
-                    {d.hasPower === false && <span className="decoder-flag warn">on battery</span>}
-                    {d.inTimingMode && <span className="decoder-flag ok">timing</span>}
-                    {d.readerHealthy === false && <span className="decoder-flag bad">reader</span>}
-                    {d.errorFlags && d.errorFlags !== '0' && (
-                      <span className="decoder-flag bad" title="Error flags reported by the device">
-                        err {d.errorFlags}
-                      </span>
+                    {/* These describe the box as it was when last heard from. On an
+                        offline one that may be a year stale, so saying "timing" or
+                        "on battery" would be asserting something we do not know. */}
+                    {d.connected && (
+                      <>
+                        {d.inStandby && <span className="decoder-flag">standby</span>}
+                        {d.hasPower === false && <span className="decoder-flag warn">on battery</span>}
+                        {d.inTimingMode && <span className="decoder-flag ok">timing</span>}
+                        {d.readerHealthy === false && <span className="decoder-flag bad">reader</span>}
+                        {d.errorFlags && d.errorFlags !== '0' && (
+                          <span className="decoder-flag bad" title="Error flags reported by the device">
+                            err {d.errorFlags}
+                          </span>
+                        )}
+                      </>
                     )}
-                  </td>
-                  <td className="col-clock dim" title={`device ${d.deviceTime ?? '—'} / asked ${d.requestTime ?? '—'}`}>
-                    {drift(d) ?? '—'}
                   </td>
                   <td className="dim col-seen" title={lastOnline(d.received).title}>
                     {d.connected ? <span className="ok-text">online now</span> : lastOnline(d.received).text}
@@ -338,7 +329,7 @@ export function DecodersView({
               ))}
               {shown.length === 0 && (
                 <tr>
-                  <td colSpan={admin ? 8 : 7} className="dim">
+                  <td colSpan={admin ? 7 : 6} className="dim">
                     {decoders.length === 0 ? 'No decoders yet.' : 'Nothing matches that filter.'}
                   </td>
                 </tr>
