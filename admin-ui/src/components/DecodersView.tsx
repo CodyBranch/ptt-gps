@@ -145,9 +145,12 @@ export function DecodersView({
   const hiddenCount = decoders.length - ours.length;
 
   /**
-   * What is on screen, by family. Zoomed out that is the whole fleet; zoomed
-   * onto one event it is the boxes at that event, which is the count you
-   * actually want when you are standing at it.
+   * What is on screen, by family.
+   *
+   * Decoders and Ubidiums are always listed, showing a zero when none are in
+   * view — a chip that vanishes is easy to misread as "none of those exist",
+   * and a row of chips that keeps changing width is hard to scan. The rarer
+   * families only appear when there is one to report.
    */
   const inView = useMemo(() => {
     const rows = ours.filter((d) => {
@@ -162,7 +165,16 @@ export function DecodersView({
       if (d.connected) e.online++;
       byType.set(d.type, e);
     }
-    return [...byType.entries()].sort((a, b) => b[1].total - a[1].total);
+    const ALWAYS = ['Decoder', 'Ubidium'];
+    const out: Array<[string, { total: number; online: number }]> = ALWAYS.map((t) => [
+      t,
+      byType.get(t) ?? { total: 0, online: 0 },
+    ]);
+    // anything else RaceResult reports — TrackBoxes today — only when present
+    for (const [type, c] of byType) {
+      if (!ALWAYS.includes(type) && c.total > 0) out.push([type, c]);
+    }
+    return out;
   }, [ours, view]);
 
   const setHidden = async (deviceId: string, hidden: boolean) => {
@@ -224,7 +236,8 @@ export function DecodersView({
         )}
       </div>
 
-      <div className="wire-count">
+      <div className="wire-count decoder-status">
+        <span className="decoder-status-text">
         {status?.configured ? (
           <>
             {online} of {ours.length} online · polling every {status.intervalS}s · last poll{' '}
@@ -238,20 +251,20 @@ export function DecodersView({
           </span>
         )}
         {msg && <span className="dim"> · {msg}</span>}
-      </div>
-
-      {inView.length > 0 && (
-        <div className="decoder-counts">
+        </span>
+        {inView.length > 0 && (
+          <span className="decoder-counts">
           {inView.map(([type, c]) => (
-            <span className="decoder-count" key={type}>
+            <span className={`decoder-count ${c.total === 0 ? 'empty' : ''}`} key={type}>
               <span className="decoder-count-n">{c.total}</span>
               <span className="decoder-count-type">{type}</span>
               <span className={`decoder-count-on ${c.online > 0 ? 'live' : ''}`}>{c.online} online</span>
             </span>
           ))}
-          <span className="dim decoder-count-note">in view</span>
-        </div>
-      )}
+            <span className="dim decoder-count-note">in view</span>
+          </span>
+        )}
+      </div>
 
       {ours.length > 0 && (
         <div className="decoder-map">
@@ -273,7 +286,7 @@ export function DecodersView({
                 <th className="col-type">Type</th>
                 <th className="col-where">Location</th>
                 <th className="col-batt">Battery</th>
-                <th>Status</th>
+                <th className="col-status">Status</th>
                 <th className="col-seen">Last online</th>
                 {admin && <th className="col-hide"></th>}
               </tr>
@@ -323,7 +336,7 @@ export function DecodersView({
                       </span>
                     )}
                   </td>
-                  <td>
+                  <td className="col-status">
                     <span className={`decoder-state ${d.connected ? 'on' : 'off'}`}>
                       {d.connected ? 'Online' : 'Offline'}
                     </span>

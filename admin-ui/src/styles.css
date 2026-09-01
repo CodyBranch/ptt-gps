@@ -1325,20 +1325,27 @@ button.mini.on { border-color: var(--warn); color: var(--warn); }
   padding: 1px 5px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
-.decoder-counts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 0 16px 10px; }
+/* Sits on the status line, pushed to the right — the fleet-wide count reads on
+   the left, what is on screen on the right. */
+.decoder-status { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding-bottom: 8px; }
+.decoder-status-text { min-width: 0; }
+.decoder-counts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-left: auto; }
 .decoder-count {
-  display: inline-flex; align-items: baseline; gap: 7px; padding: 5px 11px;
-  background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+  display: inline-flex; align-items: baseline; gap: 6px; padding: 3px 9px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 7px;
 }
-.decoder-count-n { font-size: 17px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.decoder-count-n { font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--text); }
 .decoder-count-type { font-size: 12px; font-weight: 600; color: var(--text); }
 .decoder-count-on { font-size: 11px; color: var(--dim); }
 .decoder-count-on.live { color: var(--ok); font-weight: 700; }
 .decoder-count-note { font-size: 11.5px; }
+.decoder-count.empty { opacity: 0.5; }
 
 .decoder-map { padding: 0 16px; }
 .decoder-map-wrap { margin-bottom: 0; }
 .decoder-map-canvas { height: 320px; }
+/* names only once you are close enough for them not to collide */
+.decoder-map-canvas.no-labels .decoder-marker-label { display: none; }
 
 .decoder-dot {
   display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 7px;
@@ -1370,14 +1377,21 @@ button.mini.on { border-color: var(--warn); color: var(--warn); }
 
 @media (max-width: 900px) {
   .decoder-map { padding: 0 10px; }
-  .decoder-counts { padding: 0 10px 8px; gap: 6px; }
-  .decoder-count { padding: 4px 8px; gap: 5px; }
-  .decoder-count-n { font-size: 15px; }
+  /* on a phone the chips wrap under the status line rather than squeezing it */
+  .decoder-counts { margin-left: 0; gap: 5px; }
+  .decoder-count { padding: 3px 7px; gap: 5px; }
   .decoder-map-canvas { height: 240px; }
   /* type is detail; the phone keeps device, where, battery and state */
-  .decoder-table .col-type { display: none; }
-  .decoder-table .col-hide button.mini { padding: 3px 6px; font-size: 10px; }
-  .decoder-table .col-device { width: 40%; }
-  .decoder-table .col-where { width: 34%; min-width: 0; font-size: 11px; }
-  .decoder-table .col-batt { width: 16%; }
+  /* Six columns will not fit in 375px. Type goes, and so does Status — the
+     square by the name is already filled or hollow, which says the same thing.
+     The coordinates go too: on a phone the town is the part you read. */
+  .decoder-table .col-type, .decoder-table .col-status { display: none; }
+  .decoder-table .where-coords { display: none; }
+  .decoder-table .col-hide button.mini { padding: 3px 5px; font-size: 10px; }
+  .decoder-table .col-device { width: 38%; }
+  .decoder-table .col-where { width: 24%; min-width: 0; font-size: 11px; }
+  .decoder-table .col-batt { width: 15%; }
+  .decoder-table .col-seen { width: 15%; font-size: 10.5px; white-space: normal; }
+  .decoder-table .col-hide { width: 8%; }
+  .decoder-table td, .decoder-table th { padding: 6px 3px; }
 }

@@ -82,6 +82,7 @@ export function DecoderMap({
   const viewportRef = useRef(onViewport);
   viewportRef.current = onViewport;
   const [styleKey, setStyleKey] = useState<StyleKey>('streets');
+  const [zoomedOut, setZoomedOut] = useState(true);
 
   useEffect(() => {
     const map = new mapboxgl.Map({
@@ -96,6 +97,9 @@ export function DecoderMap({
       const b = map.getBounds();
       if (!b) return;
       viewportRef.current?.({ north: b.getNorth(), south: b.getSouth(), east: b.getEast(), west: b.getWest() });
+      // Zoomed out to the whole country the names overlap into an unreadable
+      // pile; the squares alone still show where boxes are and which are dark.
+      setZoomedOut(map.getZoom() < 9);
     };
     map.on('moveend', report);
     map.once('load', report);
@@ -179,7 +183,7 @@ export function DecoderMap({
 
   return (
     <div className="mini-map-wrap decoder-map-wrap">
-      <div className="mini-map decoder-map-canvas" ref={ref} />
+      <div className={`mini-map decoder-map-canvas ${zoomedOut ? 'no-labels' : ''}`} ref={ref} />
       <div className="map-style-toggle mini">
         <button className={styleKey === 'streets' ? 'on' : ''} onClick={() => switchStyle('streets')}>
           Map
