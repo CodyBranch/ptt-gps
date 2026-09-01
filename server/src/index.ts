@@ -20,6 +20,16 @@ function arg(name: string, fallback?: string): string | undefined {
 // --- events directory ---
 
 const eventArg = arg('event');
+/**
+ * The tracker port stays open whether or not an event is loaded.
+ *
+ * Deriving the listening ports purely from active events meant that
+ * deactivating the last one closed the port and dropped every connected
+ * tracker — and after a restart with nothing active, devices had nowhere to
+ * connect at all. A frame that arrives is recorded and shown in the wire log
+ * regardless of any roster, so there is no reason to stop accepting them.
+ */
+const BASE_LISTEN_PORT = Number(arg('listen-port', '1000'));
 const eventsDir = path.resolve(
   arg('events-dir') ??
     (eventArg ? path.dirname(eventArg) : fs.existsSync('../events') ? '../events' : 'events'),
@@ -279,6 +289,11 @@ function syncListeners(): void {
       if (!portNames.has(l.port)) portNames.set(l.port, l.name);
     }
   }
+  // Always listening, even with no events — see BASE_LISTEN_PORT. An event that
+  // names this port keeps its own label for it.
+  if (Number.isFinite(BASE_LISTEN_PORT) && !portNames.has(BASE_LISTEN_PORT)) {
+    portNames.set(BASE_LISTEN_PORT, 'queclink');
+  }
   const key = [...portNames.keys()].sort().join(',');
   if (key === currentPorts) return;
   for (const s of liveSockets) s.destroy();
@@ -366,7 +381,15 @@ if (eventArg) {
   if (!toLoad.includes(f)) toLoad.push(f);
 }
 for (const file of toLoad) {
-  if (!available.some((e) => e.file === file)) continue;
+  if (!available.some((e) => e.file === file)) {
+    // Silently skipping this was the worst kind of quiet: the event simply did
+    // not come back and nothing said why.
+    const known = listEvents(eventsDir).find((e) => e.file === file);
+    console.error(
+      `[events] cannot restore ${file}: ${known?.error ?? 'not found in ' + eventsDir}`,
+    );
+    continue;
+  }
   try {
     const app = loadEvent(file);
     app.recoverOpenSessions();

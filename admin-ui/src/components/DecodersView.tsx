@@ -371,7 +371,20 @@ export function DecodersView({
                         }
                         onClick={(e) => {
                           e.stopPropagation();
-                          void setHidden(d.deviceId, !d.hidden);
+                          // Restoring is harmless, so it is one tap. Hiding is
+                          // asked about: the control sits in a card you scroll
+                          // past with a thumb, and a box that quietly vanishes
+                          // is a confusing thing to have to undo.
+                          if (d.hidden) {
+                            void setHidden(d.deviceId, false);
+                            return;
+                          }
+                          ask({
+                            title: `Hide ${d.name}?`,
+                            body: 'It stays in your RaceResult account and keeps being polled — it just drops out of this console, the map and the counts until you show it again from the Hidden filter.',
+                            confirmLabel: 'Hide',
+                            onConfirm: () => void setHidden(d.deviceId, true),
+                          });
                         }}
                       >
                         {d.hidden ? '↩ Restore' : '✕ Hide'}

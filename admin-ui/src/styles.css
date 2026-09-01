@@ -1382,16 +1382,39 @@ button.mini.on { border-color: var(--warn); color: var(--warn); }
   .decoder-count { padding: 3px 7px; gap: 5px; }
   .decoder-map-canvas { height: 240px; }
   /* type is detail; the phone keeps device, where, battery and state */
-  /* Six columns will not fit in 375px. Type goes, and so does Status — the
-     square by the name is already filled or hollow, which says the same thing.
-     The coordinates go too: on a phone the town is the part you read. */
-  .decoder-table .col-type, .decoder-table .col-status { display: none; }
-  .decoder-table .where-coords { display: none; }
-  .decoder-table .col-hide button.mini { padding: 3px 5px; font-size: 10px; }
-  .decoder-table .col-device { width: 38%; }
-  .decoder-table .col-where { width: 24%; min-width: 0; font-size: 11px; }
-  .decoder-table .col-batt { width: 15%; }
-  .decoder-table .col-seen { width: 15%; font-size: 10.5px; white-space: normal; }
-  .decoder-table .col-hide { width: 8%; }
-  .decoder-table td, .decoder-table th { padding: 6px 3px; }
+  /* A row of six columns cannot be made to read at 375px, so on a phone each
+     box becomes a card instead: name and the hide control on top, then what it
+     is, where it is, and how it is doing. Same markup — the cells are just
+     placed on a grid rather than in a row. */
+  .decoder-table, .decoder-table tbody, .decoder-table tr, .decoder-table td { display: block; }
+  .decoder-table thead { display: none; }
+  .decoder-table { table-layout: auto; }
+  .decoder-table tr {
+    display: grid; grid-template-columns: 1fr auto; gap: 3px 10px; align-items: start;
+    padding: 11px 12px; margin-bottom: 8px;
+    background: var(--panel2); border: 1px solid var(--border); border-radius: 9px;
+  }
+  .decoder-table tr.selected { border-color: var(--accent); }
+  .decoder-table td { padding: 0; border: none; width: auto !important; }
+  .decoder-table .col-device { grid-column: 1; grid-row: 1; min-width: 0; }
+  .decoder-table .col-status { display: block; grid-column: 2; grid-row: 1; justify-self: end; text-align: right; }
+  .decoder-table .col-type { display: block; grid-column: 1; grid-row: 2; font-size: 11px; }
+  .decoder-table .col-seen { grid-column: 2; grid-row: 2; justify-self: end; white-space: nowrap; }
+  .decoder-table .col-where { grid-column: 1 / -1; grid-row: 3; margin-top: 3px; }
+  .decoder-table .where-coords { display: block; }
+  .decoder-table .col-batt { grid-column: 1; grid-row: 4; margin-top: 5px; }
+  /* on the battery line, at the far edge — away from the name and from the
+     row itself, which is tappable */
+  .decoder-table .col-hide { grid-column: 2; grid-row: 4; justify-self: end; margin-top: 5px; }
+  .decoder-table .t-label { font-size: 14px; }
+  /* the name is the heading of the card; nothing below it should shout louder */
+  .decoder-table .where-place { font-size: 12.5px; }
+  .decoder-table .where-coords { font-size: 10px; }
+  .decoder-table .col-seen { font-size: 11.5px; }
+  .decoder-table .col-type { color: var(--dim); }
+  /* the flags wrap under the state rather than pushing the card wide */
+  .decoder-table .decoder-flag { margin: 2px 0 0 5px; }
+  /* the empty-state row is a single cell, not a card */
+  .decoder-table tr:has(td[colspan]) { display: block; background: none; border: none; padding: 6px 2px; }
+
 }
