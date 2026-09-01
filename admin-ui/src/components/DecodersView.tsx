@@ -16,6 +16,30 @@ const fmtAge = (ms?: number) => {
 };
 
 /**
+ * When RaceResult last heard from the box.
+ *
+ * This is the one date that distinguishes a box parked in the van since March
+ * from one that dropped out ten minutes ago. Recent times read as an age
+ * because that is how you think about them mid-meet; anything older reads as a
+ * date, because "at 14 weeks ago" means nothing.
+ *
+ * Unset clocks come back as year 1, so anything before 2000 is treated as
+ * never rather than rendered as a date in antiquity.
+ */
+function lastOnline(received?: string): { text: string; title?: string } {
+  if (!received) return { text: '—' };
+  const t = Date.parse(received);
+  if (!Number.isFinite(t) || new Date(t).getUTCFullYear() < 2000) return { text: '—' };
+  const title = new Date(t).toLocaleString();
+  const s = Math.max(0, Math.round((Date.now() - t) / 1000));
+  if (s < 90) return { text: 'just now', title };
+  if (s < 3600) return { text: `${Math.floor(s / 60)}m ago`, title };
+  if (s < 86400) return { text: `${Math.floor(s / 3600)}h ago`, title };
+  if (s < 86400 * 7) return { text: `${Math.floor(s / 86400)}d ago`, title };
+  return { text: new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }), title };
+}
+
+/**
  * Device clock against ours at the moment we asked — the drift that matters.
  *
  * Only meaningful while the box is online. For an offline one the reported
@@ -229,7 +253,7 @@ export function DecodersView({
                 <th className="col-batt">Battery</th>
                 <th>Status</th>
                 <th className="col-clock">Clock</th>
-                <th className="col-seen">Last poll</th>
+                <th className="col-seen">Last online</th>
                 {admin && <th className="col-hide"></th>}
               </tr>
             </thead>
@@ -289,7 +313,9 @@ export function DecodersView({
                   <td className="col-clock dim" title={`device ${d.deviceTime ?? '—'} / asked ${d.requestTime ?? '—'}`}>
                     {drift(d) ?? '—'}
                   </td>
-                  <td className="dim col-seen">{fmtAge(d.seenMs)}</td>
+                  <td className="dim col-seen" title={lastOnline(d.received).title}>
+                    {d.connected ? <span className="ok-text">online now</span> : lastOnline(d.received).text}
+                  </td>
                   {admin && (
                     <td className="col-hide">
                       <button

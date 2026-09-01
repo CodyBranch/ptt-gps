@@ -73,6 +73,8 @@ export function DecoderMap({
   const mapRef = useRef<mapboxgl.Map>(null);
   const markersRef = useRef(new Map<string, mapboxgl.Marker>());
   const fittedRef = useRef(false);
+  // what was selected last render, so a deselect can be told from a re-render
+  const prevSelectedRef = useRef<string | undefined>(undefined);
   const [styleKey, setStyleKey] = useState<StyleKey>('streets');
 
   useEffect(() => {
@@ -122,11 +124,38 @@ export function DecoderMap({
       }
     }
     // fit once, so the operator's panning is not undone on every poll
-    if (!fittedRef.current && !bounds.isEmpty()) {
+    if (!fittedRef.current && !bounds.isEmpty() && !selected) {
       map.fitBounds(bounds, { padding: 60, maxZoom: 15 });
       fittedRef.current = true;
     }
   }, [decoders, selected, onSelect]);
+
+  /**
+   * Picking a box flies to it; picking it again comes back out to everything.
+   * With boxes spread across the country the wide view says nothing about
+   * which corner one is on, and zooming by hand every time is tedious.
+   */
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const was = prevSelectedRef.current;
+    prevSelectedRef.current = selected;
+    if (selected) {
+      const d = decoders.find((x) => x.deviceId === selected);
+      if (d?.lat !== undefined && d?.lon !== undefined && !(d.lat === 0 && d.lon === 0)) {
+        map.flyTo({ center: [d.lon, d.lat], zoom: 15, duration: 900 });
+      }
+      return;
+    }
+    // deselected — back to the whole fleet, but not on the first render
+    if (!was) return;
+    const bounds = new mapboxgl.LngLatBounds();
+    for (const d of decoders) {
+      if (d.lat === undefined || d.lon === undefined || (d.lat === 0 && d.lon === 0)) continue;
+      bounds.extend([d.lon, d.lat]);
+    }
+    if (!bounds.isEmpty()) map.fitBounds(bounds, { padding: 60, maxZoom: 15, duration: 900 });
+  }, [selected, decoders]);
 
   const switchStyle = (key: StyleKey) => {
     if (key === styleKey) return;
