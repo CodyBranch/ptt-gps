@@ -181,6 +181,10 @@ export function EventsView({
   const card = (e: EventListing) => {
     const ev = liveById.get(e.id);
     const active = !!ev;
+    // The server refuses to complete an event with a race armed or live, so
+    // there is no point offering the button — a control that always fails is
+    // worse than no control.
+    const racing = (ev?.races ?? []).some((r) => r.status === 'armed' || r.status === 'live');
     const running = ev?.races.some((r) => r.status === 'live');
     return (
       <div key={e.file} className={`event-card ${active ? 'active' : ''} ${running ? 'running' : ''}`}>
@@ -215,13 +219,16 @@ export function EventsView({
               <button className="mini" onClick={() => onOpenSetup(e.id)}>
                 ⚙ Setup
               </button>
+              <span className="spacer" />
               <button className="mini danger" onClick={() => deactivate(e)}>
                 Deactivate
               </button>
               {/* stops it and files it in one go — the end of a meet day */}
-              <button className="mini" onClick={() => complete(e)}>
-                ✓ Complete
-              </button>
+              {!racing && (
+                <button className="mini" onClick={() => complete(e)}>
+                  ✓ Complete
+                </button>
+              )}
             </>
           ) : isCompleted(e) ? (
             <>
@@ -241,6 +248,7 @@ export function EventsView({
               <button className="mini" onClick={() => onOpenSetup(e.id)}>
                 ⚙ Setup
               </button>
+              <span className="spacer" />
               <button className="mini" onClick={() => complete(e)}>
                 ✓ Complete
               </button>

@@ -516,7 +516,10 @@ button.mini.has-issues { border-color: var(--warn); color: var(--warn); font-wei
 .event-chip { font-weight: 600; }
 .setup-grid.one-col { grid-template-columns: 1fr; }
 .section-gap { margin-top: 18px; }
-.event-card-actions { display: flex; gap: 8px; margin-top: 4px; }
+/* Opening and editing on the left, putting the meet away on the right — the
+   two are different kinds of action and should not sit shoulder to shoulder. */
+.event-card-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; align-items: center; }
+.event-card-actions .spacer { flex: 1; min-width: 0; }
 .events-layout { display: grid; grid-template-columns: 1fr 340px; gap: 16px; padding: 16px; align-items: start; }
 .events-column { display: flex; flex-direction: column; gap: 10px; }
 .event-create label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--dim); margin-bottom: 8px; }
@@ -525,6 +528,11 @@ button.mini.has-issues { border-color: var(--warn); color: var(--warn); font-wei
   padding: 7px 9px; font-size: 13px;
 }
 .event-create .form-row label { margin-bottom: 0; }
+/* The create panel is a 340px column, and three fields across it leaves ~93px
+   each — too narrow for a date, which truncates to "mm/dd/y". Meet ID takes its
+   own line so the two dates can share the next one at a width that fits. */
+.event-create .form-row label:first-child { flex: 1 0 100%; }
+.event-create input[type='date'] { min-width: 0; }
 .completed-toggle { align-self: flex-start; }
 @media (max-width: 900px) { .events-layout { grid-template-columns: 1fr; } }
 
@@ -815,6 +823,9 @@ button.linklike {
      date and the tail off a select. Two to a row on a tablet... */
   .form-row label { min-width: 150px; }
   .events-list { grid-template-columns: minmax(0, 1fr); padding: 10px; }
+  /* Once the row wraps, pushing two buttons right just splits them across
+     lines — the grouping says nothing on a phone. Let them flow. */
+  .event-card-actions .spacer { display: none; }
   .setup-grid section, .events-list > * { min-width: 0; }
   /* The table must fit the screen rather than scroll sideways. GPS lock and
      the window range are both already on the vehicle card above it, so on a
