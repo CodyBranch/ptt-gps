@@ -32,6 +32,23 @@ export function listEvents(dir: string): EventListing[] {
     const file = path.join(dir, f);
     try {
       const json = JSON.parse(fs.readFileSync(file, 'utf8'));
+      // Valid JSON is not the same as an event. The events directory picks up
+      // other files — an import's reference data, someone's notes — and listed
+      // as events they cannot be opened, activated or completed, because there
+      // is nothing there to open. A races array is what makes an event file an
+      // event file; without one, say so rather than offering a broken card.
+      if (!json || typeof json !== 'object' || !Array.isArray(json.races)) {
+        out.push({
+          id: f,
+          name: f,
+          meetId: 0,
+          file: f,
+          races: 0,
+          trackers: 0,
+          error: 'not an event config (no races)',
+        });
+        continue;
+      }
       out.push({
         id: String(json.id ?? f.replace(/\.json$/, '')),
         name: String(json.name ?? f),
