@@ -1300,6 +1300,8 @@ button.mini.on { border-color: var(--warn); color: var(--warn); }
 }
 .side-version:hover { color: var(--text); }
 .side-version.active { color: var(--brand-red); font-weight: 700; }
+.side-version.mismatch { color: var(--warn); }
+.version-warn { display: block; font-size: 10px; }
 
 /* Changelog */
 .changelog-layout { padding: 16px; }

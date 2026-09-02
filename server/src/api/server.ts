@@ -63,6 +63,28 @@ export function startApi(
   const ex = express();
   ex.use(express.json({ limit: '5mb' }));
 
+  /**
+   * What this build calls itself, so the console can say whether the server it
+   * is talking to is the one that was deployed. Walked up from this module
+   * rather than hard-coded, so it is right whether running from source or dist.
+   */
+  const serverVersion = (() => {
+    let dir = path.dirname(fileURLToPath(import.meta.url));
+    for (let i = 0; i < 6; i++) {
+      const p = path.join(dir, 'package.json');
+      if (fs.existsSync(p)) {
+        try {
+          return String(JSON.parse(fs.readFileSync(p, 'utf8')).version ?? 'unknown');
+        } catch {
+          break;
+        }
+      }
+      dir = path.dirname(dir);
+    }
+    return 'unknown';
+  })();
+  console.log(`[api] server version ${serverVersion}`);
+
   const uiDist = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../admin-ui/dist');
   if (fs.existsSync(path.join(uiDist, 'index.html'))) {
     ex.use(express.static(uiDist));
@@ -252,7 +274,13 @@ export function startApi(
   ex.get('/api/me', (req, res) => {
     const c = auth.check(auth.tokenFromRequest(req));
     if (!c) return void res.status(401).json({ ok: false });
-    res.json({ ok: true, username: c.username, role: c.role, eventScope: c.eventScope ?? null });
+    res.json({
+      ok: true,
+      username: c.username,
+      role: c.role,
+      eventScope: c.eventScope ?? null,
+      version: serverVersion,
+    });
   });
 
   // --- everything below requires a logged-in operator ---

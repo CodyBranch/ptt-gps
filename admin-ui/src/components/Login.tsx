@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react';
 export interface AuthInfo {
   username: string;
   role: 'admin' | 'staff' | 'viewer';
+  /** What the server reports itself as, to catch a half-finished deploy. */
+  serverVersion?: string;
 }
 
 export function Login({ onSuccess }: { onSuccess: (auth: AuthInfo) => void }) {

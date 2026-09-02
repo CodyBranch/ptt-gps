@@ -281,7 +281,11 @@ export default function App() {
     fetch('/api/me')
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((j) =>
-        setAuth({ username: j.username ?? 'operator', role: j.role === 'viewer' ? 'viewer' : j.role === 'admin' ? 'admin' : 'staff' }),
+        setAuth({
+          username: j.username ?? 'operator',
+          role: j.role === 'viewer' ? 'viewer' : j.role === 'admin' ? 'admin' : 'staff',
+          serverVersion: typeof j.version === 'string' ? j.version : undefined,
+        }),
       )
       .catch(() => setAuth('out'));
   }, []);
@@ -353,6 +357,11 @@ export default function App() {
   // says; every other page is named for itself.
   const mobileTitle =
     page === 'event' ? (ev?.event.name ?? eventId ?? 'Event') : (PAGE_TITLES[page] ?? '');
+
+  // A console served from an old bundle, or talking to a server that was never
+  // restarted, looks like a bug in whatever you try next — so say so plainly.
+  const serverVersion = typeof auth === 'object' ? auth.serverVersion : undefined;
+  const versionMismatch = !!serverVersion && serverVersion !== 'unknown' && serverVersion !== VERSION;
 
   const intervalS = ev?.event.reportIntervalS || 10;
   const snapshotSimulated = state.snapshot.simulated;
@@ -619,11 +628,19 @@ export default function App() {
               <span className="side-icon">❓</span> Help
             </button>
             <button
-              className={`side-version ${page === 'changelog' ? 'active' : ''}`}
-              title="What's changed in this build"
+              className={`side-version ${page === 'changelog' ? 'active' : ''} ${
+                versionMismatch ? 'mismatch' : ''
+              }`}
+              title={
+                versionMismatch
+                  ? `This page is v${VERSION} but the server is running ${serverVersion}. ` +
+                    'One of them was not updated — reload after a hard refresh, and check the server was restarted.'
+                  : "What's changed in this build"
+              }
               onClick={() => go('changelog')}
             >
               v{VERSION}
+              {versionMismatch && <span className="version-warn"> ⚠ server {serverVersion}</span>}
             </button>
           </div>
         )}
