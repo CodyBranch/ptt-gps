@@ -114,6 +114,20 @@ interface Route {
 
 const TOP_PAGES: Page[] = ['events', 'courses', 'fleet', 'decoders', 'system', 'sim', 'wire', 'help'];
 
+/** What the phone's app bar calls each page. */
+const PAGE_TITLES: Record<Page, string> = {
+  home: 'Home',
+  event: '',
+  events: 'Events',
+  courses: 'Courses',
+  fleet: 'Tracker fleet',
+  decoders: 'Decoders',
+  system: 'System',
+  sim: 'Race simulation',
+  wire: 'Wire log',
+  help: 'Help',
+};
+
 /** The tab strip's status dot, for a native <option> that cannot be styled:
  *  filled is running, half is armed and ready, hollow is waiting, tick is done. */
 const STATUS_DOT: Record<RaceStatus, string> = {
@@ -330,6 +344,11 @@ export default function App() {
     window.location.reload();
   };
 
+  // The event page shows the meet name, which the phone layout otherwise never
+  // says; every other page is named for itself.
+  const mobileTitle =
+    page === 'event' ? (ev?.event.name ?? eventId ?? 'Event') : (PAGE_TITLES[page] ?? '');
+
   const intervalS = ev?.event.reportIntervalS || 10;
   const snapshotSimulated = state.snapshot.simulated;
   // Assigned across the whole event, not the filtered view, so a tracker keeps
@@ -527,9 +546,6 @@ export default function App() {
 
   return (
     <div className="app">
-      <button className="sidebar-hamburger" onClick={() => setSidebarOpen(!sidebarOpen)} title="Menu">
-        ☰
-      </button>
       {sidebarOpen && <div className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} />}
       <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
         <div className="sidebar-brand">
@@ -651,6 +667,16 @@ export default function App() {
       </aside>
 
       <div className="content">
+        {/* A real app bar on phones. The hamburger used to float over the page,
+            so every header had to reserve space for it — and a new page had to
+            remember to. Here it has a row of its own, and the page below starts
+            at the left edge like anything else. */}
+        <header className="mobile-bar">
+          <button className="sidebar-hamburger" onClick={() => setSidebarOpen(!sidebarOpen)} title="Menu">
+            ☰
+          </button>
+          <span className="mobile-bar-title">{mobileTitle}</span>
+        </header>
       {/* One page failing must not take the whole console down. */}
       <ErrorBoundary where={`${page}:${eventId ?? ''}:${eventTab}`}>
       {page === 'event' && !ev && eventId && admin && !viewer && (
