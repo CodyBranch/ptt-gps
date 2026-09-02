@@ -762,13 +762,12 @@ button.linklike {
     padding: 5px 10px; font-size: 16px; line-height: 1.2; cursor: pointer;
   }
   .content { padding-top: 0; }
-  .event-subnav { padding-left: 10px; }
   /* let the publish switch wrap with the tabs instead of being pushed off */
   .event-subnav .spacer { display: none; }
   /* One race picker instead of a row of tabs. Tabs of different widths wrapped
      into two or three ragged rows as soon as an event had a few races, and ate
      the top of the screen; this is one line whatever the race count. */
-  .event-subnav { flex-wrap: nowrap; gap: 8px; padding: 8px 10px 8px 52px; }
+  .event-subnav { flex-wrap: nowrap; gap: 8px; padding: 8px 10px; }
   .subnav-races { display: none; }
   .subnav-race-select {
     display: block; flex: 1 1 auto; min-width: 0; height: 32px; padding: 0 8px;
