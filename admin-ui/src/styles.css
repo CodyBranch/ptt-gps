@@ -184,9 +184,24 @@ aside {
 .source-toggle button.on { background: var(--accent); color: #fff; }
 .role-head .role-dist { margin-left: 8px; }
 .role-dist.from-splits { color: var(--warn); }
-.role-tracker { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 3px 0; }
+/* A grid, not a flex run: the name takes the slack so the row fills the card,
+   and battery, lock, distance and age line up down the card instead of sitting
+   wherever the name above them happened to end. */
+.role-tracker {
+  display: grid; align-items: center; gap: 4px 9px; padding: 3px 0;
+  grid-template-columns: auto auto minmax(0, 1fr) auto auto auto auto auto;
+}
 .role-tracker label { display: flex; align-items: center; gap: 7px; flex: 1; cursor: pointer; }
 .role-tracker.is-active .t-label { color: var(--ok); font-weight: 700; }
+/* Shown on the map. With a colour dot on every row a faint tint no longer
+   reads, so the selected one gets an edge and a lift. */
+.role-tracker.selected, .tracker-table tr.selected td {
+  background: #24344d;
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+.role-tracker.selected { border-radius: 5px; padding-left: 5px; margin-left: -5px; }
+.tracker-table tr.selected td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+.tracker-table tr.selected .t-label { color: var(--text); font-weight: 700; }
 .t-dist { font-variant-numeric: tabular-nums; color: var(--dim); min-width: 48px; text-align: right; }
 .t-age { font-size: 12px; min-width: 44px; text-align: right; font-variant-numeric: tabular-nums; }
 .t-age.fresh, td.fresh { color: var(--ok); }
@@ -203,7 +218,7 @@ aside {
 }
 .tracker-table td { padding: 6px; border-bottom: 1px solid var(--border); vertical-align: middle; }
 .tracker-table tr { cursor: pointer; }
-.tracker-table tr.selected td { background: #24344d; }
+
 .tracker-table .t-label { font-weight: 600; }
 .tracker-table .t-imei { color: var(--dim); font-size: 11px; }
 .tracker-table .num { font-variant-numeric: tabular-nums; text-align: right; }
@@ -856,6 +871,9 @@ button.linklike {
   /* The move picker cannot fit beside a full tracker row at phone width — it
      pushed the card past the screen edge, where it was clipped out of reach.
      Given its own line it stays readable and the card still fits. */
+  /* The desktop grid has eight columns, which will not fit a phone — back to a
+     wrapping row there, where the space it solves for does not exist. */
+  .role-tracker { display: flex; flex-wrap: wrap; }
   /* declared after the desktop rule further down, so it needs the extra class
      to win on specificity rather than order */
   .roles-panel .role-tracker .t-move-pick {

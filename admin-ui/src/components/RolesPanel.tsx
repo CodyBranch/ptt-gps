@@ -40,6 +40,7 @@ export function RolesPanel({
   displayUnits,
   colors,
   decimals = 2,
+  selectedImei,
   lastSeen,
   intervalS,
   simulated,
@@ -56,6 +57,8 @@ export function RolesPanel({
   colors: Record<string, string>;
   /** Decimals on distances; viewer pages can be set coarser in Setup. */
   decimals?: number;
+  /** Which tracker is under the map's spotlight, so the card can show it too. */
+  selectedImei?: string;
   lastSeen: Record<string, number>;
   intervalS: number;
   simulated?: Record<string, SimulatedDistance>;
@@ -224,7 +227,9 @@ export function RolesPanel({
               return (
                 <div
                   key={imei}
-                  className={`role-tracker ${isActive ? 'active' : ''}`}
+                  className={`role-tracker ${isActive ? 'active' : ''} ${
+                    imei === selectedImei ? 'selected' : ''
+                  }`}
                   onClick={() => !readonly && role && !isActive && onActivate(role.key, imei)}
                   title={
                     role

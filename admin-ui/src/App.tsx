@@ -380,6 +380,7 @@ export default function App() {
         displayUnits={displayUnits}
         colors={trackerColorMap}
         decimals={decimals}
+        selectedImei={selected?.raceId === r.raceId ? selected.imei : undefined}
         lastSeen={state.lastSeen}
         intervalS={intervalS}
         simulated={snapshotSimulated}
