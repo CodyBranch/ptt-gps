@@ -18,14 +18,12 @@ import { NumberField } from './NumberField';
 export function EventSetup({
   eventId,
   ask,
-  onSaved,
   runningRaces = [],
 }: {
   eventId: string;
   /** Names of this event's armed/live races, for what the page can promise. */
   runningRaces?: string[];
   ask: (req: ConfirmRequest) => void;
-  onSaved: () => void;
 }) {
   const [cfg, setCfg] = useState<EventConfigT>();
   const [courses, setCourses] = useState<CourseInfo[]>([]);
@@ -65,8 +63,17 @@ export function EventSetup({
     try {
       await api.putConfig(eventId, cfg);
       setDirty(false);
-      setMsg({ kind: 'ok', text: cfg._active === false ? 'Saved.' : 'Saved — engines rebuilt.' });
-      onSaved();
+      // Say which of the three things actually happened, rather than claiming
+      // a rebuild that does not occur while a race is running.
+      setMsg({
+        kind: 'ok',
+        text:
+          cfg._active === false
+            ? 'Saved.'
+            : runningRaces.length > 0
+              ? 'Saved — engines kept, nothing interrupted.'
+              : 'Saved — engines rebuilt.',
+      });
       reload();
     } catch (err) {
       setMsg({ kind: 'err', text: (err as Error).message });

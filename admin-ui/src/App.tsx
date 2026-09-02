@@ -444,7 +444,6 @@ export default function App() {
           runningRaces={(ev?.races ?? [])
             .filter((r) => r.status === 'armed' || r.status === 'live')
             .map((r) => r.name)}
-          onSaved={() => setEventTab(ev ? 'all' : 'setup')}
         />
       );
     }
