@@ -64,7 +64,8 @@ export function EventsView({
   const today = new Date().toISOString().slice(0, 10);
   const liveById = new Map(live.map((e) => [e.event.id, e]));
   const loadedSet = new Set(liveById.keys());
-  const isCompleted = (e: EventListing) => !!e.endDate && e.endDate < today && !loadedSet.has(e.id);
+  const isCompleted = (e: EventListing) =>
+    !loadedSet.has(e.id) && (!!e.completedAt || (!!e.endDate && e.endDate < today));
 
   const sortKey = (e: EventListing): [number, string] => {
     if (loadedSet.has(e.id)) return [0, e.startDate ?? '9999'];
@@ -118,6 +119,36 @@ export function EventsView({
         }
       },
     });
+
+  const complete = (e: EventListing) =>
+    ask({
+      title: `Complete "${e.name}"?`,
+      body: e.id && loadedSet.has(e.id)
+        ? 'Stops its engines and files it under completed events. Refused while a race is armed or live.'
+        : 'Files it under completed events. Nothing is deleted — reopen it any time.',
+      confirmLabel: 'Complete',
+      onConfirm: async () => {
+        try {
+          await api.completeEvent(e.id, true);
+          setMsg({ kind: 'ok', text: `"${e.name}" completed.` });
+          onChanged();
+          reload();
+        } catch (err) {
+          setMsg({ kind: 'err', text: (err as Error).message });
+        }
+      },
+    });
+
+  const reopen = async (e: EventListing) => {
+    try {
+      await api.completeEvent(e.id, false);
+      setMsg({ kind: 'ok', text: `"${e.name}" reopened.` });
+      onChanged();
+      reload();
+    } catch (err) {
+      setMsg({ kind: 'err', text: (err as Error).message });
+    }
+  };
 
   const create = async () => {
     try {
@@ -187,6 +218,19 @@ export function EventsView({
               <button className="mini danger" onClick={() => deactivate(e)}>
                 Deactivate
               </button>
+              {/* stops it and files it in one go — the end of a meet day */}
+              <button className="mini" onClick={() => complete(e)}>
+                ✓ Complete
+              </button>
+            </>
+          ) : isCompleted(e) ? (
+            <>
+              <button className="mini" onClick={() => reopen(e)}>
+                ↩ Reopen
+              </button>
+              <button className="mini" onClick={() => onOpenSetup(e.id)}>
+                ⚙ Setup
+              </button>
             </>
           ) : (
             <>
@@ -196,6 +240,9 @@ export function EventsView({
               {/* build it during the week; activate on meet day */}
               <button className="mini" onClick={() => onOpenSetup(e.id)}>
                 ⚙ Setup
+              </button>
+              <button className="mini" onClick={() => complete(e)}>
+                ✓ Complete
               </button>
             </>
           )}

@@ -19,6 +19,8 @@ export interface EventListing {
   trackers: number;
   startDate?: string;
   endDate?: string;
+  /** Set when the meet was explicitly put away. */
+  completedAt?: string;
   error?: string;
 }
 
@@ -39,6 +41,7 @@ export function listEvents(dir: string): EventListing[] {
         trackers: Array.isArray(json.trackers) ? json.trackers.length : 0,
         startDate: typeof json.startDate === 'string' ? json.startDate : undefined,
         endDate: typeof json.endDate === 'string' ? json.endDate : undefined,
+        completedAt: typeof json.completedAt === 'string' ? json.completedAt : undefined,
       });
     } catch (err) {
       out.push({ id: f, name: f, meetId: 0, file: f, races: 0, trackers: 0, error: (err as Error).message });

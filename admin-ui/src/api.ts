@@ -84,6 +84,8 @@ export const api = {
     send('/api/events', 'POST', opts) as Promise<{ file: string }>,
 
   loadEvent: (file: string) => post(`/api/events/${encodeURIComponent(file)}/load`),
+  completeEvent: (eventId: string, completed: boolean) =>
+    send(`/api/events/${encodeURIComponent(eventId)}/complete`, 'POST', { completed }),
   unloadEvent: (eventId: string) => post(`/api/events/${encodeURIComponent(eventId)}/unload`),
 
   getConfig: (eventId: string) => getJson(`/api/events/${eventId}/config`),

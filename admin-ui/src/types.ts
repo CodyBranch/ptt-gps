@@ -149,6 +149,8 @@ export interface EventListing {
   trackers: number;
   startDate?: string;
   endDate?: string;
+  /** Set when the meet was explicitly put away. */
+  completedAt?: string;
   error?: string;
 }
 

@@ -118,6 +118,12 @@ export const EventSchema = z.object({
    */
   reportIntervalS: z.number().positive().default(10),
   /**
+   * When the meet was put away, ISO date. Events also file themselves once
+   * their end date passes, but that needs an end date and a date that has
+   * actually passed — this is the operator saying "this one is done".
+   */
+  completedAt: z.string().optional(),
+  /**
    * Decimal places on the distances the viewer pages show. The operator console
    * always reads 2 — it is a working instrument. What gets read aloud or put on
    * a screen is a different question: "5.1 km" is often the honest precision

@@ -777,6 +777,31 @@ export function startApi(
 
   // --- fleet registry ---
 
+  /**
+   * Put a meet away, or take it back out.
+   *
+   * Events file themselves once their end date passes, but that needs an end
+   * date and a date that has passed — a meet that ran late, or was never given
+   * dates, would sit in the list forever. Completing deactivates it on the way
+   * out, since a running event is not a finished one; the usual interlock still
+   * refuses while a race is armed or live.
+   */
+  ex.post(
+    '/api/events/:eventId/complete',
+    auth.adminOnly,
+    act((req: OpRequest) => {
+      const eventId = req.params.eventId as string;
+      const done = req.body?.completed !== false;
+      const { manager } = configFor(eventId);
+      if (done && ctx.apps.has(eventId)) ctx.unloadEvent(eventId);
+      const raw = JSON.parse(JSON.stringify(manager.raw)) as Record<string, unknown>;
+      if (done) raw.completedAt = new Date().toISOString().slice(0, 10);
+      else delete raw.completedAt;
+      manager.update(raw);
+      return { completedAt: raw.completedAt ?? null };
+    }),
+  );
+
   // --- decoders (RaceResult timing boxes) --------------------------------
 
   ex.get('/api/decoders', (_req, res) => {
