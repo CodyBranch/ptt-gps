@@ -3,6 +3,7 @@ import { io, type Socket } from 'socket.io-client';
 import { api } from './api';
 import { ConfirmDialog, type ConfirmRequest } from './components/Confirm';
 import { EventSetup } from './components/EventSetup';
+import { ChangelogView } from './components/ChangelogView';
 import { CoursesView } from './components/CoursesView';
 import { DecodersView } from './components/DecodersView';
 import { DistanceBoard } from './components/DistanceBoard';
@@ -15,6 +16,7 @@ import { MapView, type MapSelection } from './components/MapView';
 import { RacePanel } from './components/RacePanel';
 import { RolesPanel } from './components/RolesPanel';
 import { trackerColors } from './colors';
+import { VERSION } from './changelog';
 import { SimPanel, type SimProgress } from './components/SimPanel';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { SystemView } from './components/SystemView';
@@ -99,7 +101,9 @@ const BOARD_URL =
   window.location.pathname === '/watch/distances' ||
   new URLSearchParams(window.location.search).get('viewer') === 'distances';
 
-type Page = 'home' | 'event' | 'events' | 'courses' | 'fleet' | 'decoders' | 'system' | 'sim' | 'wire' | 'help';
+type Page =
+  | 'home' | 'event' | 'events' | 'courses' | 'fleet' | 'decoders'
+  | 'system' | 'sim' | 'wire' | 'help' | 'changelog';
 
 /**
  * The console keeps its place in the address bar, so a refresh returns you to
@@ -112,7 +116,7 @@ interface Route {
   eventTab: string;
 }
 
-const TOP_PAGES: Page[] = ['events', 'courses', 'fleet', 'decoders', 'system', 'sim', 'wire', 'help'];
+const TOP_PAGES: Page[] = ['events', 'courses', 'fleet', 'decoders', 'system', 'sim', 'wire', 'help', 'changelog'];
 
 /** What the phone's app bar calls each page. */
 const PAGE_TITLES: Record<Page, string> = {
@@ -126,6 +130,7 @@ const PAGE_TITLES: Record<Page, string> = {
   sim: 'Race simulation',
   wire: 'Wire log',
   help: 'Help',
+  changelog: 'Changelog',
 };
 
 /** The tab strip's status dot, for a native <option> that cannot be styled:
@@ -613,6 +618,13 @@ export default function App() {
             <button className={`side-item ${page === 'help' ? 'active' : ''}`} onClick={() => go('help')}>
               <span className="side-icon">❓</span> Help
             </button>
+            <button
+              className={`side-version ${page === 'changelog' ? 'active' : ''}`}
+              title="What's changed in this build"
+              onClick={() => go('changelog')}
+            >
+              v{VERSION}
+            </button>
           </div>
         )}
         <div className="sidebar-footer" ref={accountRef}>
@@ -810,6 +822,8 @@ export default function App() {
         <DecodersView socket={socket} admin={admin} ask={ask} />
       ) : page === 'help' && !viewer ? (
         <HelpView />
+      ) : page === 'changelog' && !viewer ? (
+        <ChangelogView />
       ) : page === 'wire' && !viewer ? (
         <WireLog socket={socket} />
       ) : page === 'system' && admin && !viewer ? (
