@@ -107,9 +107,19 @@ survivable. Both live in `deploy/`.
 
 ### Install
 
-From an elevated PowerShell on the server:
+From an **elevated** PowerShell on the server:
 
 ```powershell
+powershell -ExecutionPolicy Bypass -File .\deploy\install-service.ps1
+```
+
+Windows blocks unsigned scripts by default (`running scripts is disabled on
+this system`). The bypass above applies to that one command only. If you would
+rather run the scripts normally, lift it for the session — it reverts when you
+close the window — and leave the machine policy alone:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 .\deploy\install-service.ps1
 ```
 
@@ -128,8 +138,8 @@ which is what lets a future in-app deploy work by simply exiting.
 ### Deploy an update
 
 ```powershell
-.\deploy\update.ps1 -Check    # is anything waiting?
-.\deploy\update.ps1           # show the commits, confirm, deploy
+powershell -ExecutionPolicy Bypass -File .\deploy\update.ps1 -Check   # anything waiting?
+powershell -ExecutionPolicy Bypass -File .\deploy\update.ps1          # confirm, then deploy
 ```
 
 The ordering is the safety. It pulls, installs, builds and runs the tests
