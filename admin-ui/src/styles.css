@@ -1309,6 +1309,21 @@ button.mini.on { border-color: var(--warn); color: var(--warn); }
   padding: 14px 16px; margin-bottom: 24px;
 }
 .deploy-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+
+/* The deploy button restarts the server, so it earns more presence than the
+   ordinary mini button - without inventing a second button language. */
+button.mini.deploy-go { padding: 7px 16px; font-size: 12.5px; margin-top: 4px; }
+
+/* A disabled control here always means something specific is in the way, and
+   the panel says what. It needs to read as unavailable rather than broken. */
+.deploy-panel button.mini:disabled {
+  opacity: 0.45; cursor: not-allowed; background: var(--panel2);
+  border-color: var(--border); color: var(--dim);
+}
+.deploy-panel button.mini:not(:disabled):hover { border-color: var(--accent); }
+.deploy-panel button.mini.primary:not(:disabled):hover {
+  filter: brightness(1.1); border-color: var(--brand-red);
+}
 .deploy-head h2 { font-size: 15px; margin: 0; }
 .deploy-sub { font-size: 12px; color: var(--dim); margin: 2px 0 0; }
 .deploy-none { font-size: 13px; color: var(--dim); margin: 10px 0 0; }

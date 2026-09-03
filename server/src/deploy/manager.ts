@@ -46,6 +46,34 @@ export interface DeployStatus {
   updatedAt: string;
 }
 
+/**
+ * Which of git's porcelain lines should stop a deploy.
+ *
+ * Event configs and courses are operator data that happens to live in the
+ * repo. They are dirty by design on a live box, so they are reported but never
+ * block.
+ *
+ * The output is deliberately not trimmed. Porcelain v1 is `XY path`, and an
+ * unstaged modification has a leading space, so trimming the whole output eats
+ * it on the first line only. That shifts one path by a character and stops it
+ * matching -- producing exactly one spurious blocker, which is a far more
+ * confusing symptom than all of them being wrong.
+ */
+export function blockingChanges(porcelain: string): string[] {
+  return porcelain
+    .split('\n')
+    .map((line) => line.replace(/\r$/, ''))
+    .filter((line) => line.length > 3)
+    .filter((line) => !pathOf(line).startsWith('events/'));
+}
+
+/** The path a porcelain line refers to; for a rename, where it ended up. */
+function pathOf(line: string): string {
+  const rest = line.slice(3);
+  const arrow = rest.indexOf(' -> ');
+  return (arrow >= 0 ? rest.slice(arrow + 4) : rest).replace(/^"|"$/g, '');
+}
+
 const TASK_NAME = 'ptt-gps-deploy';
 
 /** Git is not reliably on PATH for a service account, so it is resolved like node. */
@@ -137,14 +165,7 @@ export class DeployManager {
           })
         : [];
 
-      // Event configs and courses are operator data that happens to live in
-      // the repo; they are dirty by design on a live box and must not block.
-      const dirty = (await this.run(['status', '--porcelain'])).trim();
-      info.blockedBy = dirty
-        ? dirty
-            .split('\n')
-            .filter((line) => !line.slice(3).replace(/^"|"$/g, '').startsWith('events/'))
-        : [];
+      info.blockedBy = blockingChanges(await this.run(['status', '--porcelain']));
     } catch (err) {
       info.error = err instanceof Error ? err.message : String(err);
     }

@@ -111,7 +111,7 @@ export function DeployPanel() {
             )}
           </p>
         </div>
-        <button className="btn" onClick={check} disabled={busy || running}>
+        <button className="mini" onClick={check} disabled={busy || running}>
           {busy ? 'Checking...' : 'Check now'}
         </button>
       </header>
@@ -197,7 +197,7 @@ export function DeployPanel() {
               )}
 
               <button
-                className="btn primary"
+                className="mini primary deploy-go"
                 onClick={() => setConfirming(true)}
                 disabled={busy || blocked.length > 0 || !info?.safeToRestart}
               >
