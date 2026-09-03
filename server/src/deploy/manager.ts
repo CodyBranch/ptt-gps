@@ -188,13 +188,46 @@ export class DeployManager {
     }
   }
 
+  /** Record a failure the deploy itself could not report. */
+  private fail(message: string): void {
+    try {
+      const prev = this.readStatus();
+      fs.writeFileSync(
+        this.statusFile,
+        JSON.stringify(
+          {
+            stage: 'failed',
+            message,
+            log: [...(prev?.log ?? []), message],
+            done: true,
+            ok: false,
+            updatedAt: new Date().toISOString(),
+          },
+          null,
+          2,
+        ),
+      );
+    } catch {
+      // Reporting a failure must not become a second failure.
+    }
+  }
+
   /** True while a deploy started earlier has not reported an ending. */
   inProgress(): boolean {
     const s = this.readStatus();
     if (!s || s.done) return false;
+    const idleMs = Date.now() - new Date(s.updatedAt).getTime();
+
+    // 'starting' is written here, before the task is handed over; every later
+    // stage is written by the script itself. So a deploy still on 'starting'
+    // after a couple of minutes never got going, and waiting the full timeout
+    // makes a hand-off that failed instantly look like a deploy that is
+    // merely slow.
+    if (s.stage === 'starting' && idleMs > 2 * 60_000) return false;
+
     // A deploy that stopped reporting is not still running; without this a
     // machine that lost power mid-deploy would refuse every later attempt.
-    return Date.now() - new Date(s.updatedAt).getTime() < 30 * 60_000;
+    return idleMs < 30 * 60_000;
   }
 
   /**
@@ -221,16 +254,20 @@ export class DeployManager {
     };
     fs.writeFileSync(this.statusFile, JSON.stringify(started, null, 2));
 
-    const inner = [
-      'powershell.exe -ExecutionPolicy Bypass -NonInteractive -File',
-      `\\"${script}\\"`,
-      '-Yes',
-      opts.force ? '-Force' : '',
-      '-StatusFile',
-      `\\"${this.statusFile}\\"`,
-    ]
-      .filter(Boolean)
-      .join(' ');
+    // Task Scheduler's /tr takes the whole command as one string, and nesting
+    // quotes inside it is a reliable way to produce something that looks right
+    // and does not run: the escapes end up stored literally, PowerShell is
+    // handed a filename that does not exist, and the task dies in under a
+    // second without telling anyone.
+    //
+    // A one-line wrapper sidesteps it. The task runs a file path with no
+    // arguments of its own, and the quoting lives in a .cmd where it behaves
+    // the way quoting normally does.
+    const runner = path.join(this.dataDir, 'run-deploy.cmd');
+    const command =
+      `powershell.exe -ExecutionPolicy Bypass -NonInteractive -File "${script}"` +
+      ` -Yes${opts.force ? ' -Force' : ''} -StatusFile "${this.statusFile}"`;
+    fs.writeFileSync(runner, ['@echo off', command, ''].join('\r\n'));
 
     // /f replaces a task left behind by a previous deploy; SYSTEM because the
     // service runs as SYSTEM and the tree is written by it.
@@ -239,7 +276,7 @@ export class DeployManager {
       '/tn',
       TASK_NAME,
       '/tr',
-      inner,
+      runner,
       '/sc',
       'once',
       '/st',
@@ -251,8 +288,16 @@ export class DeployManager {
       '/f',
     ];
 
-    execFileSync('schtasks.exe', create, { stdio: 'pipe' });
-    execFileSync('schtasks.exe', ['/run', '/tn', TASK_NAME], { stdio: 'pipe' });
+    try {
+      execFileSync('schtasks.exe', create, { stdio: 'pipe' });
+      execFileSync('schtasks.exe', ['/run', '/tn', TASK_NAME], { stdio: 'pipe' });
+    } catch (err) {
+      // Otherwise the status file sits on 'starting' and the console shows a
+      // deploy that is not running and never will.
+      const detail = err instanceof Error ? err.message : String(err);
+      this.fail(`could not schedule the deploy: ${detail}`);
+      throw new Error(`could not schedule the deploy: ${detail}`);
+    }
     this.invalidate();
   }
 }
