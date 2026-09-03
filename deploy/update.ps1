@@ -96,16 +96,34 @@ try {
   $local = (& $git rev-parse HEAD).Trim()
   $remote = (& $git rev-parse "origin/$Branch").Trim()
 
-  if ($local -eq $remote) {
+  $pullNeeded = $local -ne $remote
+
+  # Being on the newest commit is not the same as running it. Pulling by hand
+  # leaves the tree ahead of the build, and the service keeps serving the old
+  # dist indefinitely because nothing rebuilt it - a state that looks
+  # up to date from every angle except the one that matters.
+  $dist = Join-Path $root 'server\dist\index.js'
+  $headTime = [datetime]::Parse((& $git log -1 --format=%cI HEAD).Trim())
+  $buildStale = (-not (Test-Path $dist)) -or ((Get-Item $dist).LastWriteTime.ToUniversalTime() -lt $headTime.ToUniversalTime())
+
+  if (-not $pullNeeded -and -not $buildStale) {
     Set-Stage 'up-to-date' "Already up to date ($($local.Substring(0,7)))." $true $true
     return
   }
 
-  $log = & $git log --oneline --no-decorate "HEAD..origin/$Branch"
-  Write-Host ''
-  Write-Host "$($log.Count) commit(s) waiting:" -ForegroundColor Cyan
-  $log | ForEach-Object { Write-Host "  $_" }
-  Write-Host ''
+  if ($pullNeeded) {
+    $log = & $git log --oneline --no-decorate "HEAD..origin/$Branch"
+    Write-Host ''
+    Write-Host "$($log.Count) commit(s) waiting:" -ForegroundColor Cyan
+    $log | ForEach-Object { Write-Host "  $_" }
+    Write-Host ''
+  } else {
+    $log = @()
+    Write-Host ''
+    Write-Host "Up to date at $($local.Substring(0,7)), but the running build is older than it." -ForegroundColor Yellow
+    Write-Host 'Rebuilding and restarting so the service runs what the tree says.'
+    Write-Host ''
+  }
 
   if ($Check) { return }
 
@@ -148,14 +166,17 @@ try {
   }
 
   if (-not $Yes) {
-    $answer = Read-Host 'Deploy these commits? (y/N)'
+    $ask = if ($pullNeeded) { 'Deploy these commits? (y/N)' } else { 'Rebuild and restart? (y/N)' }
+    $answer = Read-Host $ask
     if ($answer -notmatch '^(y|yes)$') { Write-Host 'Cancelled.'; return }
   }
 
   # --- prepare, with the old build still serving ----------------------------
-  Set-Stage 'pulling' "Pulling $($log.Count) commit(s)..."
-  & $git pull --ff-only origin $Branch
-  if ($LASTEXITCODE -ne 0) { throw 'git pull failed (not a fast-forward?)' }
+  if ($pullNeeded) {
+    Set-Stage 'pulling' "Pulling $($log.Count) commit(s)..."
+    & $git pull --ff-only origin $Branch
+    if ($LASTEXITCODE -ne 0) { throw 'git pull failed (not a fast-forward?)' }
+  }
 
   Set-Stage 'installing' 'Installing dependencies...'
   & $npm ci
