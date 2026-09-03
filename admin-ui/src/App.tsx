@@ -839,7 +839,7 @@ export default function App() {
       ) : page === 'help' && !viewer ? (
         <HelpView />
       ) : page === 'changelog' && !viewer ? (
-        <ChangelogView />
+        <ChangelogView admin={admin} />
       ) : page === 'wire' && !viewer ? (
         <WireLog socket={socket} />
       ) : page === 'system' && admin && !viewer ? (

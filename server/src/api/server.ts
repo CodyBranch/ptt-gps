@@ -28,6 +28,7 @@ import { SimEngine, type SimTrackerCfg } from '../sim/engine.js';
 import type { DecoderPoller } from '../decoders/poller.js';
 import { AuthService, hashPassword, type Role } from './auth.js';
 import { TunnelManager } from './tunnel.js';
+import { DeployManager } from '../deploy/manager.js';
 
 /** Everything the API needs from the multi-event runtime in index.ts. */
 export interface ServerContext {
@@ -35,6 +36,8 @@ export interface ServerContext {
   hub: FirebaseHub;
   forwarder: Forwarder;
   eventsDir: string;
+  /** Where the database lives; deploy status is written beside it. */
+  dataDir: string;
   apps: Map<string, App>;
   managers: Map<string, ConfigManager>;
   gate: FixGate;
@@ -209,11 +212,8 @@ export function startApi(
    * which is exactly what a deployer needs and not something to hand out over
    * the tunnel. Anything off-box gets the same 401 as any other API call.
    */
-  ex.get('/api/health', (req, res) => {
-    const ip = (req.socket.remoteAddress ?? '').replace('::ffff:', '');
-    if (ip !== '127.0.0.1' && ip !== '::1') {
-      return void res.status(401).json({ ok: false, error: 'health is loopback-only' });
-    }
+  /** Shared by /api/health and the deploy interlock, which must agree. */
+  const raceCounts = (): { armed: number; live: number } => {
     let armed = 0;
     let live = 0;
     for (const app of ctx.apps.values()) {
@@ -222,6 +222,15 @@ export function startApi(
         else if (e.status === 'live') live++;
       }
     }
+    return { armed, live };
+  };
+
+  ex.get('/api/health', (req, res) => {
+    const ip = (req.socket.remoteAddress ?? '').replace('::ffff:', '');
+    if (ip !== '127.0.0.1' && ip !== '::1') {
+      return void res.status(401).json({ ok: false, error: 'health is loopback-only' });
+    }
+    const { armed, live } = raceCounts();
     res.json({
       ok: true,
       version: serverVersion,
@@ -316,6 +325,57 @@ export function startApi(
 
   // --- everything below requires a logged-in operator ---
   ex.use('/api', auth.middleware);
+
+  // --- deploying from the console ---
+  // The manager owns the awkward part: the work has to outlive this process,
+  // because deploying restarts it.
+  const deployRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
+  const deploy = new DeployManager(deployRoot, ctx.dataDir);
+
+  ex.get('/api/deploy', auth.adminOnly, async (_req, res) => {
+    const [info, { armed, live }] = [await deploy.check(), raceCounts()];
+    res.json({
+      ok: true,
+      version: serverVersion,
+      update: info,
+      status: deploy.readStatus(),
+      running: deploy.inProgress(),
+      races: { armed, live },
+      safeToRestart: armed === 0 && live === 0,
+    });
+  });
+
+  ex.post('/api/deploy/check', auth.adminOnly, async (_req, res) => {
+    deploy.invalidate();
+    res.json({ ok: true, update: await deploy.check() });
+  });
+
+  ex.post('/api/deploy/start', auth.adminOnly, async (req, res) => {
+    const force = req.body?.force === true;
+    const by = auth.check(auth.tokenFromRequest(req))?.username ?? 'unknown';
+    try {
+      const info = await deploy.check(30_000);
+      if (info.error) throw new Error(info.error);
+      if (!info.commits.length) throw new Error('nothing to deploy');
+      if (info.blockedBy.length) {
+        throw new Error(`local code changes on this machine: ${info.blockedBy.join('; ')}`);
+      }
+
+      // The same interlock the script enforces, checked here so the console
+      // can refuse with a useful message instead of the deploy dying later.
+      const { armed, live } = raceCounts();
+      if ((armed || live) && !force) {
+        throw new Error(`a race is armed or live (armed ${armed}, live ${live})`);
+      }
+
+      deploy.start({ force, by });
+      console.log(`[deploy] started by ${by}${force ? ' (forced)' : ''}`);
+      res.json({ ok: true, status: deploy.readStatus() });
+    } catch (err) {
+      res.status(400).json({ ok: false, error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
 
   type OpRequest = express.Request & { operator?: string; role?: Role };
   const act = (fn: (req: OpRequest) => unknown) => (req: express.Request, res: express.Response) => {

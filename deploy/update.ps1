@@ -24,12 +24,46 @@ param(
   [switch]$Yes,
   [switch]$Force,
   [int]$Port = 8080,
-  [string]$Branch = 'main'
+  [string]$Branch = 'main',
+  [string]$StatusFile
 )
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 Push-Location $root
+
+# --- progress the console can follow -----------------------------------------
+# A deploy restarts the service, so the process asking for it dies partway
+# through and cannot be told how it ended. Progress goes to a file instead,
+# which outlives the restart and is what the console reads afterwards. It sits
+# with the database rather than in the repo, so a rollback cannot revert it.
+$script:Stage = 'starting'
+$script:Lines = New-Object System.Collections.ArrayList
+
+function Set-Stage([string]$stage, [string]$message, [bool]$done = $false, [bool]$ok = $false) {
+  $script:Stage = $stage
+  if ($message) {
+    [void]$script:Lines.Add($message)
+    Write-Host $message -ForegroundColor Cyan
+  }
+  if (-not $StatusFile) { return }
+  try {
+    $dir = Split-Path -Parent $StatusFile
+    if ($dir -and -not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
+    $payload = [ordered]@{
+      stage      = $stage
+      message    = $message
+      log        = @($script:Lines)
+      done       = $done
+      ok         = $ok
+      updatedAt  = (Get-Date).ToUniversalTime().ToString('o')
+    }
+    $payload | ConvertTo-Json -Depth 4 | Set-Content -Path $StatusFile -Encoding utf8
+  } catch {
+    # Never let reporting failure break the deploy it is reporting on.
+    Write-Host "(could not write status: $($_.Exception.Message))" -ForegroundColor DarkGray
+  }
+}
 
 function Health {
   try { return Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/health" -TimeoutSec 3 }
@@ -63,7 +97,7 @@ try {
   $remote = (& $git rev-parse "origin/$Branch").Trim()
 
   if ($local -eq $remote) {
-    Write-Host "Up to date ($($local.Substring(0,7)))." -ForegroundColor Green
+    Set-Stage 'up-to-date' "Already up to date ($($local.Substring(0,7)))." $true $true
     return
   }
 
@@ -95,7 +129,7 @@ try {
   if ($codeChanges) {
     Write-Host 'The working tree on this machine has local code changes:' -ForegroundColor Red
     $codeChanges | ForEach-Object { Write-Host "  $_" }
-    throw 'Refusing to update over local changes. Commit, stash or discard them first.'
+    throw "Refusing to update over local code changes: $($codeChanges -join '; ')"
   }
 
   if ($dataChanges) {
@@ -119,25 +153,26 @@ try {
   }
 
   # --- prepare, with the old build still serving ----------------------------
-  Write-Host ''
-  Write-Host 'Pulling...' -ForegroundColor Cyan
+  Set-Stage 'pulling' "Pulling $($log.Count) commit(s)..."
   & $git pull --ff-only origin $Branch
   if ($LASTEXITCODE -ne 0) { throw 'git pull failed (not a fast-forward?)' }
 
-  Write-Host 'Installing dependencies...' -ForegroundColor Cyan
+  Set-Stage 'installing' 'Installing dependencies...'
   & $npm ci
   if ($LASTEXITCODE -ne 0) { throw 'npm ci failed - the old build is still running' }
 
-  Write-Host 'Building...' -ForegroundColor Cyan
+  Set-Stage 'building' 'Building...'
   & $npm run build
   if ($LASTEXITCODE -ne 0) { throw 'build failed - the old build is still running' }
 
-  Write-Host 'Running tests...' -ForegroundColor Cyan
+  Set-Stage 'testing' 'Running tests...'
   & $npm test
   if ($LASTEXITCODE -ne 0) { throw 'tests failed - the old build is still running' }
 
   # --- swap -----------------------------------------------------------------
-  Write-Host 'Restarting the service...' -ForegroundColor Cyan
+  # Everything above ran while the old build was still serving. This is the
+  # first irreversible step, and the one that kills whoever asked for it.
+  Set-Stage 'restarting' 'Restarting the service...'
   Restart-Service -Name 'ptt-gps' -Force
 
   $ok = $false
@@ -167,12 +202,21 @@ try {
     & $npm ci
     & $npm run build
     Restart-Service -Name 'ptt-gps' -Force
+    Set-Stage 'rolled-back' "New build did not come up. Rolled back to $($local.Substring(0,7))." $true $false
     throw "Rolled back to $($local.Substring(0,7)). Check logs\ptt-gps.err.log for why."
   }
 
-  Write-Host ''
-  Write-Host "Deployed version $($h.version) at $((& $git rev-parse --short HEAD).Trim())." -ForegroundColor Green
+  $short = (& $git rev-parse --short HEAD).Trim()
+  Set-Stage 'done' "Deployed version $($h.version) at $short." $true $true
   Write-Host "$($h.events) event(s) active, $($h.races.live) race(s) live."
+}
+catch {
+  # The console has no other way to learn why a deploy it started never
+  # finished: the process it was talking to is gone.
+  if ($script:Stage -ne 'rolled-back') {
+    Set-Stage 'failed' $_.Exception.Message $true $false
+  }
+  throw
 }
 finally {
   Pop-Location

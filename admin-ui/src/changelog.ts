@@ -22,6 +22,19 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '0.10.0',
+    date: '2026-09-03',
+    summary: 'Running as a service, and deploying without a terminal.',
+    added: [
+      'The server runs as a Windows service, so it survives a reboot and restarts itself if it exits. `deploy/install-service.ps1` sets it up.',
+      'Deploy from the console. Under the changelog, an admin sees what is waiting on `main` and can deploy it: the new code is pulled, built and tested while the current server keeps running, and only then does it restart. If the new build does not answer, it rolls back on its own.',
+      'A deploy reports progress to a file rather than to the browser, because it restarts the server the browser is talking to. The page follows along through the outage and says how it ended once the new build answers.',
+    ],
+    fixed: [
+      'A failed port bind says what happened instead of printing a stack trace. Under a service manager that restarts on failure, an unreadable crash becomes a silent restart loop.',
+    ],
+  },
+  {
     version: '0.9.0',
     date: '2026-09-02',
     summary: 'Finishing a meet, and a phone layout that stops working around itself.',

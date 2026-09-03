@@ -1,4 +1,5 @@
 import { RELEASES, VERSION } from '../changelog';
+import { DeployPanel } from './DeployPanel';
 import { inline } from './HelpView';
 
 const SECTIONS: Array<{ key: 'added' | 'changed' | 'fixed'; label: string }> = [
@@ -11,7 +12,7 @@ const SECTIONS: Array<{ key: 'added' | 'changed' | 'fixed'; label: string }> = [
  * What changed, and when — reading from the same file the sidebar takes its
  * version from, so the number on screen and the notes below it agree.
  */
-export function ChangelogView() {
+export function ChangelogView({ admin }: { admin: boolean }) {
   return (
     <div className="setup help">
       <div className="setup-bar">
@@ -20,6 +21,9 @@ export function ChangelogView() {
 
       <div className="changelog-layout">
         <article className="help-body">
+          {/* Deploying belongs with the version it changes. */}
+          {admin && <DeployPanel />}
+
           <header className="help-head">
             <h1>What&rsquo;s changed</h1>
             <p className="help-sub">

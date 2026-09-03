@@ -46,6 +46,11 @@ export const api = {
   moveTracker: (eventId: string, imei: string, vehicle: string) =>
     post(`/api/events/${eventId}/trackers/${imei}/vehicle`, { vehicle }),
 
+  // --- deploying a new build ---
+  deployInfo: (): Promise<import('./types').DeployInfo> => getJson('/api/deploy'),
+  deployCheck: (): Promise<{ update: import('./types').UpdateInfo }> => send('/api/deploy/check', 'POST'),
+  deployStart: (force: boolean) => send('/api/deploy/start', 'POST', { force }),
+
   // --- decoders (RaceResult timing boxes) ---
   decoders: (): Promise<{
     decoders: import('./types').DecoderPub[];

@@ -40,7 +40,9 @@ if (!fs.existsSync(eventsDir)) {
 }
 
 const store = new Store(arg('db', 'data/ptt.db')!);
-const hub = new FirebaseHub(store, path.dirname(path.resolve(arg('db', 'data/ptt.db')!)));
+/** Everything that is state rather than code lives here, next to the database. */
+const dataDir = path.dirname(path.resolve(arg('db', 'data/ptt.db')!));
+const hub = new FirebaseHub(store, dataDir);
 const forwarder = new Forwarder(store);
 
 // --- shared ingest pipeline (one gate/store/lastSeen for all loaded events) ---
@@ -340,6 +342,7 @@ const ctx: ServerContext = {
   hub,
   forwarder,
   eventsDir,
+  dataDir,
   apps,
   managers,
   gate,

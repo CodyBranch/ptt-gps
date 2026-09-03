@@ -303,3 +303,40 @@ export interface DecoderStatus {
   lastError?: string;
   deviceCount: number;
 }
+
+// --- deploying a new build ---
+
+export interface PendingCommit {
+  sha: string;
+  subject: string;
+}
+
+export interface UpdateInfo {
+  repo: boolean;
+  branch: string;
+  current: string;
+  commits: PendingCommit[];
+  /** Local code changes on the box, which block a deploy. Event data excluded. */
+  blockedBy: string[];
+  checkedAt: number;
+  error?: string;
+}
+
+export interface DeployStatus {
+  stage: string;
+  message: string;
+  log: string[];
+  done: boolean;
+  ok: boolean;
+  updatedAt: string;
+}
+
+export interface DeployInfo {
+  ok: boolean;
+  version: string;
+  update: UpdateInfo;
+  status: DeployStatus | null;
+  running: boolean;
+  races: { armed: number; live: number };
+  safeToRestart: boolean;
+}
