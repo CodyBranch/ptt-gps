@@ -1315,6 +1315,15 @@ button.mini.on { border-color: var(--warn); color: var(--warn); }
 
 .version-warn { display: block; font-size: 10px; }
 
+/* Live feed access */
+.feed-token-cell { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.feed-conn-head { font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--dim); margin: 18px 0 6px; }
+.setup-table td.right { text-align: right; white-space: nowrap; }
+.setup-table td.right button + button { margin-left: 6px; }
+@media (max-width: 700px) {
+  .feed-token-cell { flex-wrap: wrap; white-space: normal; }
+}
+
 /* Deploying a new build */
 .deploy-panel {
   border: 1px solid var(--border); border-radius: 10px; background: var(--panel);

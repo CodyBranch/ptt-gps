@@ -236,11 +236,25 @@ export interface FeedContext {
   snapshotFor: (eventId: string) => unknown;
 }
 
+export interface FeedConnection {
+  /** Which token it authenticated with, so a noisy consumer can be identified. */
+  tokenId: number | null;
+  tokenLabel: string;
+  ip: string;
+  connectedMs: number;
+  /** The meet it is watching, or null if it has not chosen one. */
+  eventId: string | null;
+}
+
 export interface Feed {
   /** Rebuild and push an event's races to whoever is subscribed to it. */
   publish: (eventId: string) => void;
   /** Push every loaded event, for changes that are not race-scoped. */
   publishAll: () => void;
+  /** Who is connected and what each one is listening to. */
+  connections: () => FeedConnection[];
+  /** Drop everyone using a token, for when it is revoked or disabled. */
+  disconnectToken: (tokenId: number) => void;
 }
 
 export function attachFeed(io: SocketIOServer, ctx: FeedContext, auth: AuthService): Feed {
@@ -254,9 +268,11 @@ export function attachFeed(io: SocketIOServer, ctx: FeedContext, auth: AuthServi
     const header = handshake.headers?.['x-feed-token'];
     const token = [fromAuth, fromQuery, header].find((t) => typeof t === 'string') as string | undefined;
 
-    if (!token || !auth.feedTokenValid(token)) {
-      return next(new Error('invalid feed token'));
-    }
+    const row = token ? auth.feedTokenRow(token) : undefined;
+    if (!row) return next(new Error('invalid feed token'));
+
+    socket.data.tokenId = row.id;
+    socket.data.tokenLabel = row.label;
     next();
   });
 
@@ -273,7 +289,11 @@ export function attachFeed(io: SocketIOServer, ctx: FeedContext, auth: AuthServi
 
   ns.on('connection', (socket) => {
     const ip = socket.handshake.address?.replace('::ffff:', '') ?? '?';
-    console.log(`[feed] client connected from ${ip}`);
+    socket.data.ip = ip;
+    socket.data.connectedMs = Date.now();
+    socket.data.eventId = null;
+    if (typeof socket.data.tokenId === 'number') auth.noteFeedTokenUse(socket.data.tokenId, ip);
+    console.log(`[feed] "${socket.data.tokenLabel}" connected from ${ip}`);
 
     // Everything a client needs to choose a meet, without a second round trip.
     socket.emit('hello', {
@@ -297,7 +317,8 @@ export function attachFeed(io: SocketIOServer, ctx: FeedContext, auth: AuthServi
       // again moves the subscription rather than adding to it.
       for (const r of socket.rooms) if (r.startsWith('feed:')) void socket.leave(r);
       void socket.join(room(eventId));
-      console.log(`[feed] ${ip} subscribed to ${eventId}`);
+      socket.data.eventId = eventId;
+      console.log(`[feed] "${socket.data.tokenLabel}" subscribed to ${eventId}`);
 
       const messages = feedMessages(ctx.snapshotFor(eventId) as InternalSnapshot, Date.now());
       if (ack) ack({ ok: true, eventId, races: messages.map((m) => m.race.id) });
@@ -308,6 +329,7 @@ export function attachFeed(io: SocketIOServer, ctx: FeedContext, auth: AuthServi
 
     socket.on('unsubscribe', () => {
       for (const r of socket.rooms) if (r.startsWith('feed:')) void socket.leave(r);
+      socket.data.eventId = null;
     });
 
     socket.on('events', (_payload: unknown, ack?: (res: unknown) => void) => {
@@ -315,7 +337,7 @@ export function attachFeed(io: SocketIOServer, ctx: FeedContext, auth: AuthServi
       else socket.emit('hello', { protocol: PROTOCOL, serverTimeMs: Date.now(), events: summaries() });
     });
 
-    socket.on('disconnect', () => console.log(`[feed] client from ${ip} disconnected`));
+    socket.on('disconnect', () => console.log(`[feed] "${socket.data.tokenLabel}" from ${ip} disconnected`));
   });
 
   // Several races in an event can change in the same tick; rebuilding the
@@ -344,6 +366,19 @@ export function attachFeed(io: SocketIOServer, ctx: FeedContext, auth: AuthServi
 
   return {
     publish,
+    connections: () =>
+      [...ns.sockets.values()].map((socket) => ({
+        tokenId: typeof socket.data.tokenId === 'number' ? socket.data.tokenId : null,
+        tokenLabel: String(socket.data.tokenLabel ?? 'unknown'),
+        ip: String(socket.data.ip ?? '?'),
+        connectedMs: Number(socket.data.connectedMs ?? 0),
+        eventId: typeof socket.data.eventId === 'string' ? socket.data.eventId : null,
+      })),
+    disconnectToken: (tokenId: number) => {
+      for (const socket of ns.sockets.values()) {
+        if (socket.data.tokenId === tokenId) socket.disconnect(true);
+      }
+    },
     publishAll: () => {
       for (const id of ctx.apps.keys()) publish(id);
       // The set of events itself may have changed, so anyone connected but not

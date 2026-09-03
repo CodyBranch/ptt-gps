@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import type { ConfirmRequest } from './Confirm';
-import type { FirebaseConn, TunnelStatus, UserRow } from '../types';
+import type { FeedConnection, FeedToken, FirebaseConn, TunnelStatus, UserRow } from '../types';
 import { Toast } from './Toast';
 
 type Msg = { kind: 'ok' | 'err'; text: string };
@@ -434,67 +434,180 @@ function FirebasePanel({
 }
 
 /**
- * The outbound live feed's token.
+ * Who may read the live feed, and who currently is.
  *
- * Kept separate from the split feed's token on purpose: one lets software
- * write distances in, this one lets it read races out, and revoking a
- * partner's read access should not break an unrelated writer.
+ * One token per consumer rather than one shared secret: rotating a single
+ * token disconnects everyone at once, and a shared secret can never answer
+ * "who is using this?". The connections list answers the question that
+ * actually comes up during an event - is their software connected, and is it
+ * watching the right meet?
  */
 function LiveFeedPanel({ onMsg, ask }: { onMsg: (m: Msg) => void; ask: (req: ConfirmRequest) => void }) {
-  const [token, setToken] = useState<string | null>(null);
-  const [show, setShow] = useState(false);
+  const [tokens, setTokens] = useState<FeedToken[]>([]);
+  const [connections, setConnections] = useState<FeedConnection[]>([]);
+  const [label, setLabel] = useState('');
+  const [shown, setShown] = useState<number | null>(null);
+
+  const load = () =>
+    api
+      .feedTokens()
+      .then((r) => {
+        setTokens(r.tokens);
+        setConnections(r.connections);
+      })
+      .catch(console.error);
 
   useEffect(() => {
-    api.feedToken().then(setToken).catch(console.error);
+    void load();
+    // Connections come and go without anything else on this page changing.
+    const id = setInterval(load, 10_000);
+    return () => clearInterval(id);
   }, []);
 
-  const regenerate = () =>
+  const create = async () => {
+    const name = label.trim();
+    if (!name) return onMsg({ kind: 'err', text: 'Give the token a label so you know whose it is.' });
+    try {
+      const res = (await api.createFeedToken(name)) as { token: FeedToken };
+      setLabel('');
+      await load();
+      setShown(res.token.id);
+      onMsg({ kind: 'ok', text: `Token created for ${name}.` });
+    } catch (err) {
+      onMsg({ kind: 'err', text: (err as Error).message });
+    }
+  };
+
+  const revoke = (t: FeedToken) =>
     ask({
-      title: token ? 'Regenerate the live feed token?' : 'Enable the live feed?',
-      body: token
-        ? 'Every connected consumer is disconnected immediately and must be given the new token.'
-        : 'Generates a read-only token other software uses to receive live race distances.',
-      confirmLabel: token ? 'Regenerate' : 'Generate token',
-      danger: !!token,
+      title: `Revoke "${t.label}"?`,
+      body: 'Anything using this token is disconnected immediately and cannot reconnect.',
+      confirmLabel: 'Revoke',
+      danger: true,
       onConfirm: async () => {
         try {
-          setToken(await api.regenerateFeedToken());
-          setShow(true);
-          onMsg({ kind: 'ok', text: 'Live feed token generated.' });
+          await api.deleteFeedToken(t.id);
+          await load();
+          onMsg({ kind: 'ok', text: `Revoked "${t.label}".` });
         } catch (err) {
           onMsg({ kind: 'err', text: (err as Error).message });
         }
       },
     });
 
+  const toggle = async (t: FeedToken) => {
+    try {
+      await api.setFeedTokenEnabled(t.id, !t.enabled);
+      await load();
+    } catch (err) {
+      onMsg({ kind: 'err', text: (err as Error).message });
+    }
+  };
+
+  const live = (id: number) => connections.filter((c) => c.tokenId === id).length;
+
   return (
     <>
       <p className="hint">
-        Real-time race distances for other software to consume. Connect socket.io to the{' '}
-        <span className="mono">/feed</span> namespace with this token, subscribe to a meet, and receive a
-        message whenever anything in it changes. Read-only: it cannot start races or change setup. See{' '}
+        Real-time race distances for other software. Connect socket.io to the{' '}
+        <span className="mono">/feed</span> namespace with a token, subscribe to a meet, and receive a message
+        whenever anything in it changes. Read-only: a token cannot start races or change setup. See{' '}
         <span className="mono">docs/live-feed.md</span>.
       </p>
+
       <div className="form-row">
         <label>
-          Feed token
+          New token for
           <input
-            readOnly
-            type={show ? 'text' : 'password'}
-            value={token ?? ''}
-            placeholder="not generated - feed disabled"
-            onFocus={(e) => e.target.select()}
+            value={label}
+            placeholder="who is it for? e.g. Scoreboard"
+            maxLength={60}
+            onChange={(e) => setLabel(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && void create()}
           />
         </label>
-        {token && (
-          <button className="mini self-end" onClick={() => setShow(!show)}>
-            {show ? 'Hide' : 'Show'}
-          </button>
-        )}
-        <button className="mini self-end" onClick={regenerate}>
-          {token ? 'Regenerate' : 'Generate'}
+        <button className="mini primary self-end" onClick={() => void create()}>
+          Create
         </button>
       </div>
+
+      {tokens.length === 0 ? (
+        <p className="hint">No tokens yet, so nothing can read the feed.</p>
+      ) : (
+        <table className="setup-table">
+          <thead>
+            <tr>
+              <th>Label</th>
+              <th>Token</th>
+              <th>Last used</th>
+              <th>Now</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {tokens.map((t) => (
+              <tr key={t.id} className={t.enabled ? '' : 'dim'}>
+                <td>{t.label}</td>
+                <td className="mono feed-token-cell">
+                  {shown === t.id ? t.token : '•'.repeat(16)}
+                  <button className="mini" onClick={() => setShown(shown === t.id ? null : t.id)}>
+                    {shown === t.id ? 'Hide' : 'Show'}
+                  </button>
+                  {shown === t.id && (
+                    <button className="mini" onClick={() => void navigator.clipboard?.writeText(t.token)}>
+                      Copy
+                    </button>
+                  )}
+                </td>
+                <td>{t.lastSeenMs ? `${new Date(t.lastSeenMs).toLocaleString()}${t.lastIp ? ` (${t.lastIp})` : ''}` : 'never'}</td>
+                <td>{live(t.id) > 0 ? <span className="fwd-ok">● {live(t.id)}</span> : <span className="dim">—</span>}</td>
+                <td className="right">
+                  <button className="mini" onClick={() => void toggle(t)}>
+                    {t.enabled ? 'Disable' : 'Enable'}
+                  </button>
+                  <button className="mini danger" onClick={() => revoke(t)}>
+                    Revoke
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      <h4 className="feed-conn-head">Connected now</h4>
+      {connections.length === 0 ? (
+        <p className="hint">Nothing is connected to the feed.</p>
+      ) : (
+        <table className="setup-table">
+          <thead>
+            <tr>
+              <th>Token</th>
+              <th>From</th>
+              <th>Watching</th>
+              <th>Since</th>
+            </tr>
+          </thead>
+          <tbody>
+            {connections.map((c, i) => (
+              <tr key={`${c.ip}-${c.connectedMs}-${i}`}>
+                <td>{c.tokenLabel}</td>
+                <td className="mono">{c.ip}</td>
+                <td>
+                  {c.eventId ? (
+                    <span className="mono">{c.eventId}</span>
+                  ) : (
+                    /* Connected but not subscribed is a real state, and the
+                       usual reason a consumer sees no data. */
+                    <span className="dim">not subscribed</span>
+                  )}
+                </td>
+                <td>{new Date(c.connectedMs).toLocaleTimeString()}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </>
   );
 }

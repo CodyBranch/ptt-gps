@@ -1,6 +1,6 @@
 {
   "name": "ptt-gps",
-  "version": "0.11.0",
+  "version": "0.11.1",
   "private": true,
   "description": "PT Timing race GPS tracking system",
   "workspaces": [

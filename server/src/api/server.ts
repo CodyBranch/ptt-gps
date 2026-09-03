@@ -1191,12 +1191,42 @@ export function startApi(
 
   // --- live feed token (outbound: other software reading races) ---
 
-  ex.get('/api/feed-token', auth.adminOnly, (_req, res) => {
-    res.json({ token: auth.feedToken() ?? null });
+  ex.get('/api/feed-tokens', auth.adminOnly, (_req, res) => {
+    res.json({
+      ok: true,
+      tokens: auth.listFeedTokens().map((t) => ({
+        id: t.id,
+        label: t.label,
+        token: t.token,
+        createdMs: t.created_at_ms,
+        lastSeenMs: t.last_seen_ms,
+        lastIp: t.last_ip,
+        enabled: !!t.enabled,
+      })),
+      connections: feed.connections(),
+    });
   });
 
-  ex.post('/api/feed-token', auth.adminOnly, (_req, res) => {
-    res.json({ ok: true, token: auth.regenerateFeedToken() });
+  ex.post('/api/feed-tokens', auth.adminOnly, (req, res) => {
+    const label = String(req.body?.label ?? '').trim();
+    if (!label) return void res.status(400).json({ ok: false, error: 'a label is required' });
+    if (label.length > 60) return void res.status(400).json({ ok: false, error: 'label is too long' });
+    const row = auth.createFeedToken(label);
+    res.json({ ok: true, token: { id: row.id, label: row.label, token: row.token } });
+  });
+
+  ex.patch('/api/feed-tokens/:id', auth.adminOnly, (req, res) => {
+    auth.setFeedTokenEnabled(Number(req.params.id), req.body?.enabled !== false);
+    // A disabled token must stop working now, not at the consumer's next
+    // reconnect - that is the whole point of being able to turn one off.
+    feed.disconnectToken(Number(req.params.id));
+    res.json({ ok: true });
+  });
+
+  ex.delete('/api/feed-tokens/:id', auth.adminOnly, (req, res) => {
+    auth.deleteFeedToken(Number(req.params.id));
+    feed.disconnectToken(Number(req.params.id));
+    res.json({ ok: true });
   });
 
   // --- simulation ---

@@ -340,3 +340,24 @@ export interface DeployInfo {
   races: { armed: number; live: number };
   safeToRestart: boolean;
 }
+
+// --- live feed access ---
+
+export interface FeedToken {
+  id: number;
+  label: string;
+  token: string;
+  createdMs: number;
+  lastSeenMs: number | null;
+  lastIp: string | null;
+  enabled: boolean;
+}
+
+export interface FeedConnection {
+  tokenId: number | null;
+  tokenLabel: string;
+  ip: string;
+  connectedMs: number;
+  /** The meet it is watching, or null if it has not chosen one. */
+  eventId: string | null;
+}

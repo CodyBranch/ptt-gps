@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import type { NextFunction, Request, Response } from 'express';
-import type { Store } from '../state/store.js';
+import type { FeedTokenRow, Store } from '../state/store.js';
 
 /**
  * Console authentication.
@@ -164,26 +164,52 @@ export class AuthService {
   }
 
   /**
-   * Machine token for the outbound live feed.
+   * Machine tokens for the outbound live feed.
    *
-   * Deliberately not the ingest token: one lets software write distances in,
-   * the other lets it read races out. Revoking a partner's read access should
-   * not also break an unrelated writer, and vice versa.
+   * One per consumer rather than one shared secret: rotating a single token
+   * disconnects everybody at once, and a shared secret can never answer "who
+   * is using this?". Deliberately not the ingest token either - that lets
+   * software write distances in, these let it read races out, and revoking a
+   * partner's read access should not break an unrelated writer.
    */
+  feedTokenRow(token: string): FeedTokenRow | undefined {
+    if (!token) return undefined;
+    const row = this.store.feedTokenByValue(token);
+    if (row) return row;
+
+    // A single token predates the table. Carry it in on first use rather than
+    // cutting off a consumer that was configured before the upgrade.
+    const legacy = this.store.getSetting('feed-token');
+    if (legacy && token.length === legacy.length && crypto.timingSafeEqual(Buffer.from(token), Buffer.from(legacy))) {
+      const migrated = this.store.createFeedToken('Original token', legacy);
+      this.store.setSetting('feed-token', '');
+      return migrated;
+    }
+    return undefined;
+  }
+
   feedTokenValid(token: string): boolean {
-    const stored = this.store.getSetting('feed-token');
-    if (!stored || token.length !== stored.length) return false;
-    return crypto.timingSafeEqual(Buffer.from(token), Buffer.from(stored));
+    return this.feedTokenRow(token) !== undefined;
   }
 
-  feedToken(): string | undefined {
-    return this.store.getSetting('feed-token');
+  listFeedTokens(): FeedTokenRow[] {
+    return this.store.listFeedTokens();
   }
 
-  regenerateFeedToken(): string {
-    const token = crypto.randomBytes(24).toString('hex');
-    this.store.setSetting('feed-token', token);
-    return token;
+  createFeedToken(label: string): FeedTokenRow {
+    return this.store.createFeedToken(label, crypto.randomBytes(24).toString('hex'));
+  }
+
+  deleteFeedToken(id: number): void {
+    this.store.deleteFeedToken(id);
+  }
+
+  setFeedTokenEnabled(id: number, enabled: boolean): void {
+    this.store.setFeedTokenEnabled(id, enabled);
+  }
+
+  noteFeedTokenUse(id: number, ip: string): void {
+    this.store.touchFeedToken(id, ip);
   }
 
   regenerateIngestToken(): string {

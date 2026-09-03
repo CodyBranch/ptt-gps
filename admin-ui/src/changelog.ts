@@ -22,6 +22,16 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '0.11.1',
+    date: '2026-09-03',
+    summary: 'Named tokens for the live feed, and who is on it.',
+    added: [
+      'One live-feed token per consumer instead of a single shared secret, each with a label, created from System. They can be disabled or revoked individually, and either takes effect immediately rather than at the consumer next reconnecting.',
+      'A Connected now list under the same panel: who is on the feed, from where, and which meet each is watching. Connected but not subscribed shows as its own state, which is the usual reason a consumer sees no data.',
+      'Each token records when it was last used and from which address, so an integration that has quietly stopped connecting is visible without asking anyone.',
+    ],
+  },
+  {
     version: '0.11.0',
     date: '2026-09-03',
     summary: 'A live feed other software can consume.',

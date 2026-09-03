@@ -31,10 +31,18 @@ made", not a fixed number of seconds.
 - **Transport**: socket.io v4
 - **Auth**: a feed token, in the handshake
 
-Get the token from the console: **System → Live feed**. It is a read-only
-credential for this feed and nothing else — it cannot start races, change setup,
-or write data. Regenerating it disconnects existing clients, so hand out one
-token per consumer only if you want to revoke them separately.
+Get a token from the console: **System → Live feed**. Give it a label naming
+the consumer ("Scoreboard", "Broadcast partner") and press Create; the token is
+shown once created and can be revealed and copied at any time.
+
+**Create one token per consumer.** They are individually revocable, so turning
+off one partner does not disconnect everyone else, and the console can show you
+which consumers are actually connected and what each is watching. A single
+shared token can answer neither question.
+
+A token is read-only: it cannot start races, change setup, or write data.
+Disabling or revoking one **disconnects anything using it immediately** — not
+at its next reconnect.
 
 ```js
 import { io } from 'socket.io-client';
@@ -313,8 +321,8 @@ running), `live`, `finished`. Distances only advance while `live`.
 
 | Symptom | Cause |
 | --- | --- |
-| `connect_error: invalid feed token` | Wrong or regenerated token. Check **System → Live feed** |
-| Connects, but no `race` messages | You have not subscribed, or the meet has no races |
+| `connect_error: invalid feed token` | Wrong, disabled or revoked token. Check **System → Live feed** |
+| Connects, but no `race` messages | You have not subscribed, or the meet has no races. **System → Live feed → Connected now** shows each connection and what it is watching; "not subscribed" there is the usual answer |
 | `subscribe` acks `no such event` | The meet is not loaded on the server. `ack.events` lists what is |
 | `distance` is null | The role has no vehicle, or nothing has been heard from its tracker yet |
 | `distance` frozen, `stale: true` | The tracker has gone quiet. Show the age, or nothing — not the number alone |

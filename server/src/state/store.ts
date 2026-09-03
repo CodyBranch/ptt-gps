@@ -52,6 +52,16 @@ export interface WireFrameRow {
   text: string;
 }
 
+export interface FeedTokenRow {
+  id: number;
+  label: string;
+  token: string;
+  created_at_ms: number;
+  last_seen_ms: number | null;
+  last_ip: string | null;
+  enabled: number;
+}
+
 export class Store {
   readonly db: Database.Database;
 
@@ -141,6 +151,15 @@ export class Store {
         username TEXT PRIMARY KEY,
         password_hash TEXT NOT NULL,
         created_at_ms INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS feed_tokens (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        label TEXT NOT NULL,
+        token TEXT NOT NULL UNIQUE,
+        created_at_ms INTEGER NOT NULL,
+        last_seen_ms INTEGER,
+        last_ip TEXT,
+        enabled INTEGER NOT NULL DEFAULT 1
       );
       CREATE TABLE IF NOT EXISTS auth_tokens (
         token_hash TEXT PRIMARY KEY,
@@ -679,6 +698,50 @@ export class Store {
     return this.db.prepare(`SELECT username, password_hash, role FROM users WHERE username = ?`).get(username) as
       | { username: string; password_hash: string; role: string }
       | undefined;
+  }
+
+  // --- live feed tokens ---
+  //
+  // One per consumer rather than one shared secret, so a partner can be
+  // revoked without taking every other consumer down with them, and so the
+  // list answers "who is using this?" - which a single token never can.
+
+  listFeedTokens(): FeedTokenRow[] {
+    return this.db
+      .prepare(`SELECT id, label, token, created_at_ms, last_seen_ms, last_ip, enabled FROM feed_tokens ORDER BY id`)
+      .all() as FeedTokenRow[];
+  }
+
+  createFeedToken(label: string, token: string): FeedTokenRow {
+    const info = this.db
+      .prepare(`INSERT INTO feed_tokens (label, token, created_at_ms, enabled) VALUES (?, ?, ?, 1)`)
+      .run(label, token, Date.now());
+    return this.db
+      .prepare(`SELECT id, label, token, created_at_ms, last_seen_ms, last_ip, enabled FROM feed_tokens WHERE id = ?`)
+      .get(info.lastInsertRowid) as FeedTokenRow;
+  }
+
+  /** The token row for a presented value, or undefined. Disabled rows do not match. */
+  feedTokenByValue(token: string): FeedTokenRow | undefined {
+    return this.db
+      .prepare(
+        `SELECT id, label, token, created_at_ms, last_seen_ms, last_ip, enabled
+         FROM feed_tokens WHERE token = ? AND enabled = 1`,
+      )
+      .get(token) as FeedTokenRow | undefined;
+  }
+
+  deleteFeedToken(id: number): void {
+    this.db.prepare(`DELETE FROM feed_tokens WHERE id = ?`).run(id);
+  }
+
+  setFeedTokenEnabled(id: number, enabled: boolean): void {
+    this.db.prepare(`UPDATE feed_tokens SET enabled = ? WHERE id = ?`).run(enabled ? 1 : 0, id);
+  }
+
+  /** Record that a token was just used, so the list can show what is live. */
+  touchFeedToken(id: number, ip: string): void {
+    this.db.prepare(`UPDATE feed_tokens SET last_seen_ms = ?, last_ip = ? WHERE id = ?`).run(Date.now(), ip, id);
   }
 
   listUsers(): Array<{ username: string; created_at_ms: number; role: string }> {

@@ -202,8 +202,13 @@ export const api = {
     send('/api/forwards', 'PUT', { targets }),
 
   ingestToken: async (): Promise<string | null> => (await getJson('/api/ingest-token')).token,
-  feedToken: async (): Promise<string | null> => (await getJson('/api/feed-token')).token,
-  regenerateFeedToken: async (): Promise<string> => (await send('/api/feed-token', 'POST')).token,
+  feedTokens: (): Promise<{
+    tokens: import('./types').FeedToken[];
+    connections: import('./types').FeedConnection[];
+  }> => getJson('/api/feed-tokens'),
+  createFeedToken: (label: string) => send('/api/feed-tokens', 'POST', { label }),
+  setFeedTokenEnabled: (id: number, enabled: boolean) => send(`/api/feed-tokens/${id}`, 'PATCH', { enabled }),
+  deleteFeedToken: (id: number) => send(`/api/feed-tokens/${id}`, 'DELETE'),
   regenerateIngestToken: async (): Promise<string> => (await send('/api/ingest-token', 'POST')).token,
 
   tunnelStatus: () => getJson('/api/tunnel'),
