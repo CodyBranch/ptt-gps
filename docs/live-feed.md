@@ -9,6 +9,9 @@ internal thing that changes shape whenever the UI needs it to; this one does
 not move under you. If the shape ever has to change incompatibly, `protocol`
 goes up and the old shape keeps working until you migrate.
 
+What has changed between releases, and what to do about it, is in
+[live-feed-changes.md](live-feed-changes.md).
+
 ---
 
 ## Before you start
