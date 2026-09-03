@@ -145,9 +145,21 @@ try {
   }
 
   if ($codeChanges) {
-    Write-Host 'The working tree on this machine has local code changes:' -ForegroundColor Red
+    # Blocking is right when pulling: a fast-forward can conflict with local
+    # edits, and whoever made them should look first.
+    #
+    # With nothing to pull it is wrong. Nothing is being overwritten, and the
+    # only thing refusing achieves is a box that can never be brought in line
+    # with its own tree - which is the exact state this path exists to fix.
+    # Report and continue instead.
+    if ($pullNeeded) {
+      Write-Host 'The working tree on this machine has local code changes:' -ForegroundColor Red
+      $codeChanges | ForEach-Object { Write-Host "  $_" }
+      throw "Refusing to update over local code changes: $($codeChanges -join '; ')"
+    }
+    Write-Host 'Local code changes on this machine, which will be built as they are:' -ForegroundColor Yellow
     $codeChanges | ForEach-Object { Write-Host "  $_" }
-    throw "Refusing to update over local code changes: $($codeChanges -join '; ')"
+    Write-Host ''
   }
 
   if ($dataChanges) {
