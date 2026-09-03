@@ -190,6 +190,13 @@ export default function App() {
   // Timing boxes are global hardware, so they are fetched once and pushed
   // thereafter — the race map can draw them over any event's course.
   const [decoders, setDecoders] = useState<DecoderPub[]>([]);
+  /**
+   * How many commits are waiting, so the version in the sidebar can say a
+   * build is behind without anyone opening the changelog to find out. Null
+   * means nobody has checked - which is not the same as being current, and is
+   * shown differently.
+   */
+  const [pendingUpdates, setPendingUpdates] = useState<number | null>(null);
   const [, tick] = useReducer((n: number) => n + 1, 0);
   const ask = (req: ConfirmRequest) => setConfirm(req);
   const go = (p: Page) => {
@@ -332,6 +339,29 @@ export default function App() {
     [events, eventId],
   );
 
+  const isAdmin = typeof auth === 'object' && auth.role === 'admin';
+  useEffect(() => {
+    if (!isAdmin || VIEWER_URL) return;
+    let alive = true;
+    const check = () =>
+      api
+        .deployInfo()
+        .then((d) => {
+          if (alive) setPendingUpdates(d.update?.error ? null : (d.update?.commits.length ?? null));
+        })
+        .catch(() => {
+          // A deploy restarts the server, so failing to reach it is routine
+          // here. Fall back to "unknown" rather than to a wrong answer.
+          if (alive) setPendingUpdates(null);
+        });
+    void check();
+    const id = setInterval(check, 5 * 60_000);
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
+  }, [isAdmin]);
+
   if (auth === 'checking') return <div className="loading">Checking sign-in…</div>;
   if (auth === 'out') return <Login onSuccess={(a) => setAuth(a)} />;
 
@@ -362,6 +392,20 @@ export default function App() {
   // restarted, looks like a bug in whatever you try next — so say so plainly.
   const serverVersion = typeof auth === 'object' ? auth.serverVersion : undefined;
   const versionMismatch = !!serverVersion && serverVersion !== 'unknown' && serverVersion !== VERSION;
+
+  /**
+   * A mismatch outranks an available update: it means a deploy half-landed,
+   * which is a fault rather than news. 'unknown' is its own state because
+   * nobody having checked is not the same as being current - claiming green
+   * on no information is the one answer that would be actively misleading.
+   */
+  const versionState: 'mismatch' | 'behind' | 'current' | 'unknown' = versionMismatch
+    ? 'mismatch'
+    : pendingUpdates === null
+      ? 'unknown'
+      : pendingUpdates > 0
+        ? 'behind'
+        : 'current';
 
   const intervalS = ev?.event.reportIntervalS || 10;
   const snapshotSimulated = state.snapshot.simulated;
@@ -627,19 +671,26 @@ export default function App() {
               <span className="side-icon">❓</span> Help
             </button>
             <button
-              className={`side-version ${page === 'changelog' ? 'active' : ''} ${
-                versionMismatch ? 'mismatch' : ''
-              }`}
+              className={`side-version ${page === 'changelog' ? 'active' : ''} ${versionState}`}
               title={
                 versionMismatch
                   ? `This page is v${VERSION} but the server is running ${serverVersion}. ` +
                     'One of them was not updated — reload after a hard refresh, and check the server was restarted.'
-                  : "What's changed in this build"
+                  : pendingUpdates
+                    ? `${pendingUpdates} update${pendingUpdates === 1 ? '' : 's'} waiting. Open the changelog to deploy.`
+                    : versionState === 'current'
+                      ? "Up to date. What's changed in this build"
+                      : "What's changed in this build"
               }
               onClick={() => go('changelog')}
             >
               v{VERSION}
               {versionMismatch && <span className="version-warn"> ⚠ server {serverVersion}</span>}
+              {!versionMismatch && !!pendingUpdates && (
+                <span className="version-warn">
+                  ↑ {pendingUpdates} update{pendingUpdates === 1 ? '' : 's'}
+                </span>
+              )}
             </button>
           </div>
         )}

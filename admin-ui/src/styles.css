@@ -1300,7 +1300,19 @@ button.mini.on { border-color: var(--warn); color: var(--warn); }
 }
 .side-version:hover { color: var(--text); }
 .side-version.active { color: var(--brand-red); font-weight: 700; }
-.side-version.mismatch { color: var(--warn); }
+
+/* The version doubles as an update indicator, so its colour is the state:
+   green current, amber behind, red for a half-landed deploy. 'unknown' keeps
+   the neutral dim - nobody having checked is not the same as being current,
+   and green on no information is the one answer that would mislead. */
+.side-version.current { color: var(--ok); }
+.side-version.behind { color: var(--warn); }
+.side-version.mismatch { color: var(--bad); }
+/* Selecting the page still wins: it says where you are, which outranks news. */
+.side-version.active.current,
+.side-version.active.behind,
+.side-version.active.mismatch { color: var(--brand-red); }
+
 .version-warn { display: block; font-size: 10px; }
 
 /* Deploying a new build */
