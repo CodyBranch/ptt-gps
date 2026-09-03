@@ -123,10 +123,17 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 .\deploy\install-service.ps1
 ```
 
-It builds if needed, downloads WinSW, registers **ptt-gps** to start
-automatically, and then waits until the console actually answers — a service
+It builds if needed, downloads WinSW as `deploy/ptt-gps.exe` (WinSW reads the
+config file named after itself, which is why it is not called `WinSW.exe`),
+registers **ptt-gps** to start automatically, and then waits until the console
+actually answers — a service
 that reports "Running" while failing to serve is worse than one that fails
 loudly. Logs roll in `logs/`.
+
+If the download fails - a proxy, or an older TLS stack - fetch
+`WinSW.NET461.exe` from the [WinSW releases](https://github.com/winsw/winsw/releases)
+on any machine, copy it to the server as `deploy\ptt-gps.exe`, and re-run the
+script. It uses whatever is already there.
 
 Two details in `deploy/ptt-gps.xml` are load-bearing. The `--db` and
 `--events-dir` paths are **explicit**, because the server resolves them relative

@@ -21,7 +21,9 @@ param(
 $ErrorActionPreference = 'Stop'
 $deploy = Split-Path -Parent $MyInvocation.MyCommand.Path
 $root = Split-Path -Parent $deploy
-$exe = Join-Path $deploy 'WinSW.exe'
+# WinSW reads the config file named after itself, so this must sit beside
+# ptt-gps.xml under the same base name.
+$exe = Join-Path $deploy 'ptt-gps.exe'
 
 function Require-Admin {
   $id = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -53,10 +55,37 @@ if (-not (Test-Path (Join-Path $root 'admin-ui\dist\index.html'))) {
 
 # --- WinSW ------------------------------------------------------------------
 if (-not (Test-Path $exe)) {
-  $url = "https://github.com/winsw/winsw/releases/download/v$WinSwVersion/WinSW-net461.exe"
+  $url = "https://github.com/winsw/winsw/releases/download/v$WinSwVersion/WinSW.NET461.exe"
   Write-Host "Downloading WinSW $WinSwVersion..."
-  [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-  Invoke-WebRequest -Uri $url -OutFile $exe
+
+  # Invoke-WebRequest in Windows PowerShell renders a progress bar per chunk,
+  # which on a binary of this size is slow enough to look like a hang and
+  # occasionally drops the connection outright. Silencing it is not cosmetic.
+  $prevProgress = $ProgressPreference
+  $ProgressPreference = 'SilentlyContinue'
+  # Add TLS 1.2 rather than replacing whatever is already enabled.
+  [Net.ServicePointManager]::SecurityProtocol =
+    [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+  try {
+    Invoke-WebRequest -Uri $url -OutFile $exe -UseBasicParsing -TimeoutSec 120
+  } catch {
+    Write-Host "Invoke-WebRequest failed ($($_.Exception.Message)) - trying curl." -ForegroundColor Yellow
+    if (Test-Path $exe) { Remove-Item $exe -Force }
+    # curl.exe ships with Windows 10 1803 and Server 2019 onwards, and does its
+    # own TLS, so it gets past most of what trips the cmdlet.
+    & curl.exe -sSL --fail -o "$exe" "$url"
+    if ($LASTEXITCODE -ne 0) { throw 'curl failed too' }
+  } finally {
+    $ProgressPreference = $prevProgress
+  }
+
+  # A failed download can leave an HTML error page with an .exe name, which
+  # fails much later and much more confusingly. Check it is really a binary.
+  $header = [System.IO.File]::ReadAllBytes($exe)[0..1]
+  if ((Get-Item $exe).Length -lt 100000 -or $header[0] -ne 0x4D -or $header[1] -ne 0x5A) {
+    Remove-Item $exe -Force
+    throw "Downloaded file was not a Windows executable. Download $url by hand and save it as deploy\ptt-gps.exe, then re-run this script."
+  }
 }
 
 $existing = Get-Service -Name 'ptt-gps' -ErrorAction SilentlyContinue

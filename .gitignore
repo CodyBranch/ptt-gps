@@ -20,3 +20,9 @@ secrets/
 # the in-app Help page shows the same content. Regenerate with:
 #   npm run manual
 admin-ui/public/docs/primetime-gps-manual.html
+
+# WinSW, fetched by deploy/install-service.ps1. A service host binary
+# belongs on the machine, not in the repository.
+deploy/ptt-gps.exe
+deploy/*.exe
+logs/
