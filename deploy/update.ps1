@@ -221,6 +221,22 @@ try {
     Set-Stage 'installing' 'Dependencies unchanged - skipping install.'
   }
 
+  # The server cannot start without its native modules. A missing one would
+  # surface only as a service that fails to come back, triggering a rollback
+  # over something that was knowable before the restart. npm can also skip a
+  # package's install script, which is precisely how a native module ends up
+  # present but unbuilt.
+  $sqlite = Join-Path $root 'node_modulesetter-sqlite3uild\Releaseetter_sqlite3.node'
+  if (-not (Test-Path $sqlite)) {
+    Write-Host ''
+    Write-Host 'better-sqlite3 has no compiled binary:' -ForegroundColor Red
+    Write-Host "  $sqlite"
+    Write-Host 'Its install script was probably skipped. Approve it and install again:'
+    Write-Host '  npm.cmd install-scripts approve better-sqlite3'
+    Write-Host '  npm.cmd install --no-audit --no-fund'
+    throw 'native module missing - the old build is still running, nothing was changed'
+  }
+
   Set-Stage 'building' 'Building...'
   & $npm run build
   if ($LASTEXITCODE -ne 0) { throw 'build failed - the old build is still running' }
