@@ -1,0 +1,46 @@
+<!--
+  Windows service definition for WinSW (https://github.com/winsw/winsw).
+
+  Install with deploy/install-service.ps1, which downloads WinSW next to this
+  file and registers it. %BASE% is the directory holding WinSW.exe and this
+  file — that is deploy/, so the repo root is %BASE%\..
+
+  Two things here are load-bearing:
+
+  * The paths are explicit. The server resolves --db and --events-dir relative
+    to the working directory, so a service started from anywhere else would
+    quietly open an empty database and report no events — which looks exactly
+    like losing every event rather than like a misconfiguration.
+
+  * onfailure restarts on *any* exit, including a clean one. That is what makes
+    "deploy by exiting" work: the update script builds, verifies, and stops the
+    service, and the service manager brings the new code up.
+-->
+<service>
+  <id>ptt-gps</id>
+  <name>Primetime GPS</name>
+  <description>Live race tracking: tracker ingest, race engines, and the operator console.</description>
+
+  <executable>node</executable>
+  <arguments>"%BASE%\..\server\dist\index.js" --db "%BASE%\..\server\data\ptt.db" --events-dir "%BASE%\..\events" --api-port 8080</arguments>
+  <workingdirectory>%BASE%\..\server</workingdirectory>
+
+  <!-- Start with Windows, and wait for the network: trackers connect over TCP
+       and the tunnel needs DNS, so starting before the stack is up just means
+       a failed start and a retry. -->
+  <startmode>Automatic</startmode>
+  <delayedAutoStart>true</delayedAutoStart>
+  <depend>Tcpip</depend>
+
+  <!-- Restart whatever the exit code, including 0. See the note above. -->
+  <onfailure action="restart" delay="5 sec" />
+  <resetfailure>1 hour</resetfailure>
+  <stoptimeout>20 sec</stoptimeout>
+
+  <logpath>%BASE%\..\logs</logpath>
+  <logmode>roll-by-size</logmode>
+  <sizeThreshold>10240</sizeThreshold>
+  <keepFiles>8</keepFiles>
+
+  <env name="NODE_ENV" value="production" />
+</service>

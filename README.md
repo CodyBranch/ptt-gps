@@ -99,3 +99,47 @@ then resets the test race itself, and puts the event back as it found it. Add
 `--only <shot-name>` to re-take a single screenshot. `manual` then rebuilds
 `admin-ui/public/docs/primetime-gps-manual.pdf`, which the Help page links to.
 Run `npm run build -w admin-ui` afterwards so the console serves the new files.
+
+## Running as a service
+
+The server has to come back on its own after a reboot, and a deploy has to be
+survivable. Both live in `deploy/`.
+
+### Install
+
+From an elevated PowerShell on the server:
+
+```powershell
+.\deploy\install-service.ps1
+```
+
+It builds if needed, downloads WinSW, registers **ptt-gps** to start
+automatically, and then waits until the console actually answers — a service
+that reports "Running" while failing to serve is worse than one that fails
+loudly. Logs roll in `logs/`.
+
+Two details in `deploy/ptt-gps.xml` are load-bearing. The `--db` and
+`--events-dir` paths are **explicit**, because the server resolves them relative
+to the working directory: a service started from anywhere else opens an empty
+database and reports no events, which looks like losing every event rather than
+like a misconfiguration. And it restarts on *any* exit, including a clean one,
+which is what lets a future in-app deploy work by simply exiting.
+
+### Deploy an update
+
+```powershell
+.\deploy\update.ps1 -Check    # is anything waiting?
+.\deploy\update.ps1           # show the commits, confirm, deploy
+```
+
+The ordering is the safety. It pulls, installs, builds and runs the tests
+**while the old build is still serving**, and only restarts once the new one is
+known good — so a bad commit costs time rather than uptime. It refuses if a
+race is armed or live, and if the working tree on the box has local changes. If
+the new build does not answer within 30 seconds it rolls back to the previous
+commit, rebuilds and restarts.
+
+Expect a 2–4 second gap at the restart, not zero. Trackers reconnect and resend
+what they buffered, live races resume from recorded fixes, and consoles
+reconnect on their own — so nothing is lost, but do not do it mid-race. That is
+what the interlock is for.

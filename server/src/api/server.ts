@@ -202,6 +202,37 @@ export function startApi(
     });
   });
 
+  /**
+   * Health, for the deploy script and anything watching the box.
+   *
+   * Loopback only: it names the version and says whether a race is running,
+   * which is exactly what a deployer needs and not something to hand out over
+   * the tunnel. Anything off-box gets the same 401 as any other API call.
+   */
+  ex.get('/api/health', (req, res) => {
+    const ip = (req.socket.remoteAddress ?? '').replace('::ffff:', '');
+    if (ip !== '127.0.0.1' && ip !== '::1') {
+      return void res.status(401).json({ ok: false, error: 'health is loopback-only' });
+    }
+    let armed = 0;
+    let live = 0;
+    for (const app of ctx.apps.values()) {
+      for (const e of app.engines.values()) {
+        if (e.status === 'armed') armed++;
+        else if (e.status === 'live') live++;
+      }
+    }
+    res.json({
+      ok: true,
+      version: serverVersion,
+      uptimeS: Math.round(process.uptime()),
+      events: ctx.apps.size,
+      races: { armed, live },
+      /** The deploy script's interlock: never restart mid-race. */
+      safeToRestart: armed === 0 && live === 0,
+    });
+  });
+
   // --- unauthenticated: first-run bootstrap ---
   ex.get('/api/setup-needed', (_req, res) => {
     res.json({ needed: ctx.store.countUsers() === 0 });
