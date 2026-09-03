@@ -76,13 +76,32 @@ try {
   if ($Check) { return }
 
   # --- interlocks -----------------------------------------------------------
-  # Local edits on the box would be discarded or would block the pull; either
-  # way somebody should look at them first.
+  # Local edits to code would be discarded or would block the pull; either way
+  # somebody should look at them first.
+  #
+  # Event configs and courses are the exception. They are operator data that
+  # happens to live in the repo, written on the box through the console, so a
+  # production tree is dirty by design and blocking on them would refuse every
+  # deploy forever.
   $dirty = & $git status --porcelain
-  if ($dirty) {
-    Write-Host 'The working tree on this machine has local changes:' -ForegroundColor Red
-    $dirty | ForEach-Object { Write-Host "  $_" }
+  $dataChanges = @()
+  $codeChanges = @()
+  foreach ($line in $dirty) {
+    # Porcelain format is 'XY path', with forward slashes, quoted if unusual.
+    $file = $line.Substring(3).Trim('"')
+    if ($file -like 'events/*') { $dataChanges += $line } else { $codeChanges += $line }
+  }
+
+  if ($codeChanges) {
+    Write-Host 'The working tree on this machine has local code changes:' -ForegroundColor Red
+    $codeChanges | ForEach-Object { Write-Host "  $_" }
     throw 'Refusing to update over local changes. Commit, stash or discard them first.'
+  }
+
+  if ($dataChanges) {
+    Write-Host "$($dataChanges.Count) local event/course change(s) - these are yours, and are kept:" -ForegroundColor Cyan
+    $dataChanges | ForEach-Object { Write-Host "  $_" }
+    Write-Host ''
   }
 
   $h = Health
@@ -131,7 +150,20 @@ try {
   if (-not $ok) {
     Write-Host ''
     Write-Host 'The new build did not come up. Rolling back.' -ForegroundColor Red
+
+    # reset --hard reverts the whole tree, and events/ is tracked, so a
+    # rollback would quietly undo operator edits to real event configs. Set
+    # them aside first and put them back afterwards: losing an event to a
+    # failed deploy would be far worse than the failed deploy.
+    $keep = Join-Path $env:TEMP "ptt-gps-events-$($local.Substring(0,7))"
+    if (Test-Path $keep) { Remove-Item $keep -Recurse -Force }
+    Copy-Item (Join-Path $root 'events') $keep -Recurse -Force
+    Write-Host "  events/ copied to $keep"
+
     & $git reset --hard $local
+    Copy-Item "$keep\*" (Join-Path $root 'events') -Recurse -Force
+    Write-Host '  events/ restored'
+
     & $npm ci
     & $npm run build
     Restart-Service -Name 'ptt-gps' -Force
