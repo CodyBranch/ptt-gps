@@ -36,20 +36,38 @@ function Health {
   catch { return $null }
 }
 
+# Resolved rather than assumed to be on PATH. A long-lived shell can predate
+# the machine PATH that Git was added to, and an unattended run under the
+# service account gets a minimal PATH of its own - in both cases the whole
+# script is useless without git, including the rollback.
+function Resolve-Tool([string]$name, [string[]]$candidates) {
+  $cmd = Get-Command $name -ErrorAction SilentlyContinue
+  if ($cmd) { return $cmd.Source }
+  foreach ($c in $candidates) { if (Test-Path $c) { return $c } }
+  throw "$name was not found. Install it, or add it to PATH."
+}
+
+$git = Resolve-Tool 'git' @(
+  "$env:ProgramFiles\Git\cmd\git.exe",
+  "${env:ProgramFiles(x86)}\Git\cmd\git.exe",
+  "$env:LOCALAPPDATA\Programs\Git\cmd\git.exe"
+)
+$npm = Resolve-Tool 'npm.cmd' @("$env:ProgramFiles\nodejs\npm.cmd")
+
 try {
   # --- what is waiting? -----------------------------------------------------
-  & git fetch --quiet origin $Branch
+  & $git fetch --quiet origin $Branch
   if ($LASTEXITCODE -ne 0) { throw 'git fetch failed' }
 
-  $local = (& git rev-parse HEAD).Trim()
-  $remote = (& git rev-parse "origin/$Branch").Trim()
+  $local = (& $git rev-parse HEAD).Trim()
+  $remote = (& $git rev-parse "origin/$Branch").Trim()
 
   if ($local -eq $remote) {
     Write-Host "Up to date ($($local.Substring(0,7)))." -ForegroundColor Green
     return
   }
 
-  $log = & git log --oneline --no-decorate "HEAD..origin/$Branch"
+  $log = & $git log --oneline --no-decorate "HEAD..origin/$Branch"
   Write-Host ''
   Write-Host "$($log.Count) commit(s) waiting:" -ForegroundColor Cyan
   $log | ForEach-Object { Write-Host "  $_" }
@@ -60,7 +78,7 @@ try {
   # --- interlocks -----------------------------------------------------------
   # Local edits on the box would be discarded or would block the pull; either
   # way somebody should look at them first.
-  $dirty = & git status --porcelain
+  $dirty = & $git status --porcelain
   if ($dirty) {
     Write-Host 'The working tree on this machine has local changes:' -ForegroundColor Red
     $dirty | ForEach-Object { Write-Host "  $_" }
@@ -84,19 +102,19 @@ try {
   # --- prepare, with the old build still serving ----------------------------
   Write-Host ''
   Write-Host 'Pulling...' -ForegroundColor Cyan
-  & git pull --ff-only origin $Branch
+  & $git pull --ff-only origin $Branch
   if ($LASTEXITCODE -ne 0) { throw 'git pull failed (not a fast-forward?)' }
 
   Write-Host 'Installing dependencies...' -ForegroundColor Cyan
-  & npm ci
+  & $npm ci
   if ($LASTEXITCODE -ne 0) { throw 'npm ci failed - the old build is still running' }
 
   Write-Host 'Building...' -ForegroundColor Cyan
-  & npm run build
+  & $npm run build
   if ($LASTEXITCODE -ne 0) { throw 'build failed - the old build is still running' }
 
   Write-Host 'Running tests...' -ForegroundColor Cyan
-  & npm test
+  & $npm test
   if ($LASTEXITCODE -ne 0) { throw 'tests failed - the old build is still running' }
 
   # --- swap -----------------------------------------------------------------
@@ -113,15 +131,15 @@ try {
   if (-not $ok) {
     Write-Host ''
     Write-Host 'The new build did not come up. Rolling back.' -ForegroundColor Red
-    & git reset --hard $local
-    & npm ci
-    & npm run build
+    & $git reset --hard $local
+    & $npm ci
+    & $npm run build
     Restart-Service -Name 'ptt-gps' -Force
     throw "Rolled back to $($local.Substring(0,7)). Check logs\ptt-gps.err.log for why."
   }
 
   Write-Host ''
-  Write-Host "Deployed version $($h.version) at $((& git rev-parse --short HEAD).Trim())." -ForegroundColor Green
+  Write-Host "Deployed version $($h.version) at $((& $git rev-parse --short HEAD).Trim())." -ForegroundColor Green
   Write-Host "$($h.events) event(s) active, $($h.races.live) race(s) live."
 }
 finally {
