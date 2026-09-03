@@ -231,6 +231,17 @@ try {
         throw "install finished but $t is still missing - the running service may be holding files open; stop it and install by hand"
       }
     }
+
+    # npm rewrites package-lock.json as a side effect of installing, which
+    # leaves the tree dirty and blocks the NEXT deploy on a change nobody made.
+    # On a deploy box the committed lockfile is the input, not an output, so
+    # put it back. If it genuinely needed to change, that belongs in a commit,
+    # not in a working tree nobody looks at.
+    $lockDirty = & $git status --porcelain -- package-lock.json
+    if ($lockDirty) {
+      & $git checkout -- package-lock.json
+      Set-Stage 'installing' 'Restored package-lock.json, which npm rewrote while installing.'
+    }
   } else {
     Set-Stage 'installing' 'Dependencies unchanged - skipping install.'
   }

@@ -96,6 +96,8 @@ function resolveGit(): string | null {
 
 export class DeployManager {
   private cached: UpdateInfo | null = null;
+  /** updatedAt of the last finished deploy we have already reacted to. */
+  private lastSettled: string | null = null;
   private checking: Promise<UpdateInfo> | null = null;
   private readonly git = resolveGit();
 
@@ -125,6 +127,12 @@ export class DeployManager {
    * remote actually changes.
    */
   async check(maxAgeMs = 10 * 60_000): Promise<UpdateInfo> {
+    // Never inspect the repository while the deploy is changing it. A pull
+    // holds index.lock, so a concurrent status or fetch fails - and the
+    // console would report that failure as though something were wrong with
+    // the repository rather than with the timing of the question.
+    if (this.inProgress() && this.cached) return this.cached;
+
     if (this.cached && Date.now() - this.cached.checkedAt < maxAgeMs) return this.cached;
     // Collapse concurrent checks: several console tabs polling should not
     // produce several fetches.
@@ -222,7 +230,20 @@ export class DeployManager {
    */
   reapAbandoned(): void {
     const s = this.readStatus();
-    if (!s || s.done || s.stage !== 'starting') return;
+    if (!s) return;
+
+    // A deploy that has just finished changed the repository, so what we know
+    // about it is stale. Refresh once, on the transition, rather than on every
+    // poll afterwards.
+    if (s.done) {
+      if (this.lastSettled !== s.updatedAt) {
+        this.lastSettled = s.updatedAt;
+        this.invalidate();
+      }
+      return;
+    }
+
+    if (s.stage !== 'starting') return;
     if (Date.now() - new Date(s.updatedAt).getTime() < 2 * 60_000) return;
     this.fail('The deploy was scheduled but never started. Nothing was changed.');
   }
@@ -313,6 +334,5 @@ export class DeployManager {
       this.fail(`could not schedule the deploy: ${detail}`);
       throw new Error(`could not schedule the deploy: ${detail}`);
     }
-    this.invalidate();
   }
 }

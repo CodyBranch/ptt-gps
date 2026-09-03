@@ -534,79 +534,78 @@ function LiveFeedPanel({ onMsg, ask }: { onMsg: (m: Msg) => void; ask: (req: Con
       {tokens.length === 0 ? (
         <p className="hint">No tokens yet, so nothing can read the feed.</p>
       ) : (
-        <table className="setup-table">
-          <thead>
-            <tr>
-              <th>Label</th>
-              <th>Token</th>
-              <th>Last used</th>
-              <th>Now</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {tokens.map((t) => (
-              <tr key={t.id} className={t.enabled ? '' : 'dim'}>
-                <td>{t.label}</td>
-                <td className="mono feed-token-cell">
-                  {shown === t.id ? t.token : '•'.repeat(16)}
-                  <button className="mini" onClick={() => setShown(shown === t.id ? null : t.id)}>
-                    {shown === t.id ? 'Hide' : 'Show'}
-                  </button>
-                  {shown === t.id && (
-                    <button className="mini" onClick={() => void navigator.clipboard?.writeText(t.token)}>
-                      Copy
-                    </button>
-                  )}
-                </td>
-                <td>{t.lastSeenMs ? `${new Date(t.lastSeenMs).toLocaleString()}${t.lastIp ? ` (${t.lastIp})` : ''}` : 'never'}</td>
-                <td>{live(t.id) > 0 ? <span className="fwd-ok">● {live(t.id)}</span> : <span className="dim">—</span>}</td>
-                <td className="right">
-                  <button className="mini" onClick={() => void toggle(t)}>
-                    {t.enabled ? 'Disable' : 'Enable'}
-                  </button>
-                  <button className="mini danger" onClick={() => revoke(t)}>
-                    Revoke
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        /* A card each rather than a table. This panel sits in a ~430px column
+           and a token is 48 characters of monospace: in a row it pushed the
+           controls off the edge of the card entirely. */
+        <ul className="feed-tokens">
+          {tokens.map((t) => (
+            <li key={t.id} className={`feed-token ${t.enabled ? '' : 'off'}`}>
+              <div className="feed-token-top">
+                <span className="feed-token-label">{t.label}</span>
+                {live(t.id) > 0 ? (
+                  <span className="fwd-ok">● {live(t.id)} connected</span>
+                ) : (
+                  <span className="dim">{t.enabled ? 'idle' : 'disabled'}</span>
+                )}
+              </div>
+
+              <div className="feed-token-used dim">
+                {t.lastSeenMs
+                  ? `last used ${new Date(t.lastSeenMs).toLocaleString()}${t.lastIp ? ` from ${t.lastIp}` : ''}`
+                  : 'never used'}
+              </div>
+
+              {shown === t.id && <code className="feed-token-value">{t.token}</code>}
+
+              <div className="feed-token-actions">
+                <button className="mini" onClick={() => setShown(shown === t.id ? null : t.id)}>
+                  {shown === t.id ? 'Hide' : 'Show'}
+                </button>
+                <button
+                  className="mini"
+                  onClick={() => {
+                    void navigator.clipboard?.writeText(t.token);
+                    onMsg({ kind: 'ok', text: `Copied the token for ${t.label}.` });
+                  }}
+                >
+                  Copy
+                </button>
+                <span className="spacer" />
+                <button className="mini" onClick={() => void toggle(t)}>
+                  {t.enabled ? 'Disable' : 'Enable'}
+                </button>
+                <button className="mini danger" onClick={() => revoke(t)}>
+                  Revoke
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
       )}
 
       <h4 className="feed-conn-head">Connected now</h4>
       {connections.length === 0 ? (
         <p className="hint">Nothing is connected to the feed.</p>
       ) : (
-        <table className="setup-table">
-          <thead>
-            <tr>
-              <th>Token</th>
-              <th>From</th>
-              <th>Watching</th>
-              <th>Since</th>
-            </tr>
-          </thead>
-          <tbody>
-            {connections.map((c, i) => (
-              <tr key={`${c.ip}-${c.connectedMs}-${i}`}>
-                <td>{c.tokenLabel}</td>
-                <td className="mono">{c.ip}</td>
-                <td>
-                  {c.eventId ? (
-                    <span className="mono">{c.eventId}</span>
-                  ) : (
-                    /* Connected but not subscribed is a real state, and the
-                       usual reason a consumer sees no data. */
-                    <span className="dim">not subscribed</span>
-                  )}
-                </td>
-                <td>{new Date(c.connectedMs).toLocaleTimeString()}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <ul className="feed-conns">
+          {connections.map((c, i) => (
+            <li key={`${c.ip}-${c.connectedMs}-${i}`}>
+              <span className="feed-conn-who">{c.tokenLabel}</span>
+              <span className="feed-conn-watch">
+                {c.eventId ? (
+                  <span className="mono">{c.eventId}</span>
+                ) : (
+                  /* Connected but not subscribed is a real state, and the
+                     usual reason a consumer sees no data. */
+                  <span className="dim">not subscribed</span>
+                )}
+              </span>
+              <span className="dim feed-conn-meta">
+                {c.ip} · since {new Date(c.connectedMs).toLocaleTimeString()}
+              </span>
+            </li>
+          ))}
+        </ul>
       )}
     </>
   );
