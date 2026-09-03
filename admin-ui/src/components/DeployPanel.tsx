@@ -124,7 +124,11 @@ export function DeployPanel({ onUpdateCount }: { onUpdateCount?: (n: number | nu
 
       {/* A deploy in flight takes over the panel: it is the only thing that
           matters until it lands, and it outlives this page's connection. */}
-      {(running || (status && !status.done)) && (
+      {/* Only the server can say whether a deploy is still alive: it knows
+          when one was scheduled and never reported in. Trusting an unfinished
+          status file instead left the progress bar up forever after a deploy
+          that died before it started. */}
+      {running && (
         <div className="deploy-progress">
           <ol className="deploy-stages">
             {STAGES.map((s, i) => (

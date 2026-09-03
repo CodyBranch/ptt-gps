@@ -346,6 +346,8 @@ export function startApi(
   const deploy = new DeployManager(deployRoot, ctx.dataDir);
 
   ex.get('/api/deploy', auth.adminOnly, async (_req, res) => {
+    // A deploy that never started should say so, not sit on the page forever.
+    deploy.reapAbandoned();
     const [info, { armed, live }] = [await deploy.check(), raceCounts()];
     res.json({
       ok: true,

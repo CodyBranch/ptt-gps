@@ -212,6 +212,21 @@ export class DeployManager {
     }
   }
 
+  /**
+   * Turn a deploy that was scheduled but never reported in into a recorded
+   * failure.
+   *
+   * Quietly hiding it would leave the operator with no answer at all: they
+   * pressed Deploy, something clearly did not happen, and nothing on the page
+   * would ever say so.
+   */
+  reapAbandoned(): void {
+    const s = this.readStatus();
+    if (!s || s.done || s.stage !== 'starting') return;
+    if (Date.now() - new Date(s.updatedAt).getTime() < 2 * 60_000) return;
+    this.fail('The deploy was scheduled but never started. Nothing was changed.');
+  }
+
   /** True while a deploy started earlier has not reported an ending. */
   inProgress(): boolean {
     const s = this.readStatus();
