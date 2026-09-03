@@ -27,7 +27,7 @@ function Require-Admin {
   $id = [Security.Principal.WindowsIdentity]::GetCurrent()
   $p = New-Object Security.Principal.WindowsPrincipal($id)
   if (-not $p.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    throw 'Run this from an elevated PowerShell — installing a service needs administrator.'
+    throw 'Run this from an elevated PowerShell - installing a service needs administrator.'
   }
 }
 
@@ -35,7 +35,7 @@ Require-Admin
 
 # --- the service runs the built output, so it has to exist -------------------
 if (-not (Test-Path (Join-Path $root 'server\dist\index.js'))) {
-  Write-Host 'Server is not built yet — building.' -ForegroundColor Yellow
+  Write-Host 'Server is not built yet - building.' -ForegroundColor Yellow
   Push-Location $root
   try {
     & npm ci
@@ -48,20 +48,20 @@ if (-not (Test-Path (Join-Path $root 'server\dist\index.js'))) {
 # The console is served from admin-ui/dist; without it the service runs but
 # only answers the API, which is a confusing way to discover a missing build.
 if (-not (Test-Path (Join-Path $root 'admin-ui\dist\index.html'))) {
-  throw 'admin-ui/dist is missing — run "npm run build" in the repo root first.'
+  throw 'admin-ui/dist is missing - run "npm run build" in the repo root first.'
 }
 
 # --- WinSW ------------------------------------------------------------------
 if (-not (Test-Path $exe)) {
   $url = "https://github.com/winsw/winsw/releases/download/v$WinSwVersion/WinSW-net461.exe"
-  Write-Host "Downloading WinSW $WinSwVersion…"
+  Write-Host "Downloading WinSW $WinSwVersion..."
   [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
   Invoke-WebRequest -Uri $url -OutFile $exe
 }
 
 $existing = Get-Service -Name 'ptt-gps' -ErrorAction SilentlyContinue
 if ($existing) {
-  Write-Host 'Service already installed — reinstalling.' -ForegroundColor Yellow
+  Write-Host 'Service already installed - reinstalling.' -ForegroundColor Yellow
   & $exe stop   | Out-Null
   & $exe uninstall | Out-Null
   Start-Sleep -Seconds 2
@@ -69,7 +69,7 @@ if ($existing) {
 
 New-Item -ItemType Directory -Force -Path (Join-Path $root 'logs') | Out-Null
 
-Write-Host 'Installing service…'
+Write-Host 'Installing service...'
 & $exe install
 if ($LASTEXITCODE -ne 0) { throw 'WinSW install failed' }
 
@@ -77,7 +77,7 @@ if ($LASTEXITCODE -ne 0) { throw 'WinSW install failed' }
 if ($LASTEXITCODE -ne 0) { throw 'WinSW start failed' }
 
 # --- prove it is actually serving, not merely "started" ----------------------
-Write-Host 'Waiting for the console to answer…'
+Write-Host 'Waiting for the console to answer...'
 $ok = $false
 foreach ($i in 1..30) {
   Start-Sleep -Seconds 1
@@ -85,7 +85,7 @@ foreach ($i in 1..30) {
     $h = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/health" -TimeoutSec 3
     if ($h.ok) {
       Write-Host ''
-      Write-Host "Running version $($h.version) — $($h.events) event(s) active." -ForegroundColor Green
+      Write-Host "Running version $($h.version) - $($h.events) event(s) active." -ForegroundColor Green
       $ok = $true
       break
     }

@@ -3,14 +3,15 @@
 
   Install with deploy/install-service.ps1, which downloads WinSW next to this
   file and registers it. %BASE% is the directory holding WinSW.exe and this
-  file — that is deploy/, so the repo root is %BASE%\..
+  file - that is deploy/, so the repo root is %BASE%\..
 
   Two things here are load-bearing:
 
-  * The paths are explicit. The server resolves --db and --events-dir relative
-    to the working directory, so a service started from anywhere else would
-    quietly open an empty database and report no events — which looks exactly
-    like losing every event rather than like a misconfiguration.
+  * The paths are explicit. The server resolves its db and events-dir
+    arguments relative to the working directory, so a service started from
+    anywhere else would quietly open an empty database and report no events,
+    which looks exactly like losing every event rather than like a
+    misconfiguration.
 
   * onfailure restarts on *any* exit, including a clean one. That is what makes
     "deploy by exiting" work: the update script builds, verifies, and stops the

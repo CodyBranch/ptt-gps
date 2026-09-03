@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Pull, build, verify, then restart — in that order.
+  Pull, build, verify, then restart - in that order.
 
 .DESCRIPTION
   The ordering is the point. Pulling and restarting first would leave the box
@@ -69,7 +69,7 @@ try {
 
   $h = Health
   if ($null -eq $h) {
-    Write-Host 'Service is not answering — updating anyway (nothing to interrupt).' -ForegroundColor Yellow
+    Write-Host 'Service is not answering - updating anyway (nothing to interrupt).' -ForegroundColor Yellow
   } elseif (-not $h.safeToRestart) {
     $msg = "A race is running (armed $($h.races.armed), live $($h.races.live))."
     if (-not $Force) { throw "$msg Finish or reset it, or pass -Force if you really mean it." }
@@ -83,24 +83,24 @@ try {
 
   # --- prepare, with the old build still serving ----------------------------
   Write-Host ''
-  Write-Host 'Pulling…' -ForegroundColor Cyan
+  Write-Host 'Pulling...' -ForegroundColor Cyan
   & git pull --ff-only origin $Branch
   if ($LASTEXITCODE -ne 0) { throw 'git pull failed (not a fast-forward?)' }
 
-  Write-Host 'Installing dependencies…' -ForegroundColor Cyan
+  Write-Host 'Installing dependencies...' -ForegroundColor Cyan
   & npm ci
-  if ($LASTEXITCODE -ne 0) { throw 'npm ci failed — the old build is still running' }
+  if ($LASTEXITCODE -ne 0) { throw 'npm ci failed - the old build is still running' }
 
-  Write-Host 'Building…' -ForegroundColor Cyan
+  Write-Host 'Building...' -ForegroundColor Cyan
   & npm run build
-  if ($LASTEXITCODE -ne 0) { throw 'build failed — the old build is still running' }
+  if ($LASTEXITCODE -ne 0) { throw 'build failed - the old build is still running' }
 
-  Write-Host 'Running tests…' -ForegroundColor Cyan
+  Write-Host 'Running tests...' -ForegroundColor Cyan
   & npm test
-  if ($LASTEXITCODE -ne 0) { throw 'tests failed — the old build is still running' }
+  if ($LASTEXITCODE -ne 0) { throw 'tests failed - the old build is still running' }
 
   # --- swap -----------------------------------------------------------------
-  Write-Host 'Restarting the service…' -ForegroundColor Cyan
+  Write-Host 'Restarting the service...' -ForegroundColor Cyan
   Restart-Service -Name 'ptt-gps' -Force
 
   $ok = $false
