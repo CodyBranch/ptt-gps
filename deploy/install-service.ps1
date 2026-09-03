@@ -16,6 +16,7 @@
 [CmdletBinding()]
 param(
   [int]$Port = 8080,
+  [int]$IngestPort = 1000,
   [string]$WinSwVersion = '2.12.0'
 )
 
@@ -32,6 +33,31 @@ function Require-Admin {
   if (-not $p.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     throw 'Run this from an elevated PowerShell - installing a service needs administrator.'
   }
+}
+
+function Get-PortHolder([int]$p) {
+  try {
+    $conn = Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContinue |
+      Select-Object -First 1
+    if ($conn) { return Get-CimInstance Win32_Process -Filter "ProcessId=$($conn.OwningProcess)" -ErrorAction SilentlyContinue }
+  } catch { }
+  return $null
+}
+
+# `npm run dev` supervises the server with tsx watch, so stopping the process
+# that holds the port just prompts the watcher to start another one and take it
+# straight back. Walk up to the outermost supervisor so the advice works.
+function Get-Supervisor($proc) {
+  $top = $proc.ProcessId
+  $cur = $proc
+  for ($i = 0; $i -lt 8; $i++) {
+    $parent = Get-CimInstance Win32_Process -Filter "ProcessId=$($cur.ParentProcessId)" -ErrorAction SilentlyContinue
+    if (-not $parent) { break }
+    if ($parent.CommandLine -notmatch 'tsx|npm-cli|npm run dev') { break }
+    $top = $parent.ProcessId
+    $cur = $parent
+  }
+  return $top
 }
 
 Require-Admin
@@ -94,7 +120,13 @@ if ($existing) {
   Write-Host 'Service already installed - reinstalling.' -ForegroundColor Yellow
   & $exe stop   | Out-Null
   & $exe uninstall | Out-Null
-  Start-Sleep -Seconds 2
+  # Wait for the old process to actually let go rather than guessing at a
+  # sleep. A stop that has not finished looks exactly like a foreign process
+  # holding the port, and the check below would blame the wrong thing.
+  foreach ($i in 1..20) {
+    if (-not (Get-PortHolder $Port) -and -not (Get-PortHolder $IngestPort)) { break }
+    Start-Sleep -Seconds 1
+  }
 }
 
 New-Item -ItemType Directory -Force -Path (Join-Path $root 'logs') | Out-Null
@@ -110,23 +142,32 @@ Write-Host "Using node at $node"
 (Get-Content -Raw (Join-Path $deploy 'ptt-gps.xml.template')).Replace('@@NODE@@', $node) |
   Set-Content -Path (Join-Path $deploy 'ptt-gps.xml') -Encoding ascii
 
-# --- is the port already taken? ----------------------------------------------
-# Our own service is gone by this point, so anything still holding the port is
-# a server someone started by hand. The new process would lose the bind and
-# die in a restart loop, while the health check below happily talks to the old
-# one - a false pass that is worse than the failure.
-$holder = $null
-try {
-  $conn = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue |
-    Select-Object -First 1
-  if ($conn) { $holder = Get-Process -Id $conn.OwningProcess -ErrorAction SilentlyContinue }
-} catch { }
-if ($holder) {
+# --- is anything else already running? ---------------------------------------
+# Our own service is gone by this point, so a listener on either port is a
+# server someone started by hand. It would block the service two ways at once:
+# the new process loses the bind, and it contends for the same SQLite file.
+$blocker = Get-PortHolder $Port
+$blockedPort = $Port
+if (-not $blocker) {
+  $blocker = Get-PortHolder $IngestPort
+  $blockedPort = $IngestPort
+}
+if ($blocker) {
+  $top = Get-Supervisor $blocker
   Write-Host ''
-  Write-Host "Port $Port is already held by $($holder.ProcessName) (PID $($holder.Id))." -ForegroundColor Red
-  Write-Host 'That is almost certainly a server started by hand. Stop it first:'
-  Write-Host "  Stop-Process -Id $($holder.Id)"
-  throw "Port $Port is in use."
+  Write-Host "Port $blockedPort is already held by PID $($blocker.ProcessId)." -ForegroundColor Red
+  Write-Host "  $($blocker.CommandLine)"
+  Write-Host ''
+  Write-Host 'The service cannot run alongside it: they want the same ports and the'
+  Write-Host 'same database. Stop it first.'
+  if ($top -ne $blocker.ProcessId) {
+    Write-Host ''
+    Write-Host "It is supervised by PID $top, which would restart it, so kill the tree:" -ForegroundColor Yellow
+    Write-Host "  taskkill /PID $top /T /F"
+  } else {
+    Write-Host "  Stop-Process -Id $($blocker.ProcessId) -Force"
+  }
+  throw "Port $blockedPort is in use."
 }
 
 Write-Host 'Installing service...'

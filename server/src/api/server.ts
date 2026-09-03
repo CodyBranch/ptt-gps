@@ -1214,6 +1214,21 @@ export function startApi(
       .catch((err: Error) => res.status(400).json({ ok: false, error: err.message }));
   });
 
+  // Without a handler a failed bind throws a bare stack trace, which under a
+  // service manager means an unreadable log and a restart loop. The common
+  // case by far is a second copy of the server, so say that.
+  httpServer.on('error', (err: NodeJS.ErrnoException) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(
+        `[api] port ${port} is already in use - another copy of the server is ` +
+          `probably running. Stop it, or pass --api-port.`,
+      );
+    } else {
+      console.error(`[api] could not listen on :${port}:`, err.message);
+    }
+    process.exit(1);
+  });
+
   httpServer.listen(port, () => {
     console.log(`[api] http + socket.io on :${port}`);
   });
