@@ -92,6 +92,14 @@ export interface FeedRole {
 export interface FeedRace {
   id: string;
   name: string;
+  /**
+   * This race's position in the meet's running order, from 0.
+   *
+   * Sort by this. Arrival order only conveys the order for the burst you get
+   * on subscribe: after that, each race is pushed as it changes, so a consumer
+   * holding races by id and updating them has no other way to lay them out.
+   */
+  orderIndex: number;
   /** Programme number, where the meet uses them. */
   eventNumber: number | null;
   /** Scheduled start as "HH:MM", local to the meet. Null if not scheduled. */
@@ -124,6 +132,8 @@ export interface FeedEventSummary {
   races: Array<{
     id: string;
     name: string;
+    /** Position in the running order, from 0. Matches the race messages. */
+    orderIndex: number;
     eventNumber: number | null;
     scheduledStart: string | null;
     status: string;
@@ -196,7 +206,8 @@ export function feedMessages(snapshot: InternalSnapshot, nowMs: number): FeedMes
     const intervalS = ev.event.reportIntervalS || DEFAULT_INTERVAL_S;
     const staleAfterMs = intervalS * STALE_AFTER_INTERVALS * 1000;
 
-    for (const race of ev.races ?? []) {
+    // Position in this array is the running order; app.snapshot() sorts it.
+    for (const [orderIndex, race] of (ev.races ?? []).entries()) {
       const byImei = new Map(race.trackers.map((t) => [t.imei, t]));
 
       const roles: FeedRole[] = race.roles.map((role) => {
@@ -252,6 +263,7 @@ export function feedMessages(snapshot: InternalSnapshot, nowMs: number): FeedMes
         race: {
           id: race.raceId,
           name: race.name,
+          orderIndex,
           eventNumber: race.eventNumber ?? null,
           scheduledStart: race.scheduledStart ?? null,
           status: race.status,
@@ -276,9 +288,12 @@ export function eventSummary(id: string, snap: InternalSnapshot['events'][number
     meetId: snap.event.meetId,
     startDate: snap.event.startDate ?? null,
     endDate: snap.event.endDate ?? null,
-    races: snap.races.map((r) => ({
+    // The snapshot's races are already in running order, so their position in
+    // it is the order - derived in one place rather than recomputed here.
+    races: snap.races.map((r, orderIndex) => ({
       id: r.raceId,
       name: r.name,
+      orderIndex,
       eventNumber: r.eventNumber ?? null,
       scheduledStart: r.scheduledStart ?? null,
       status: r.status,

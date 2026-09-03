@@ -175,6 +175,7 @@ describe('the meet list a consumer maps against', () => {
         {
           id: 'r1',
           name: 'Marathon',
+          orderIndex: 0,
           eventNumber: null,
           scheduledStart: null,
           status: 'live',
@@ -212,5 +213,38 @@ describe('the schedule fields on the wire', () => {
     const [msg] = feedMessages(snapshot(), NOW);
     expect(msg.race.eventNumber).toBeNull();
     expect(msg.race.scheduledStart).toBeNull();
+  });
+});
+
+describe('how a consumer knows the running order', () => {
+  it('numbers each race by its position, so it can be sorted without arrival order', () => {
+    // Arrival order only conveys the order for the burst sent on subscribe.
+    // Every later message is pushed on its own as that race changes.
+    const snap = snapshot();
+    snap.events[0].races.push({ ...snap.events[0].races[0], raceId: 'r2', name: 'Half' });
+    snap.events[0].races.push({ ...snap.events[0].races[0], raceId: 'r3', name: '5K' });
+
+    const msgs = feedMessages(snap, NOW);
+    expect(msgs.map((m) => [m.race.id, m.race.orderIndex])).toEqual([
+      ['r1', 0],
+      ['r2', 1],
+      ['r3', 2],
+    ]);
+  });
+
+  it('agrees with the meet list, so the two cannot be sorted differently', () => {
+    const snap = snapshot();
+    snap.events[0].races.push({ ...snap.events[0].races[0], raceId: 'r2', name: 'Half' });
+
+    const fromMessages = feedMessages(snap, NOW).map((m) => [m.race.id, m.race.orderIndex]);
+    const fromList = eventSummary('e', snap.events[0] as never).races.map((r) => [r.id, r.orderIndex]);
+    expect(fromList).toEqual(fromMessages);
+  });
+
+  it('is dense and starts at zero even when the event sets no order at all', () => {
+    const snap = snapshot();
+    snap.events[0].races.push({ ...snap.events[0].races[0], raceId: 'r2', name: 'Half' });
+    const indexes = eventSummary('e', snap.events[0] as never).races.map((r) => r.orderIndex);
+    expect(indexes).toEqual([0, 1]);
   });
 });

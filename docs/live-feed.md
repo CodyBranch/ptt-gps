@@ -80,19 +80,9 @@ Sent by the server as soon as you connect. You do not have to ask.
       "endDate": "2026-04-20",
       "races": [
         {
-          "id": "marathon",
-          "name": "Marathon",
-          "eventNumber": 12,
-          "scheduledStart": "09:30",
-          "status": "live",
-          "units": "miles",
-          "courseLength": 26.294,
-          "courseLengthMeters": 42316.2,
-          "sessionId": 3
-        },
-        {
           "id": "wheelchair",
           "name": "Wheelchair",
+          "orderIndex": 0,
           "eventNumber": 11,
           "scheduledStart": "09:02",
           "status": "scheduled",
@@ -100,6 +90,18 @@ Sent by the server as soon as you connect. You do not have to ask.
           "courseLength": 26.294,
           "courseLengthMeters": 42316.2,
           "sessionId": null
+        },
+        {
+          "id": "marathon",
+          "name": "Marathon",
+          "orderIndex": 1,
+          "eventNumber": 12,
+          "scheduledStart": "09:30",
+          "status": "live",
+          "units": "miles",
+          "courseLength": 26.294,
+          "courseLengthMeters": 42316.2,
+          "sessionId": 3
         }
       ]
     }
@@ -116,15 +118,20 @@ distinguish one meet from another — names do not. "10K" is not a distinguishin
 name, two races in one meet often share a course, and the same event runs again
 next year under exactly the same title.
 
-Each race also carries `eventNumber`, `scheduledStart`, `units`,
+Each race also carries `orderIndex`, `eventNumber`, `scheduledStart`, `units`,
 `courseLength`, `courseLengthMeters` and `sessionId`, so you can line races up
 without subscribing first. Where a meet uses programme numbers, `eventNumber`
 is the natural key to match races on.
 
-**Races arrive in running order** — the order the meet intends to run them,
-which is not necessarily by scheduled time and is not the order they appear in
-the event file. Present them in the order you receive them rather than sorting
-by name or start time.
+**Sort races by `orderIndex`** — a race's position in the meet's running order,
+from 0. That order is what the meet intends to run, which is not necessarily by
+scheduled time and is not the order races appear in the event file.
+
+Do not rely on the order messages arrive in. The burst you receive on
+`subscribe` is in running order, but every later `race` message is pushed on
+its own as that race changes — so a consumer holding races by id and updating
+them would otherwise have nothing to lay them out by. `orderIndex` is identical
+in the meet list and in the race messages.
 
 `scheduledStart` is a wall-clock time at the venue, deliberately not an
 instant. A schedule is written in local time and does not move because your
@@ -176,6 +183,7 @@ race every few seconds.
   "race": {
     "id": "marathon",
     "name": "Marathon",
+    "orderIndex": 1,
     "eventNumber": 12,
     "scheduledStart": "09:30",
     "status": "live",
@@ -245,7 +253,7 @@ Each entry describes a meet loaded on the server.
 | `meetId` | number | The number this meet is known by in the wider timing system. Your primary key for matching, where you have it |
 | `startDate` | string \| null | `YYYY-MM-DD`, from the meet's setup |
 | `endDate` | string \| null | `YYYY-MM-DD`. Differs from `startDate` for a multi-day meet |
-| `races` | array | Each with `id`, `name`, `eventNumber`, `scheduledStart`, `status`, `units`, `courseLength`, `courseLengthMeters` and `sessionId` — the same meanings as in the `race` message below. **In running order** |
+| `races` | array | Each with `id`, `name`, `orderIndex`, `eventNumber`, `scheduledStart`, `status`, `units`, `courseLength`, `courseLengthMeters` and `sessionId` — the same meanings as in the `race` message below |
 
 ### `race`
 
@@ -253,6 +261,7 @@ Each entry describes a meet loaded on the server.
 | --- | --- | --- |
 | `id` | string | Race id, unique within the meet |
 | `name` | string | Display name |
+| `orderIndex` | number | Position in the meet's running order, from 0. **Sort on this** — see above |
 | `eventNumber` | number \| null | The number this race carries in the meet programme, where the meet uses them. Null for a road race with one start |
 | `scheduledStart` | string \| null | Scheduled start as `"HH:MM"`, 24-hour, **local to the meet**. Null if not scheduled |
 | `status` | string | `scheduled`, `armed`, `live`, `finished` |
@@ -327,6 +336,7 @@ const socket = io('https://gps.example.com/feed', {
 });
 
 const sessions = new Map(); // raceId -> sessionId we are tracking
+const races = new Map(); // raceId -> latest message, laid out by orderIndex
 
 socket.on('connect_error', (err) => console.error('feed refused:', err.message));
 
@@ -347,6 +357,14 @@ socket.on('hello', (hello) => {
 
 socket.on('race', (msg) => {
   const { race } = msg;
+
+  // Keep every race, and lay them out by orderIndex rather than by the order
+  // messages happen to arrive in - after the first burst, that is the order
+  // things changed, not the running order.
+  races.set(race.id, race);
+  const runningOrder = [...races.values()].sort((a, b) => a.orderIndex - b.orderIndex);
+  void runningOrder; // render this, not the map
+
   if (race.status !== 'live') return;
 
   // A reset starts a new session; anything accumulated for the old one is void.
