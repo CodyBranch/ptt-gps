@@ -202,6 +202,8 @@ export const api = {
     send('/api/forwards', 'PUT', { targets }),
 
   ingestToken: async (): Promise<string | null> => (await getJson('/api/ingest-token')).token,
+  feedToken: async (): Promise<string | null> => (await getJson('/api/feed-token')).token,
+  regenerateFeedToken: async (): Promise<string> => (await send('/api/feed-token', 'POST')).token,
   regenerateIngestToken: async (): Promise<string> => (await send('/api/ingest-token', 'POST')).token,
 
   tunnelStatus: () => getJson('/api/tunnel'),

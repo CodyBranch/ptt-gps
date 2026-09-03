@@ -29,6 +29,7 @@ import type { DecoderPoller } from '../decoders/poller.js';
 import { AuthService, hashPassword, type Role } from './auth.js';
 import { TunnelManager } from './tunnel.js';
 import { DeployManager } from '../deploy/manager.js';
+import { attachFeed } from './feed.js';
 
 /** Everything the API needs from the multi-event runtime in index.ts. */
 export interface ServerContext {
@@ -107,12 +108,21 @@ export function startApi(
   const io = new SocketIOServer(httpServer, { cors: { origin: true } });
   const auth = new AuthService(ctx.store);
 
+  /**
+   * The external live feed. It hangs off the same server on its own namespace
+   * with its own token and its own payload contract - see docs/live-feed.md.
+   */
+  const feed = attachFeed(io, ctx, auth);
+
   /** Event-tagged payloads go to full-access clients and that event's scoped
    *  viewers; untagged (global) payloads go to everyone. */
   const broadcast = (event: string, payload: unknown): void => {
     const eid = (payload as { eventId?: unknown } | undefined)?.eventId;
     if (typeof eid === 'string') io.to('all-events').to(`ev:${eid}`).emit(event, payload);
     else io.emit(event, payload);
+    // Every engine update in the system passes through here, so this is the
+    // one place the feed has to hook to stay in step with the console.
+    if (typeof eid === 'string') feed.publish(eid);
   };
   /**
    * Raw wire traffic, sent only to consoles that asked for it.
@@ -159,6 +169,9 @@ export function startApi(
   const broadcastSnapshot = (): void => {
     io.to('all-events').emit('snapshot', ctx.snapshotAll());
     for (const id of ctx.apps.keys()) io.to(`ev:${id}`).emit('snapshot', ctx.snapshotFor(id));
+    // Loading, unloading or reconfiguring an event changes what the feed can
+    // offer, not just what a race says.
+    feed.publishAll();
   };
 
   io.use((socket, next) => {
@@ -1172,6 +1185,16 @@ export function startApi(
 
   ex.post('/api/ingest-token', auth.adminOnly, (_req, res) => {
     res.json({ ok: true, token: auth.regenerateIngestToken() });
+  });
+
+  // --- live feed token (outbound: other software reading races) ---
+
+  ex.get('/api/feed-token', auth.adminOnly, (_req, res) => {
+    res.json({ token: auth.feedToken() ?? null });
+  });
+
+  ex.post('/api/feed-token', auth.adminOnly, (_req, res) => {
+    res.json({ ok: true, token: auth.regenerateFeedToken() });
   });
 
   // --- simulation ---

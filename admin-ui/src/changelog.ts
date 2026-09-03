@@ -22,6 +22,17 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '0.11.0',
+    date: '2026-09-03',
+    summary: 'A live feed other software can consume.',
+    added: [
+      'A live race feed on the `/feed` socket.io namespace: connect with a token, choose a meet, and receive a message whenever anything in it changes. Distances come in the race units and in metres, with the position each one was derived from.',
+      "Every position carries the age of the fix behind it and a `stale` flag, because a distance that has stopped updating still looks like a distance. Staleness is measured against the event's own reporting interval, and against when the server received the fix rather than the device's clock.",
+      'A read-only feed token under System, separate from the split-feed token: one lets software write distances in, the other lets it read races out.',
+      'Integration notes in `docs/live-feed.md`, with the payload reference and a worked example.',
+    ],
+  },
+  {
     version: '0.10.0',
     date: '2026-09-03',
     summary: 'Running as a service, and deploying without a terminal.',

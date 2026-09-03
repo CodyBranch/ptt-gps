@@ -163,6 +163,29 @@ export class AuthService {
     return this.store.getSetting('ingest-token');
   }
 
+  /**
+   * Machine token for the outbound live feed.
+   *
+   * Deliberately not the ingest token: one lets software write distances in,
+   * the other lets it read races out. Revoking a partner's read access should
+   * not also break an unrelated writer, and vice versa.
+   */
+  feedTokenValid(token: string): boolean {
+    const stored = this.store.getSetting('feed-token');
+    if (!stored || token.length !== stored.length) return false;
+    return crypto.timingSafeEqual(Buffer.from(token), Buffer.from(stored));
+  }
+
+  feedToken(): string | undefined {
+    return this.store.getSetting('feed-token');
+  }
+
+  regenerateFeedToken(): string {
+    const token = crypto.randomBytes(24).toString('hex');
+    this.store.setSetting('feed-token', token);
+    return token;
+  }
+
   regenerateIngestToken(): string {
     const token = crypto.randomBytes(24).toString('hex');
     this.store.setSetting('ingest-token', token);

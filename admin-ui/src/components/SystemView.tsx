@@ -34,7 +34,9 @@ export function SystemView({ ask }: { ask: (req: ConfirmRequest) => void }) {
         </section>
 
         <section>
-          <h3>Split feed (external)</h3>
+          <h3>Live feed (outbound)</h3>
+          <LiveFeedPanel onMsg={setMsg} ask={ask} />
+          <h3 className="section-gap">Split feed (external)</h3>
           <SplitFeedPanel onMsg={setMsg} ask={ask} />
           <h3 className="section-gap">Ping forwarding</h3>
           <ForwardsPanel onMsg={setMsg} ask={ask} />
@@ -427,6 +429,72 @@ function FirebasePanel({
           </div>
         </>
       )}
+    </>
+  );
+}
+
+/**
+ * The outbound live feed's token.
+ *
+ * Kept separate from the split feed's token on purpose: one lets software
+ * write distances in, this one lets it read races out, and revoking a
+ * partner's read access should not break an unrelated writer.
+ */
+function LiveFeedPanel({ onMsg, ask }: { onMsg: (m: Msg) => void; ask: (req: ConfirmRequest) => void }) {
+  const [token, setToken] = useState<string | null>(null);
+  const [show, setShow] = useState(false);
+
+  useEffect(() => {
+    api.feedToken().then(setToken).catch(console.error);
+  }, []);
+
+  const regenerate = () =>
+    ask({
+      title: token ? 'Regenerate the live feed token?' : 'Enable the live feed?',
+      body: token
+        ? 'Every connected consumer is disconnected immediately and must be given the new token.'
+        : 'Generates a read-only token other software uses to receive live race distances.',
+      confirmLabel: token ? 'Regenerate' : 'Generate token',
+      danger: !!token,
+      onConfirm: async () => {
+        try {
+          setToken(await api.regenerateFeedToken());
+          setShow(true);
+          onMsg({ kind: 'ok', text: 'Live feed token generated.' });
+        } catch (err) {
+          onMsg({ kind: 'err', text: (err as Error).message });
+        }
+      },
+    });
+
+  return (
+    <>
+      <p className="hint">
+        Real-time race distances for other software to consume. Connect socket.io to the{' '}
+        <span className="mono">/feed</span> namespace with this token, subscribe to a meet, and receive a
+        message whenever anything in it changes. Read-only: it cannot start races or change setup. See{' '}
+        <span className="mono">docs/live-feed.md</span>.
+      </p>
+      <div className="form-row">
+        <label>
+          Feed token
+          <input
+            readOnly
+            type={show ? 'text' : 'password'}
+            value={token ?? ''}
+            placeholder="not generated - feed disabled"
+            onFocus={(e) => e.target.select()}
+          />
+        </label>
+        {token && (
+          <button className="mini self-end" onClick={() => setShow(!show)}>
+            {show ? 'Hide' : 'Show'}
+          </button>
+        )}
+        <button className="mini self-end" onClick={regenerate}>
+          {token ? 'Regenerate' : 'Generate'}
+        </button>
+      </div>
     </>
   );
 }
