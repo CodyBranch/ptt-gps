@@ -209,6 +209,7 @@ race every few seconds.
           "receivedMs": 1788419070733,
           "ageS": 1,
           "stale": false,
+          "offCourse": 0.0021,
           "offCourseMeters": 3.4,
           "suspect": false,
           "gpsQuality": "good"
@@ -305,18 +306,20 @@ showing a gap.
 | `receivedMs` | number \| null | Epoch ms **this server** received it |
 | `ageS` | number \| null | Seconds since `receivedMs` |
 | `stale` | boolean | The position has missed several expected reports — **do not trust `distance`** |
-| `offCourseMeters` | number \| null | How far this fix was from the course line, in metres. **A magnitude, not a verdict** — see below |
+| `offCourse` | number \| null | How far this fix was from the course line, in the race's units. The same quantity the Firebase output publishes as `path_distoff`. **A magnitude, not a verdict** — see below |
+| `offCourseMeters` | number \| null | The same distance in metres |
 | `suspect` | boolean | The fix is further off the course than the race allows, so the distance from it should not be trusted: a wrong turn, a detour, or a bad lock |
 | `gpsQuality` | string \| null | `good`, `ok`, `poor` |
 
-**`offCourseMeters` is never zero, and that is normal.** A vehicle drives in a
+**`offCourse` is never zero, and that is normal.** A vehicle drives in a
 lane rather than along the centreline of a KML trace, and consumer GPS is good
 to a few metres, so a perfectly-behaved vehicle reads a handful of metres off.
 Do not derive "off course" from it being non-zero — that is true of everything,
 always. `suspect` is the judgement: the engine raises it when the distance
 exceeds the race's own `maxOffCourse` allowance, 0.25 course units by default.
-Use `offCourseMeters` for a magnitude — how far into the wrong street — and
-`suspect` for whether to trust the distance.
+Use `offCourse` for a magnitude — how far into the wrong street — and `suspect`
+for whether to trust the distance. This is the same number the scoring system
+already receives from the Firebase output as `path_distoff`, so the two agree.
 
 `ageS` is measured from `receivedMs`, not `fixMs`, deliberately. A tracker with
 a wrong clock would otherwise report positions that look hours old — or worse,
@@ -436,5 +439,5 @@ running), `live`, `finished`. Distances only advance while `live`.
 | `distance` is null | The role has no vehicle, or nothing has been heard from its tracker yet |
 | `distance` frozen, `stale: true` | The tracker has gone quiet. Show the age, or nothing — not the number alone |
 | Every role `suspect` | Usually the wrong course loaded for the race, not fifty simultaneous wrong turns |
-| `offCourseMeters` is never 0 | Expected. Vehicles drive in lanes and GPS has error; see the note above |
+| `offCourse` is never 0 | Expected. Vehicles drive in lanes and GPS has error; see the note above |
 | Distances jumped backwards | A race reset. Check `sessionId` |

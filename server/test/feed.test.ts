@@ -256,7 +256,8 @@ describe('being off the course line', () => {
     // along the exact centreline of a KML trace.
     const [msg] = feedMessages(snapshot(), NOW);
     const pos = msg.race.roles[0].position!;
-    expect(pos.offCourseMeters).toBeCloseTo(1.9, 1); // 0.0012 miles
+    expect(pos.offCourse).toBe(0.0012); // race units, as the scoring feed has it
+    expect(pos.offCourseMeters).toBeCloseTo(1.9, 1);
     expect(pos.suspect).toBe(false);
   });
 
@@ -266,6 +267,7 @@ describe('being off the course line', () => {
     snap.events[0].races[0].trackers[0].offCourse = 0.5;
     snap.events[0].races[0].trackers[0].suspect = true;
     const pos = feedMessages(snap, NOW)[0].race.roles[0].position!;
+    expect(pos.offCourse).toBe(0.5);
     expect(pos.offCourseMeters).toBeCloseTo(804.7, 0);
     expect(pos.suspect).toBe(true);
   });
@@ -273,6 +275,8 @@ describe('being off the course line', () => {
   it('is null when nothing has been measured yet', () => {
     const snap = snapshot();
     delete (snap as any).events[0].races[0].trackers[0].offCourse;
-    expect(feedMessages(snap, NOW)[0].race.roles[0].position!.offCourseMeters).toBeNull();
+    const pos = feedMessages(snap, NOW)[0].race.roles[0].position!;
+    expect(pos.offCourse).toBeNull();
+    expect(pos.offCourseMeters).toBeNull();
   });
 });

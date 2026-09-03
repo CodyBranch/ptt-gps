@@ -66,12 +66,16 @@ export interface FeedPosition {
   /** The fix is old enough that the distance should not be trusted. */
   stale: boolean;
   /**
-   * How far this fix was from the course line, in metres.
+   * How far this fix was from the course line, in the race's units - the same
+   * quantity the Firebase output has always published as `path_distoff`, and
+   * that the scoring system already consumes. Paired with a metric form the
+   * same way `distance` is.
    *
-   * Never exactly zero in practice - a vehicle drives in a lane, not along a
+   * Never exactly zero in practice: a vehicle drives in a lane, not along a
    * centreline, and consumer GPS is good to a few metres. Read it as a
-   * magnitude, not as a yes/no: `suspect` is the flag.
+   * magnitude, not as a yes/no - `suspect` is the flag.
    */
+  offCourse: number | null;
   offCourseMeters: number | null;
   /**
    * The fix is further off the course than the race allows (its
@@ -259,6 +263,7 @@ export function feedMessages(snapshot: InternalSnapshot, nowMs: number): FeedMes
                 receivedMs,
                 ageS,
                 stale: basis === null ? true : nowMs - basis > staleAfterMs,
+                offCourse: typeof tracker?.offCourse === 'number' ? round(tracker.offCourse, 4) : null,
                 offCourseMeters:
                   typeof tracker?.offCourse === 'number'
                     ? round(toMeters(tracker.offCourse, race.units), 1)
