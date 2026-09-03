@@ -210,9 +210,11 @@ try {
   # whether node_modules is actually usable. A failed install leaves the tree
   # half-deleted, and skipping the repair on that basis turns one bad install
   # into a build that cannot run at all. Check the toolchain the build needs.
+  # Forward slashes deliberately: Windows accepts them, and unlike a
+  # backslash they cannot be turned into a control character in transit.
   $toolchain = @(
-    (Join-Path $root 'node_modules\.bin	sc.cmd'),
-    (Join-Path $root 'node_modules\.binite.cmd')
+    (Join-Path $root 'node_modules/.bin/tsc.cmd'),
+    (Join-Path $root 'node_modules/.bin/vite.cmd')
   )
   $modulesOk = $true
   foreach ($t in $toolchain) { if (-not (Test-Path $t)) { $modulesOk = $false } }
@@ -238,7 +240,7 @@ try {
   # over something that was knowable before the restart. npm can also skip a
   # package's install script, which is precisely how a native module ends up
   # present but unbuilt.
-  $sqlite = Join-Path $root 'node_modulesetter-sqlite3uild\Releaseetter_sqlite3.node'
+  $sqlite = Join-Path $root 'node_modules/better-sqlite3/build/Release/better_sqlite3.node'
   if (-not (Test-Path $sqlite)) {
     Write-Host ''
     Write-Host 'better-sqlite3 has no compiled binary:' -ForegroundColor Red
