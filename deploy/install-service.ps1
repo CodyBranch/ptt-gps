@@ -17,6 +17,7 @@
 param(
   [int]$Port = 8080,
   [int]$IngestPort = 1000,
+  [switch]$StopDevServers,
   [string]$WinSwVersion = '2.12.0'
 )
 
@@ -47,6 +48,23 @@ function Get-PortHolder([int]$p) {
 # `npm run dev` supervises the server with tsx watch, so stopping the process
 # that holds the port just prompts the watcher to start another one and take it
 # straight back. Walk up to the outermost supervisor so the advice works.
+# Killing the process that holds the port is not enough: tsx watch starts
+# another within a second. Kill the watchers first so nothing is left to
+# restart anything, then whatever remains. Two passes, because killing a tree
+# shifts the list underneath us.
+function Stop-DevServers {
+  foreach ($pass in 1..2) {
+    $procs = Get-CimInstance Win32_Process -Filter "Name='node.exe'" -ErrorAction SilentlyContinue |
+      Where-Object { $_.CommandLine -match 'ptt-gps' } |
+      Sort-Object { if ($_.CommandLine -match 'tsx.*watch') { 0 } else { 1 } }
+    foreach ($proc in $procs) {
+      Write-Host "  killing PID $($proc.ProcessId)"
+      & taskkill /PID $proc.ProcessId /T /F 2>&1 | Out-Null
+    }
+    Start-Sleep -Seconds 2
+  }
+}
+
 function Get-Supervisor($proc) {
   $top = $proc.ProcessId
   $cur = $proc
@@ -62,17 +80,16 @@ function Get-Supervisor($proc) {
 
 Require-Admin
 
-# --- the service runs the built output, so it has to exist -------------------
-if (-not (Test-Path (Join-Path $root 'server\dist\index.js'))) {
-  Write-Host 'Server is not built yet - building.' -ForegroundColor Yellow
-  Push-Location $root
-  try {
-    & npm ci
-    if ($LASTEXITCODE -ne 0) { throw 'npm ci failed' }
-    & npm run build
-    if ($LASTEXITCODE -ne 0) { throw 'build failed' }
-  } finally { Pop-Location }
-}
+# --- the service runs the built output, so build it --------------------------
+# Always, rather than only when dist is missing. A stale dist is the worse
+# failure of the two: the service comes up, looks healthy, and serves code
+# nobody can account for.
+Write-Host 'Building...' -ForegroundColor Cyan
+Push-Location $root
+try {
+  & npm run build
+  if ($LASTEXITCODE -ne 0) { throw 'build failed' }
+} finally { Pop-Location }
 
 # The console is served from admin-ui/dist; without it the service runs but
 # only answers the API, which is a confusing way to discover a missing build.
@@ -152,17 +169,30 @@ if (-not $blocker) {
   $blocker = Get-PortHolder $IngestPort
   $blockedPort = $IngestPort
 }
-if ($blocker) {
+if ($blocker -and $StopDevServers) {
+  Write-Host ''
+  Write-Host "Port $blockedPort is held by PID $($blocker.ProcessId) - stopping dev servers." -ForegroundColor Yellow
+  Stop-DevServers
+  $blocker = Get-PortHolder $Port
+  if (-not $blocker) { $blocker = Get-PortHolder $IngestPort }
+  if ($blocker) {
+    Write-Host "PID $($blocker.ProcessId) is still holding a port after the kill:" -ForegroundColor Red
+    Write-Host "  $($blocker.CommandLine)"
+    throw 'Could not free the ports.'
+  }
+  Write-Host 'Ports are free.' -ForegroundColor Green
+} elseif ($blocker) {
   $top = Get-Supervisor $blocker
   Write-Host ''
   Write-Host "Port $blockedPort is already held by PID $($blocker.ProcessId)." -ForegroundColor Red
   Write-Host "  $($blocker.CommandLine)"
   Write-Host ''
   Write-Host 'The service cannot run alongside it: they want the same ports and the'
-  Write-Host 'same database. Stop it first.'
+  Write-Host 'same database.'
+  Write-Host ''
+  Write-Host 'Re-run with -StopDevServers to stop it, or do it by hand:' -ForegroundColor Yellow
   if ($top -ne $blocker.ProcessId) {
-    Write-Host ''
-    Write-Host "It is supervised by PID $top, which would restart it, so kill the tree:" -ForegroundColor Yellow
+    # tsx watch restarts its child, so the child's PID is the wrong target.
     Write-Host "  taskkill /PID $top /T /F"
   } else {
     Write-Host "  Stop-Process -Id $($blocker.ProcessId) -Force"
@@ -210,10 +240,20 @@ if (-not $ok) {
     }
   }
 
-  Write-Host ''
-  Write-Host 'If the logs are empty, node itself never started - check that' -ForegroundColor Yellow
-  Write-Host "  $node"
-  Write-Host '  is readable by LocalSystem.'
+  # A watcher can start a dev server again between the check above and now, and
+  # then the console that fails to answer is not the one we just installed.
+  $thief = Get-PortHolder $Port
+  if ($thief -and $thief.CommandLine -match 'tsx|src[\\/]index\.ts') {
+    Write-Host ''
+    Write-Host "Port $Port was taken by a dev server while the service started:" -ForegroundColor Yellow
+    Write-Host "  PID $($thief.ProcessId)  $($thief.CommandLine)"
+    Write-Host 'Re-run with -StopDevServers.'
+  } elseif (-not $thief) {
+    Write-Host ''
+    Write-Host 'If the logs are empty, node itself never started - check that' -ForegroundColor Yellow
+    Write-Host "  $node"
+    Write-Host '  is readable by LocalSystem.'
+  }
   throw 'Service did not come up.'
 }
 
