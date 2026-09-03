@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { feedMessages, PROTOCOL } from '../src/api/feed.js';
+import { eventSummary, feedMessages, PROTOCOL } from '../src/api/feed.js';
 
 /**
  * The feed is a published contract, so these tests are as much about pinning
@@ -20,7 +20,7 @@ const snapshot = (over: Record<string, unknown> = {}) => ({
           status: 'live',
           units: 'miles',
           courseLength: 26.2,
-          sessionId: 's-1',
+          sessionId: 4,
           roles: [
             { key: 'lead', label: 'Lead Vehicle', vehicle: 'moto-1', activeImei: '111', source: 'gps' },
             { key: 'trail', label: 'Trail Vehicle', vehicle: null, activeImei: null, source: 'gps' },
@@ -48,7 +48,7 @@ describe('the external live feed payload', () => {
     expect(msg.protocol).toBe(PROTOCOL);
     expect(msg.event).toEqual({ id: 'boston-2026', name: 'Boston 2026', meetId: 42 });
     expect(msg.race.id).toBe('r1');
-    expect(msg.race.sessionId).toBe('s-1');
+    expect(msg.race.sessionId).toBe(4);
   });
 
   it('reports distance in the race units and in metres', () => {
@@ -155,5 +155,39 @@ describe('the external live feed payload', () => {
     snap.events[0].races.push({ ...snap.events[0].races[0], raceId: 'r2', name: 'Half' });
     const msgs = feedMessages(snap, NOW);
     expect(msgs.map((m) => m.race.id)).toEqual(['r1', 'r2']);
+  });
+});
+
+describe('the meet list a consumer maps against', () => {
+  it('carries what is needed to line a meet up with a consumer record', () => {
+    const snap = snapshot();
+    (snap as any).events[0].event.startDate = '2026-04-20';
+    (snap as any).events[0].event.endDate = '2026-04-20';
+
+    const summary = eventSummary('boston-2026', snap.events[0] as never);
+    expect(summary).toEqual({
+      id: 'boston-2026',
+      name: 'Boston 2026',
+      meetId: 42,
+      startDate: '2026-04-20',
+      endDate: '2026-04-20',
+      races: [
+        {
+          id: 'r1',
+          name: 'Marathon',
+          status: 'live',
+          units: 'miles',
+          courseLength: 26.2,
+          courseLengthMeters: 42164.8,
+          sessionId: 4,
+        },
+      ],
+    });
+  });
+
+  it('reports absent dates as null rather than leaving the field out', () => {
+    const summary = eventSummary('e', snapshot().events[0] as never);
+    expect(summary.startDate).toBeNull();
+    expect(summary.endDate).toBeNull();
   });
 });

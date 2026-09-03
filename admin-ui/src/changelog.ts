@@ -26,6 +26,7 @@ export const RELEASES: Release[] = [
     date: '2026-09-03',
     summary: 'Named tokens for the live feed, and who is on it.',
     added: [
+      'The feed meet list carries what a consumer needs to map meets onto its own records without subscribing first: the meet number, start and end dates, and each race with its units, course length and session.',
       'One live-feed token per consumer instead of a single shared secret, each with a label, created from System. They can be disabled or revoked individually, and either takes effect immediately rather than at the consumer next reconnecting.',
       'A Connected now list under the same panel: who is on the feed, from where, and which meet each is watching. Connected but not subscribed shows as its own state, which is the usual reason a consumer sees no data.',
       'Each token records when it was last used and from which address, so an integration that has quietly stopped connecting is visible without asking anyone.',

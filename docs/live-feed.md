@@ -76,17 +76,53 @@ Sent by the server as soon as you connect. You do not have to ask.
       "id": "boston-2026-demo",
       "name": "Boston Marathon 2026 (demo)",
       "meetId": 9999,
+      "startDate": "2026-04-20",
+      "endDate": "2026-04-20",
       "races": [
-        { "id": "marathon", "name": "Marathon", "status": "live" },
-        { "id": "wheelchair", "name": "Wheelchair", "status": "scheduled" }
+        {
+          "id": "marathon",
+          "name": "Marathon",
+          "status": "live",
+          "units": "miles",
+          "courseLength": 26.294,
+          "courseLengthMeters": 42316.2,
+          "sessionId": 3
+        },
+        {
+          "id": "wheelchair",
+          "name": "Wheelchair",
+          "status": "scheduled",
+          "units": "miles",
+          "courseLength": 26.294,
+          "courseLengthMeters": 42316.2,
+          "sessionId": null
+        }
       ]
     }
   ]
 }
 ```
 
-Use `id` to subscribe. `meetId` is the number the meet is known by in the wider
-timing system, if you key off that instead.
+Use `id` to subscribe.
+
+**Mapping meets to your own records.** `meetId` is the anchor: it is the number
+the meet is known by in the wider timing system, and where both sides have it,
+match on that alone. Where they do not, the dates and course lengths are what
+distinguish one meet from another — names do not. "10K" is not a distinguishing
+name, two races in one meet often share a course, and the same event runs again
+next year under exactly the same title.
+
+Each race also carries `units`, `courseLength`, `courseLengthMeters` and
+`sessionId`, so you can line races up without subscribing first.
+
+The list is of meets **loaded on the server right now**, not every meet that
+exists. A meet not yet activated, or put away after its event, will not appear.
+
+Ask for it again at any time — you do not have to reconnect:
+
+```js
+socket.emit('events', null, (res) => console.log(res.events));
+```
 
 ### 2. `subscribe` — choose the meet
 
@@ -158,9 +194,10 @@ race every few seconds.
 
 ### Other messages
 
-- **`events`** — the meet list, resent when events are loaded, unloaded or
-  reconfigured. Same shape as `hello`. Refresh your menu; your subscription is
-  unaffected unless the meet itself went away.
+- **`events`** — the meet list. Pushed when events are loaded, unloaded or
+  reconfigured, and requestable at any time with an ack, as above. Same shape as
+  `hello`. Refresh your menu; your subscription is unaffected unless the meet
+  itself went away.
 - **`unsubscribe`** — emit with no payload to stop receiving `race` messages.
 
 ---

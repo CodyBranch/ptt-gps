@@ -102,11 +102,31 @@ export interface FeedRace {
   roles: FeedRole[];
 }
 
+/**
+ * Enough to recognise a meet without subscribing to it.
+ *
+ * A consumer usually has its own record of the same event and needs to line
+ * the two up. `meetId` is the anchor where both systems know it; the dates and
+ * the course length are what you fall back on when they do not, since "10K" is
+ * not a distinguishing name and two meets can share one.
+ */
 export interface FeedEventSummary {
   id: string;
   name: string;
   meetId: number;
-  races: Array<{ id: string; name: string; status: string }>;
+  /** ISO dates from the event's setup, where set. */
+  startDate: string | null;
+  endDate: string | null;
+  races: Array<{
+    id: string;
+    name: string;
+    status: string;
+    units: string;
+    courseLength: number;
+    courseLengthMeters: number;
+    /** Present once the race has been run at least once; changes on reset. */
+    sessionId: number | null;
+  }>;
 }
 
 export interface FeedMessage {
@@ -118,7 +138,14 @@ export interface FeedMessage {
 
 interface InternalSnapshot {
   events: Array<{
-    event: { id: string; name: string; meetId: number; reportIntervalS?: number };
+    event: {
+      id: string;
+      name: string;
+      meetId: number;
+      reportIntervalS?: number;
+      startDate?: string | null;
+      endDate?: string | null;
+    };
     races: Array<{
       raceId: string;
       name: string;
@@ -231,6 +258,26 @@ export function feedMessages(snapshot: InternalSnapshot, nowMs: number): FeedMes
   return out;
 }
 
+/** One entry in the meet list, from an event's internal snapshot. */
+export function eventSummary(id: string, snap: InternalSnapshot['events'][number]): FeedEventSummary {
+  return {
+    id,
+    name: snap.event.name,
+    meetId: snap.event.meetId,
+    startDate: snap.event.startDate ?? null,
+    endDate: snap.event.endDate ?? null,
+    races: snap.races.map((r) => ({
+      id: r.raceId,
+      name: r.name,
+      status: r.status,
+      units: r.units,
+      courseLength: round(r.courseLength, 4),
+      courseLengthMeters: round(toMeters(r.courseLength, r.units), 1),
+      sessionId: r.sessionId ?? null,
+    })),
+  };
+}
+
 export interface FeedContext {
   apps: Map<string, { snapshot: () => unknown }>;
   snapshotFor: (eventId: string) => unknown;
@@ -277,15 +324,9 @@ export function attachFeed(io: SocketIOServer, ctx: FeedContext, auth: AuthServi
   });
 
   const summaries = (): FeedEventSummary[] =>
-    [...ctx.apps.entries()].map(([id, app]) => {
-      const snap = app.snapshot() as InternalSnapshot['events'][number];
-      return {
-        id,
-        name: snap.event.name,
-        meetId: snap.event.meetId,
-        races: snap.races.map((r) => ({ id: r.raceId, name: r.name, status: r.status })),
-      };
-    });
+    [...ctx.apps.entries()].map(([id, app]) =>
+      eventSummary(id, app.snapshot() as InternalSnapshot['events'][number]),
+    );
 
   ns.on('connection', (socket) => {
     const ip = socket.handshake.address?.replace('::ffff:', '') ?? '?';
