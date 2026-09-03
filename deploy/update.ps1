@@ -178,9 +178,31 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'git pull failed (not a fast-forward?)' }
   }
 
-  Set-Stage 'installing' 'Installing dependencies...'
-  & $npm ci
-  if ($LASTEXITCODE -ne 0) { throw 'npm ci failed - the old build is still running' }
+  # Dependencies are only touched when they actually changed.
+  #
+  # `npm ci` deletes node_modules and reinstalls from scratch, which cannot
+  # work here: the running service holds native modules open (ngrok's .node
+  # among them) and Windows refuses to unlink a loaded binary. The whole point
+  # of this script is that the old build keeps serving while the new one is
+  # prepared, so the install has to tolerate a running server.
+  #
+  # `npm install` leaves packages that are already correct alone, so it only
+  # goes near the locked files when a dependency genuinely moved.
+  $depsChanged = $false
+  if ($pullNeeded) {
+    $touched = & $git diff --name-only "$local..HEAD"
+    $depsChanged = [bool]($touched | Where-Object { $_ -match '(^|/)(package\.json|package-lock\.json)$' })
+  }
+
+  if ($depsChanged) {
+    Set-Stage 'installing' 'Dependencies changed - installing...'
+    & $npm install --no-audit --no-fund
+    if ($LASTEXITCODE -ne 0) {
+      throw 'npm install failed - the old build is still running, nothing was changed'
+    }
+  } else {
+    Set-Stage 'installing' 'Dependencies unchanged - skipping install.'
+  }
 
   Set-Stage 'building' 'Building...'
   & $npm run build
@@ -220,7 +242,9 @@ try {
     Copy-Item "$keep\*" (Join-Path $root 'events') -Recurse -Force
     Write-Host '  events/ restored'
 
-    & $npm ci
+    # Same constraint as above, and the service is down at this point, so a
+    # clean install would be possible - but it is also the slowest way back.
+    if ($depsChanged) { & $npm install --no-audit --no-fund }
     & $npm run build
     Restart-Service -Name 'ptt-gps' -Force
     Set-Stage 'rolled-back' "New build did not come up. Rolled back to $($local.Substring(0,7))." $true $false
