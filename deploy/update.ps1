@@ -194,11 +194,28 @@ try {
     $depsChanged = [bool]($touched | Where-Object { $_ -match '(^|/)(package\.json|package-lock\.json)$' })
   }
 
-  if ($depsChanged) {
-    Set-Stage 'installing' 'Dependencies changed - installing...'
+  # Git says whether dependencies were meant to change; it says nothing about
+  # whether node_modules is actually usable. A failed install leaves the tree
+  # half-deleted, and skipping the repair on that basis turns one bad install
+  # into a build that cannot run at all. Check the toolchain the build needs.
+  $toolchain = @(
+    (Join-Path $root 'node_modules\.bin	sc.cmd'),
+    (Join-Path $root 'node_modules\.binite.cmd')
+  )
+  $modulesOk = $true
+  foreach ($t in $toolchain) { if (-not (Test-Path $t)) { $modulesOk = $false } }
+
+  if ($depsChanged -or -not $modulesOk) {
+    $why = if (-not $modulesOk) { 'node_modules is incomplete' } else { 'dependencies changed' }
+    Set-Stage 'installing' "Installing dependencies ($why)..."
     & $npm install --no-audit --no-fund
     if ($LASTEXITCODE -ne 0) {
       throw 'npm install failed - the old build is still running, nothing was changed'
+    }
+    foreach ($t in $toolchain) {
+      if (-not (Test-Path $t)) {
+        throw "install finished but $t is still missing - the running service may be holding files open; stop it and install by hand"
+      }
     }
   } else {
     Set-Stage 'installing' 'Dependencies unchanged - skipping install.'
