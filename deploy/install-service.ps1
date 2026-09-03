@@ -132,6 +132,37 @@ if (-not (Test-Path $exe)) {
   }
 }
 
+# --- let the service read the repository -------------------------------------
+# The service runs as LocalSystem, but the checkout is owned by whoever cloned
+# it, and git refuses to operate on a repository owned by another user. The
+# console's update check is the first thing to hit this, and it fails with a
+# wall of text rather than "no updates".
+#
+# This has to go in system scope. safe.directory is only honoured in protected
+# configuration, so neither the repository's own config nor `git -c` on the
+# command line will do, and a --global setting would apply to the installing
+# user rather than to SYSTEM.
+$gitExe = (Get-Command git -ErrorAction SilentlyContinue).Source
+if (-not $gitExe) {
+  foreach ($c in @("$env:ProgramFiles\Git\cmd\git.exe", "${env:ProgramFiles(x86)}\Git\cmd\git.exe")) {
+    if (Test-Path $c) { $gitExe = $c; break }
+  }
+}
+if ($gitExe -and (Test-Path (Join-Path $root '.git'))) {
+  $repoPath = (Resolve-Path $root).Path.Replace('\', '/')
+  $already = & $gitExe config --system --get-all safe.directory 2>$null
+  if ($already -notcontains $repoPath) {
+    & $gitExe config --system --add safe.directory $repoPath
+    if ($LASTEXITCODE -eq 0) {
+      Write-Host "Allowed SYSTEM to read the repository at $repoPath"
+    } else {
+      Write-Host "Could not set safe.directory - the console's update check may fail." -ForegroundColor Yellow
+    }
+  }
+} elseif (-not $gitExe) {
+  Write-Host 'git not found - deploys from the console will not be available.' -ForegroundColor Yellow
+}
+
 $existing = Get-Service -Name 'ptt-gps' -ErrorAction SilentlyContinue
 if ($existing) {
   Write-Host 'Service already installed - reinstalling.' -ForegroundColor Yellow
