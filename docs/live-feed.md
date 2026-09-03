@@ -223,6 +223,30 @@ race every few seconds.
 
 ## Field reference
 
+### The message envelope
+
+Every `race` message is wrapped in these.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `protocol` | number | The payload version. Currently `1`. **Check it and refuse a shape you do not know** rather than guessing at unfamiliar fields |
+| `serverTimeMs` | number | The server's clock when the message was built, epoch ms. Compare it with your own to spot clock skew: every age in the payload is computed against this clock, so if the two disagree by minutes, so will your idea of how fresh the data is |
+| `event` | object | `{ id, name, meetId }` — which meet this race belongs to |
+| `race` | object | The race and its roles. See below |
+
+### The meet list (`hello` and `events`)
+
+Each entry describes a meet loaded on the server.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `id` | string | The meet id. This is what you pass to `subscribe` |
+| `name` | string | Display name |
+| `meetId` | number | The number this meet is known by in the wider timing system. Your primary key for matching, where you have it |
+| `startDate` | string \| null | `YYYY-MM-DD`, from the meet's setup |
+| `endDate` | string \| null | `YYYY-MM-DD`. Differs from `startDate` for a multi-day meet |
+| `races` | array | Each with `id`, `name`, `eventNumber`, `scheduledStart`, `status`, `units`, `courseLength`, `courseLengthMeters` and `sessionId` — the same meanings as in the `race` message below. **In running order** |
+
 ### `race`
 
 | Field | Type | Meaning |
