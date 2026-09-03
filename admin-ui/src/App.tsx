@@ -890,7 +890,7 @@ export default function App() {
       ) : page === 'help' && !viewer ? (
         <HelpView />
       ) : page === 'changelog' && !viewer ? (
-        <ChangelogView admin={admin} />
+        <ChangelogView admin={admin} onUpdateCount={setPendingUpdates} />
       ) : page === 'wire' && !viewer ? (
         <WireLog socket={socket} />
       ) : page === 'system' && admin && !viewer ? (

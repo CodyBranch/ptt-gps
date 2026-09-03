@@ -12,7 +12,13 @@ const SECTIONS: Array<{ key: 'added' | 'changed' | 'fixed'; label: string }> = [
  * What changed, and when — reading from the same file the sidebar takes its
  * version from, so the number on screen and the notes below it agree.
  */
-export function ChangelogView({ admin }: { admin: boolean }) {
+export function ChangelogView({
+  admin,
+  onUpdateCount,
+}: {
+  admin: boolean;
+  onUpdateCount?: (n: number | null) => void;
+}) {
   return (
     <div className="setup help">
       <div className="setup-bar">
@@ -22,7 +28,7 @@ export function ChangelogView({ admin }: { admin: boolean }) {
       <div className="changelog-layout">
         <article className="help-body">
           {/* Deploying belongs with the version it changes. */}
-          {admin && <DeployPanel />}
+          {admin && <DeployPanel onUpdateCount={onUpdateCount} />}
 
           <header className="help-head">
             <h1>What&rsquo;s changed</h1>

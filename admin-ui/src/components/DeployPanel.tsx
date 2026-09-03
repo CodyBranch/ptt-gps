@@ -22,7 +22,7 @@ const STAGES: Array<{ key: string; label: string }> = [
 
 const stageIndex = (stage: string) => STAGES.findIndex((s) => s.key === stage);
 
-export function DeployPanel() {
+export function DeployPanel({ onUpdateCount }: { onUpdateCount?: (n: number | null) => void }) {
   const [info, setInfo] = useState<DeployInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -37,13 +37,16 @@ export function DeployPanel() {
       setInfo(next);
       setWaiting(false);
       setError(null);
+      // The sidebar shows the same fact and polls far more slowly, so tell it
+      // what we just learned rather than leaving it stale until its next turn.
+      onUpdateCount?.(next.update?.error ? null : (next.update?.commits.length ?? null));
     } catch {
       // While a deploy is running the server is expected to go away. Only
       // report a fetch failure as an error when nothing is in flight.
       if (startedHere.current) setWaiting(true);
       else setError('Could not reach the server.');
     }
-  }, []);
+  }, [onUpdateCount]);
 
   useEffect(() => {
     void load();
