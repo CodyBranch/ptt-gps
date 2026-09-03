@@ -69,6 +69,9 @@ export interface RaceSnap {
   eventId: string;
   raceId: string;
   name: string;
+  eventNumber: number | null;
+  scheduledStart: string | null;
+  order: number | null;
   status: RaceStatus;
   units: 'miles' | 'kilometers';
   courseLength: number;
@@ -135,7 +138,18 @@ export interface EventConfigT {
     mapEvent?: string;
   }>;
   snapDefaults: { minInc: number; maxInc: number; initialMax: number; maxOffCourse: number; fwdTolerance: number };
-  races: Array<{ id: string; name: string; course: string; units: Units }>;
+  races: Array<{
+    id: string;
+    name: string;
+    course: string;
+    units: Units;
+    /** Programme number, where the meet uses them. */
+    eventNumber?: number;
+    /** Scheduled start as "HH:MM", local to the meet. */
+    scheduledStart?: string;
+    /** Running order; blank keeps the position in the file. */
+    order?: number;
+  }>;
   /** Read-only: is this event currently running? Setup works either way. */
   _active?: boolean;
 }

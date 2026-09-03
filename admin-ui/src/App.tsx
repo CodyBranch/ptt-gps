@@ -24,6 +24,7 @@ import { WireLog } from './components/WireLog';
 import { TrackerTable } from './components/TrackerTable';
 import { WindowDialog } from './components/WindowDialog';
 import type { DecoderPub, RaceSnap, RaceStatus, SimulatedDistance, Snapshot, TrackerPub, Units } from './types';
+import { raceLabel } from './format';
 
 interface State {
   snapshot?: Snapshot;
@@ -578,7 +579,7 @@ export default function App() {
           {races.map((r) => (
             <div className="race-section" key={r.raceId}>
               <div className="race-section-head">
-                <span className="race-section-name">{r.name}</span>
+                <span className="race-section-name">{raceLabel(r)}</span>
                 {!viewer ? (
                   <RacePanel race={r} ask={ask} onAction={(a) => api.lifecycle(r.eventId, r.raceId, a).catch(oops('Lifecycle change failed'))} />
                 ) : (
@@ -793,7 +794,7 @@ export default function App() {
                 className={eventTab === r.raceId ? 'active' : ''}
                 onClick={() => setEventTab(r.raceId)}
               >
-                {r.name}
+                {raceLabel(r)}
                 <span className={`status-dot ${r.status}`} />
               </button>
             ))}
@@ -809,7 +810,7 @@ export default function App() {
             {navRaces.length > 1 && <option value="all">All races</option>}
             {navRaces.map((r) => (
               <option key={r.raceId} value={r.raceId}>
-                {STATUS_DOT[r.status]} {r.name}
+                {STATUS_DOT[r.status]} {raceLabel(r)}
               </option>
             ))}
             {admin && !viewer && <option value="setup">⚙ Setup</option>}

@@ -465,13 +465,53 @@ export function EventSetup({
           <h3>Races</h3>
           <table className="setup-table">
             <thead>
-              <tr><th>ID</th><th>Name</th><th>Course</th><th>Distance</th><th>Units</th><th></th></tr>
+              <tr>
+                <th className="col-order" title="Running order. Lower first; blank keeps the position below.">#</th>
+                <th className="col-evno" title="Programme number, where the meet uses them">Event</th>
+                <th className="col-start" title="Scheduled start, 24-hour, local to the meet">Start</th>
+                <th>ID</th><th>Name</th><th>Course</th><th>Distance</th><th>Units</th><th></th>
+              </tr>
             </thead>
             <tbody>
               {cfg.races.map((race, i) => {
                 const k = courseFor(race.course);
                 return (
                   <tr key={i}>
+                    {/* Blank rather than 0 for "no opinion": an event that
+                        never sets these keeps the order it was written in. */}
+                    <td className="col-order">
+                      <input
+                        type="number"
+                        value={race.order ?? ''}
+                        placeholder="—"
+                        onChange={(e) =>
+                          edit((c) => (c.races[i].order = e.target.value === '' ? undefined : Number(e.target.value)))
+                        }
+                      />
+                    </td>
+                    <td className="col-evno">
+                      <input
+                        type="number"
+                        min={0}
+                        value={race.eventNumber ?? ''}
+                        placeholder="—"
+                        onChange={(e) =>
+                          edit(
+                            (c) =>
+                              (c.races[i].eventNumber = e.target.value === '' ? undefined : Number(e.target.value)),
+                          )
+                        }
+                      />
+                    </td>
+                    <td className="col-start">
+                      <input
+                        type="time"
+                        value={race.scheduledStart ?? ''}
+                        onChange={(e) =>
+                          edit((c) => (c.races[i].scheduledStart = e.target.value || undefined))
+                        }
+                      />
+                    </td>
                     <td>
                       <input value={race.id} onChange={(e) => edit((c) => (c.races[i].id = e.target.value))} />
                     </td>

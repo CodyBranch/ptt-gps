@@ -92,6 +92,10 @@ export interface FeedRole {
 export interface FeedRace {
   id: string;
   name: string;
+  /** Programme number, where the meet uses them. */
+  eventNumber: number | null;
+  /** Scheduled start as "HH:MM", local to the meet. Null if not scheduled. */
+  scheduledStart: string | null;
   status: string;
   /** 'miles' or 'kilometers' - the units `distance` and `courseLength` use. */
   units: string;
@@ -120,6 +124,8 @@ export interface FeedEventSummary {
   races: Array<{
     id: string;
     name: string;
+    eventNumber: number | null;
+    scheduledStart: string | null;
     status: string;
     units: string;
     courseLength: number;
@@ -149,6 +155,8 @@ interface InternalSnapshot {
     races: Array<{
       raceId: string;
       name: string;
+      eventNumber?: number | null;
+      scheduledStart?: string | null;
       status: string;
       units: string;
       courseLength: number;
@@ -244,6 +252,8 @@ export function feedMessages(snapshot: InternalSnapshot, nowMs: number): FeedMes
         race: {
           id: race.raceId,
           name: race.name,
+          eventNumber: race.eventNumber ?? null,
+          scheduledStart: race.scheduledStart ?? null,
           status: race.status,
           units: race.units,
           courseLength: round(race.courseLength, 4),
@@ -269,6 +279,8 @@ export function eventSummary(id: string, snap: InternalSnapshot['events'][number
     races: snap.races.map((r) => ({
       id: r.raceId,
       name: r.name,
+      eventNumber: r.eventNumber ?? null,
+      scheduledStart: r.scheduledStart ?? null,
       status: r.status,
       units: r.units,
       courseLength: round(r.courseLength, 4),

@@ -1315,6 +1315,13 @@ button.mini.on { border-color: var(--warn); color: var(--warn); }
 
 .version-warn { display: block; font-size: 10px; }
 
+/* Race schedule fields in setup */
+.setup-table th.col-order, .setup-table td.col-order { width: 52px; }
+.setup-table th.col-evno, .setup-table td.col-evno { width: 64px; }
+.setup-table th.col-start, .setup-table td.col-start { width: 96px; }
+.setup-table td.col-order input, .setup-table td.col-evno input { text-align: center; }
+.ev-race-time { font-variant-numeric: tabular-nums; font-size: 12px; }
+
 /* Live feed access */
 .feed-token-cell { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
 .feed-conn-head { font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--dim); margin: 18px 0 6px; }

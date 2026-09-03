@@ -1,5 +1,5 @@
 import type { EventConfig } from './config/schema.js';
-import { convertUnits, resolveRace } from './config/schema.js';
+import { convertUnits, inRunningOrder, resolveRace } from './config/schema.js';
 import { RaceEngine, type EngineHooks, type RaceStatus, type TrackerState } from './engine/race-engine.js';
 import type { Fix } from './ingest/types.js';
 import { DebugPublisher, type Publisher } from './outputs/publisher.js';
@@ -433,6 +433,10 @@ export class App {
       eventId: this.cfg.id,
       raceId,
       name: engine.race.name,
+      /** Programme number and scheduled start, for anything presenting a schedule. */
+      eventNumber: engine.race.eventNumber ?? null,
+      scheduledStart: engine.race.scheduledStart ?? null,
+      order: engine.race.order ?? null,
       status: engine.status,
       units: engine.race.units,
       courseLength: engine.course.length,
@@ -459,7 +463,7 @@ export class App {
         endDate: this.cfg.endDate,
       },
       publishEnabled: this.publishEnabled,
-      races: this.cfg.races.map((r) => this.raceSnapshot(r.id)),
+      races: inRunningOrder(this.cfg.races).map((r) => this.raceSnapshot(r.id)),
     };
   }
 }

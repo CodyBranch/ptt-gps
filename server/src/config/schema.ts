@@ -71,6 +71,31 @@ export const SnapSchema = z.object({
 export const RaceSchema = z.object({
   id: z.string(),
   name: z.string(),
+  /**
+   * The number this race is known by in the meet programme. Optional, because
+   * a road race with one start has no use for it, and a track or cross-country
+   * meet cannot be discussed without it.
+   */
+  eventNumber: z.number().int().min(0).optional(),
+  /**
+   * Scheduled start, as the operator writes it on the schedule: "09:00", local
+   * to the meet.
+   *
+   * Deliberately a wall-clock time rather than an instant. A schedule is
+   * written in the time at the venue and does not move when the server is in
+   * another zone, and a meet that slips by a day should not silently reschedule
+   * every race by 24 hours.
+   */
+  scheduledStart: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use 24-hour HH:MM, e.g. 09:00')
+    .optional(),
+  /**
+   * Where this race sits in the running order. Lower first; ties fall back to
+   * the order races appear in the file, so an event that never sets it behaves
+   * exactly as it always did.
+   */
+  order: z.number().int().optional(),
   /** Path to a KML or GeoJSON course file, relative to the event file. */
   course: z.string(),
   units: Units.default('miles'),
@@ -151,6 +176,28 @@ export type SnapConfig = z.infer<typeof SnapSchema>;
 export type FirebaseTarget = z.infer<typeof FirebaseTargetSchema>;
 
 export const MI_PER_KM = 0.621371;
+
+/**
+ * The running order of an event's races.
+ *
+ * Sorted by `order` where it is set, falling back to the position in the file
+ * so that an event which never sets one behaves exactly as it always did. The
+ * sort is stable and total, and lives here rather than in each caller because
+ * the console, the live feed and the snapshot all present this list and must
+ * not disagree about it.
+ */
+export function inRunningOrder<T extends { order?: number }>(races: readonly T[]): T[] {
+  return races
+    .map((race, index) => ({ race, index }))
+    .sort((a, b) => {
+      const ao = a.race.order ?? Number.POSITIVE_INFINITY;
+      const bo = b.race.order ?? Number.POSITIVE_INFINITY;
+      // Races without an explicit order keep their file position, after those
+      // that have one - "unordered" should not mean "first".
+      return ao === bo ? a.index - b.index : ao - bo;
+    })
+    .map(({ race }) => race);
+}
 
 /** Convert a distance between course units and another unit system. */
 export function convertUnits(value: number, from: z.infer<typeof Units>, to: z.infer<typeof Units>): number {

@@ -82,6 +82,8 @@ Sent by the server as soon as you connect. You do not have to ask.
         {
           "id": "marathon",
           "name": "Marathon",
+          "eventNumber": 12,
+          "scheduledStart": "09:30",
           "status": "live",
           "units": "miles",
           "courseLength": 26.294,
@@ -91,6 +93,8 @@ Sent by the server as soon as you connect. You do not have to ask.
         {
           "id": "wheelchair",
           "name": "Wheelchair",
+          "eventNumber": 11,
+          "scheduledStart": "09:02",
           "status": "scheduled",
           "units": "miles",
           "courseLength": 26.294,
@@ -112,8 +116,21 @@ distinguish one meet from another — names do not. "10K" is not a distinguishin
 name, two races in one meet often share a course, and the same event runs again
 next year under exactly the same title.
 
-Each race also carries `units`, `courseLength`, `courseLengthMeters` and
-`sessionId`, so you can line races up without subscribing first.
+Each race also carries `eventNumber`, `scheduledStart`, `units`,
+`courseLength`, `courseLengthMeters` and `sessionId`, so you can line races up
+without subscribing first. Where a meet uses programme numbers, `eventNumber`
+is the natural key to match races on.
+
+**Races arrive in running order** — the order the meet intends to run them,
+which is not necessarily by scheduled time and is not the order they appear in
+the event file. Present them in the order you receive them rather than sorting
+by name or start time.
+
+`scheduledStart` is a wall-clock time at the venue, deliberately not an
+instant. A schedule is written in local time and does not move because your
+server is in another zone. Combine it with the meet's `startDate` yourself if
+you need an absolute time, and be aware that a scheduled time is what was
+planned, not what happened — use `status` and `sessionId` for that.
 
 The list is of meets **loaded on the server right now**, not every meet that
 exists. A meet not yet activated, or put away after its event, will not appear.
@@ -159,6 +176,8 @@ race every few seconds.
   "race": {
     "id": "marathon",
     "name": "Marathon",
+    "eventNumber": 12,
+    "scheduledStart": "09:30",
     "status": "live",
     "units": "miles",
     "courseLength": 26.294,
@@ -210,6 +229,8 @@ race every few seconds.
 | --- | --- | --- |
 | `id` | string | Race id, unique within the meet |
 | `name` | string | Display name |
+| `eventNumber` | number \| null | The number this race carries in the meet programme, where the meet uses them. Null for a road race with one start |
+| `scheduledStart` | string \| null | Scheduled start as `"HH:MM"`, 24-hour, **local to the meet**. Null if not scheduled |
 | `status` | string | `scheduled`, `armed`, `live`, `finished` |
 | `units` | string | `miles` or `kilometers` — what `distance` and `courseLength` are in |
 | `courseLength` | number | Course length in `units` |

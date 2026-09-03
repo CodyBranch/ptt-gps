@@ -22,6 +22,16 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '0.12.0',
+    date: '2026-09-03',
+    summary: 'Races carry a programme number, a start time, and a running order.',
+    added: [
+      'A race can be given a programme number and a scheduled start in Setup, and both appear wherever races are listed - the number in front of the name, the time beside it.',
+      'A running order per race. Races are listed in it everywhere: the console, the event snapshot and the live feed. An event that sets no order keeps the order it was written in, so nothing changes for meets that do not need this.',
+      'Both fields go out on the live feed, in the meet list as well as in each race message, so a consumer can map races onto its own programme without subscribing first.',
+    ],
+  },
+  {
     version: '0.11.1',
     date: '2026-09-03',
     summary: 'Named tokens for the live feed, and who is on it.',

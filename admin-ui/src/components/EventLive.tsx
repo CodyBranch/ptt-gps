@@ -1,5 +1,6 @@
 import { toDisplay, unitAbbr } from '../api';
 import type { EventSnap, Units } from '../types';
+import { raceLabel } from '../format';
 
 /**
  * The live view of an active event — publishing state and a row per race with
@@ -76,7 +77,9 @@ export function RaceRows({
         return (
           <button key={race.raceId} className="ev-race" onClick={() => onOpenRace(race.raceId)}>
             <span className={`status-dot ${race.status}`} />
-            <span className="ev-race-name">{race.name}</span>
+            <span className="ev-race-name">{raceLabel(race)}</span>
+            {/* A scheduled start is the next thing anyone asks after the name. */}
+            {race.scheduledStart && <span className="ev-race-time dim">{race.scheduledStart}</span>}
             <span className={`ev-race-status ${race.status}`}>{race.status.toUpperCase()}</span>
             <span className="ev-race-len dim">
               {toDisplay(race.courseLength, race.units, displayUnits).toFixed(1)} {unitAbbr(displayUnits)}

@@ -175,6 +175,8 @@ describe('the meet list a consumer maps against', () => {
         {
           id: 'r1',
           name: 'Marathon',
+          eventNumber: null,
+          scheduledStart: null,
           status: 'live',
           units: 'miles',
           courseLength: 26.2,
@@ -189,5 +191,26 @@ describe('the meet list a consumer maps against', () => {
     const summary = eventSummary('e', snapshot().events[0] as never);
     expect(summary.startDate).toBeNull();
     expect(summary.endDate).toBeNull();
+  });
+});
+
+describe('the schedule fields on the wire', () => {
+  it('passes the programme number and scheduled start through to consumers', () => {
+    const snap = snapshot();
+    (snap as any).events[0].races[0].eventNumber = 12;
+    (snap as any).events[0].races[0].scheduledStart = '09:30';
+
+    expect(feedMessages(snap, NOW)[0].race.eventNumber).toBe(12);
+    expect(feedMessages(snap, NOW)[0].race.scheduledStart).toBe('09:30');
+
+    const summary = eventSummary('e', snap.events[0] as never);
+    expect(summary.races[0].eventNumber).toBe(12);
+    expect(summary.races[0].scheduledStart).toBe('09:30');
+  });
+
+  it('reports them as null when the meet does not use them', () => {
+    const [msg] = feedMessages(snapshot(), NOW);
+    expect(msg.race.eventNumber).toBeNull();
+    expect(msg.race.scheduledStart).toBeNull();
   });
 });
