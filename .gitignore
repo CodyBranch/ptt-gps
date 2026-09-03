@@ -26,3 +26,7 @@ admin-ui/public/docs/primetime-gps-manual.html
 deploy/ptt-gps.exe
 deploy/*.exe
 logs/
+
+# Rendered from ptt-gps.xml.template by install-service.ps1: the path to node
+# is a property of the machine, not of the project.
+deploy/ptt-gps.xml

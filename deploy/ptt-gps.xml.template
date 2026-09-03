@@ -1,11 +1,19 @@
 <!--
   Windows service definition for WinSW (https://github.com/winsw/winsw).
 
-  Install with deploy/install-service.ps1, which downloads WinSW next to this
-  file and registers it. %BASE% is the directory holding WinSW.exe and this
-  file - that is deploy/, so the repo root is %BASE%\..
+  This is a TEMPLATE. install-service.ps1 renders it to ptt-gps.xml, filling in
+  the path to node for this machine. The rendered file is deliberately not in
+  git: where node lives is a property of the box, not of the project.
 
-  Two things here are load-bearing:
+  %BASE% is the directory holding ptt-gps.exe and the rendered config - that is
+  deploy/, so the repo root is %BASE%\..
+
+  Three things here are load-bearing:
+
+  * The executable is an absolute path. The service runs as LocalSystem, whose
+    PATH is not the one you installed node under. A bare name resolves for you
+    interactively and then fails for the service, which reports Running while
+    nothing is ever served.
 
   * The paths are explicit. The server resolves its db and events-dir
     arguments relative to the working directory, so a service started from
@@ -22,7 +30,7 @@
   <name>Primetime GPS</name>
   <description>Live race tracking: tracker ingest, race engines, and the operator console.</description>
 
-  <executable>node</executable>
+  <executable>@@NODE@@</executable>
   <arguments>"%BASE%\..\server\dist\index.js" --db "%BASE%\..\server\data\ptt.db" --events-dir "%BASE%\..\events" --api-port 8080</arguments>
   <workingdirectory>%BASE%\..\server</workingdirectory>
 

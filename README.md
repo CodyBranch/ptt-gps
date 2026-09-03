@@ -135,7 +135,14 @@ If the download fails - a proxy, or an older TLS stack - fetch
 on any machine, copy it to the server as `deploy\ptt-gps.exe`, and re-run the
 script. It uses whatever is already there.
 
-Two details in `deploy/ptt-gps.xml` are load-bearing. The `--db` and
+The service config is generated: `install-service.ps1` renders
+`deploy/ptt-gps.xml` from `deploy/ptt-gps.xml.template`, substituting the path
+to node on that machine. The rendered file is git-ignored, so edit the template.
+
+Three details in it are load-bearing. The executable is an **absolute path**,
+because the service runs as LocalSystem, whose PATH is not the one you installed
+node under; a bare `node` resolves for you interactively and then fails for the
+service, which reports Running while nothing is ever served. The `--db` and
 `--events-dir` paths are **explicit**, because the server resolves them relative
 to the working directory: a service started from anywhere else opens an empty
 database and reports no events, which looks like losing every event rather than

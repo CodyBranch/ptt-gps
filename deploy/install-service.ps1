@@ -3,8 +3,9 @@
   Install Primetime GPS as a Windows service so it survives a reboot.
 
 .DESCRIPTION
-  Downloads WinSW next to deploy/ptt-gps.xml, registers the service and starts
-  it. Safe to re-run: it reinstalls cleanly over an existing install.
+  Downloads WinSW, renders deploy/ptt-gps.xml from the template for this
+  machine, registers the service and starts it. Safe to re-run: it reinstalls
+  cleanly over an existing install.
 
   Run from an elevated PowerShell:
       .\deploy\install-service.ps1
@@ -98,6 +99,36 @@ if ($existing) {
 
 New-Item -ItemType Directory -Force -Path (Join-Path $root 'logs') | Out-Null
 
+# --- render the config for this machine --------------------------------------
+# The service account is LocalSystem, which does not share your PATH, so the
+# path to node is resolved here rather than left for the service to look up.
+$node = (Get-Command node -ErrorAction SilentlyContinue).Source
+if (-not $node) {
+  throw 'node is not on PATH. Install Node.js, or open a new shell if you just did.'
+}
+Write-Host "Using node at $node"
+(Get-Content -Raw (Join-Path $deploy 'ptt-gps.xml.template')).Replace('@@NODE@@', $node) |
+  Set-Content -Path (Join-Path $deploy 'ptt-gps.xml') -Encoding ascii
+
+# --- is the port already taken? ----------------------------------------------
+# Our own service is gone by this point, so anything still holding the port is
+# a server someone started by hand. The new process would lose the bind and
+# die in a restart loop, while the health check below happily talks to the old
+# one - a false pass that is worse than the failure.
+$holder = $null
+try {
+  $conn = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue |
+    Select-Object -First 1
+  if ($conn) { $holder = Get-Process -Id $conn.OwningProcess -ErrorAction SilentlyContinue }
+} catch { }
+if ($holder) {
+  Write-Host ''
+  Write-Host "Port $Port is already held by $($holder.ProcessName) (PID $($holder.Id))." -ForegroundColor Red
+  Write-Host 'That is almost certainly a server started by hand. Stop it first:'
+  Write-Host "  Stop-Process -Id $($holder.Id)"
+  throw "Port $Port is in use."
+}
+
 Write-Host 'Installing service...'
 & $exe install
 if ($LASTEXITCODE -ne 0) { throw 'WinSW install failed' }
@@ -121,7 +152,28 @@ foreach ($i in 1..30) {
   } catch { }
 }
 if (-not $ok) {
-  throw "Service started but did not answer on port $Port. Check logs\ptt-gps.out.log and .err.log."
+  # Naming a log file and stopping leaves the reader to do the work. Show it.
+  Write-Host ''
+  Write-Host "Service started but nothing answered on port $Port." -ForegroundColor Red
+  Write-Host "Service state: $((Get-Service -Name 'ptt-gps' -ErrorAction SilentlyContinue).Status)"
+
+  foreach ($name in @('ptt-gps.err.log', 'ptt-gps.out.log', 'ptt-gps.wrapper.log')) {
+    $path = Join-Path $root "logs\$name"
+    if (Test-Path $path) {
+      $tail = Get-Content $path -Tail 20 -ErrorAction SilentlyContinue
+      if ($tail) {
+        Write-Host ''
+        Write-Host "--- $name ---" -ForegroundColor Yellow
+        $tail | ForEach-Object { Write-Host "  $_" }
+      }
+    }
+  }
+
+  Write-Host ''
+  Write-Host 'If the logs are empty, node itself never started - check that' -ForegroundColor Yellow
+  Write-Host "  $node"
+  Write-Host '  is readable by LocalSystem.'
+  throw 'Service did not come up.'
 }
 
 Write-Host ''
