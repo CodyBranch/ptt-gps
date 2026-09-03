@@ -29,7 +29,7 @@ const snapshot = (over: Record<string, unknown> = {}) => ({
             {
               imei: '111',
               distance: 5.5,
-              offCourse: false,
+              offCourse: 0.0012,
               suspect: false,
               gpsQuality: 'good' as const,
               lastFix: { lat: 42.3, lon: -71.1, tUtcMs: NOW - 6_000, receivedAtMs: NOW - 5_000, speedKmh: 20 },
@@ -246,5 +246,33 @@ describe('how a consumer knows the running order', () => {
     snap.events[0].races.push({ ...snap.events[0].races[0], raceId: 'r2', name: 'Half' });
     const indexes = eventSummary('e', snap.events[0] as never).races.map((r) => r.orderIndex);
     expect(indexes).toEqual([0, 1]);
+  });
+});
+
+describe('being off the course line', () => {
+  it('reports how far off, not whether off', () => {
+    // The engine measures a perpendicular distance. Treating that number as a
+    // boolean made every vehicle "off course", because none of them drive
+    // along the exact centreline of a KML trace.
+    const [msg] = feedMessages(snapshot(), NOW);
+    const pos = msg.race.roles[0].position!;
+    expect(pos.offCourseMeters).toBeCloseTo(1.9, 1); // 0.0012 miles
+    expect(pos.suspect).toBe(false);
+  });
+
+  it('leaves suspect as the judgement, at the race threshold', () => {
+    const snap = snapshot();
+    // Half a mile off the line: the engine has already decided this is bad.
+    snap.events[0].races[0].trackers[0].offCourse = 0.5;
+    snap.events[0].races[0].trackers[0].suspect = true;
+    const pos = feedMessages(snap, NOW)[0].race.roles[0].position!;
+    expect(pos.offCourseMeters).toBeCloseTo(804.7, 0);
+    expect(pos.suspect).toBe(true);
+  });
+
+  it('is null when nothing has been measured yet', () => {
+    const snap = snapshot();
+    delete (snap as any).events[0].races[0].trackers[0].offCourse;
+    expect(feedMessages(snap, NOW)[0].race.roles[0].position!.offCourseMeters).toBeNull();
   });
 });

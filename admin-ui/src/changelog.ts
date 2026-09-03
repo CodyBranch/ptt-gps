@@ -25,6 +25,9 @@ export const RELEASES: Release[] = [
     version: '0.12.0',
     date: '2026-09-03',
     summary: 'Races carry a programme number, a start time, and a running order.',
+    fixed: [
+      'The live feed reported every vehicle as off course. It was publishing a yes/no derived from a distance, and that distance is never zero - a vehicle drives in a lane, not along the centreline of a course trace. It now sends how far off the line the fix was, in metres, and leaves the verdict to the existing suspect flag, which the engine raises against the race own off-course allowance.',
+    ],
     added: [
       'A race can be given a programme number and a scheduled start in Setup, and both appear wherever races are listed - the number in front of the name, the time beside it.',
       'A running order per race. Races are listed in it everywhere: the console, the event snapshot and the live feed. An event that sets no order keeps the order it was written in, so nothing changes for meets that do not need this.',

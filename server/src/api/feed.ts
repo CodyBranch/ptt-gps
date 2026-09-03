@@ -65,9 +65,19 @@ export interface FeedPosition {
   ageS: number | null;
   /** The fix is old enough that the distance should not be trusted. */
   stale: boolean;
-  /** The tracker is not near the course line. */
-  offCourse: boolean;
-  /** The engine doubts this fix (a jump, or a bad lock). */
+  /**
+   * How far this fix was from the course line, in metres.
+   *
+   * Never exactly zero in practice - a vehicle drives in a lane, not along a
+   * centreline, and consumer GPS is good to a few metres. Read it as a
+   * magnitude, not as a yes/no: `suspect` is the flag.
+   */
+  offCourseMeters: number | null;
+  /**
+   * The fix is further off the course than the race allows (its
+   * `maxOffCourse`, 0.25 course units by default), so the distance derived
+   * from it should not be trusted. A wrong turn, a detour, or a bad lock.
+   */
   suspect: boolean;
   gpsQuality: 'good' | 'ok' | 'poor' | null;
 }
@@ -182,7 +192,8 @@ interface InternalSnapshot {
       trackers: Array<{
         imei: string;
         distance?: number | null;
-        offCourse?: boolean;
+        /** Perpendicular distance from the course line, in course units. */
+        offCourse?: number;
         suspect?: boolean;
         gpsQuality?: 'good' | 'ok' | 'poor';
         lastFix?: {
@@ -248,7 +259,10 @@ export function feedMessages(snapshot: InternalSnapshot, nowMs: number): FeedMes
                 receivedMs,
                 ageS,
                 stale: basis === null ? true : nowMs - basis > staleAfterMs,
-                offCourse: !!tracker?.offCourse,
+                offCourseMeters:
+                  typeof tracker?.offCourse === 'number'
+                    ? round(toMeters(tracker.offCourse, race.units), 1)
+                    : null,
                 suspect: !!tracker?.suspect,
                 gpsQuality: tracker?.gpsQuality ?? null,
               }
