@@ -1,5 +1,17 @@
+import type { UnitSystem } from '../config/schema.js';
 import type { RoleState, TrackerState } from '../engine/race-engine.js';
 import type { Fix } from '../ingest/types.js';
+
+/**
+ * The distance as the scoreboard shows it, with its unit.
+ *
+ * The scoreboard prints this string as-is, so the spacing is the house style
+ * rather than an accident: "1.2k" closed up, "1.2 mi" with a space. Both read
+ * correctly at a distance, which is the only thing a scoreboard is for.
+ */
+export function scoreboardDistance(value: number, units: UnitSystem): string {
+  return units === 'kilometers' ? `${value.toFixed(1)}k` : `${value.toFixed(1)} mi`;
+}
 
 /**
  * Output sink for computed race data. The Firebase implementation reproduces

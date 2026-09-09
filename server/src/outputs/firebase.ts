@@ -1,15 +1,15 @@
 import type admin from 'firebase-admin';
-import type { FirebaseTarget } from '../config/schema.js';
+import type { FirebaseTarget, UnitSystem } from '../config/schema.js';
 import type { RoleState, TrackerState } from '../engine/race-engine.js';
 import type { Fix } from '../ingest/types.js';
 import type { FirebaseHub } from './hub.js';
-import { slotSuffix, type Publisher, type PublishRecorder } from './publisher.js';
+import { scoreboardDistance, slotSuffix, type Publisher, type PublishRecorder } from './publisher.js';
 
 /**
  * Firebase RTDB publisher — reproduces the legacy write paths exactly:
  *
  * flavor "ptt" (ptt-franklin):
- *   <meet>/PTT-Scoreboard/1        { Distance<slot>: "12.3", showDistance: "Y"|"N" }
+ *   <meet>/PTT-Scoreboard/1        { Distance<slot>: "12.3 mi", showDistance: "Y"|"N" }
  *   <meet>/Meta/Clock              { distanceComplete<slot>: "12.3", showDistance: bool }
  *   <meet>/GPS/<imei>              full tracker data
  * flavor "krush" (franklin-f56f3):
@@ -24,7 +24,13 @@ export class FirebasePublisher implements Publisher {
   private db: admin.database.Database;
   private flavor: 'ptt' | 'krush';
 
-  constructor(target: FirebaseTarget, hub: FirebaseHub, private record: PublishRecorder) {
+  constructor(
+    target: FirebaseTarget,
+    hub: FirebaseHub,
+    private record: PublishRecorder,
+    /** The units distances arrive in, so the scoreboard can be told which. */
+    private outputUnits: UnitSystem = 'miles',
+  ) {
     this.name = target.connection;
     this.flavor = target.flavor;
     this.db = hub.database(target.connection); // throws when the connection is unknown
@@ -45,7 +51,11 @@ export class FirebasePublisher implements Publisher {
       const suffix = slotSuffix(role.clockSlot);
       this.update(`${meetId}/Meta/Clock`, { [`distanceComplete${suffix}`]: d1 });
       if (this.flavor === 'ptt') {
-        this.update(`${meetId}/PTT-Scoreboard/1`, { [`Distance${suffix}`]: d1 });
+        // The scoreboard carries the unit; the clock above does not, because
+        // its consumer parses that value rather than displaying it.
+        this.update(`${meetId}/PTT-Scoreboard/1`, {
+          [`Distance${suffix}`]: scoreboardDistance(distanceOut, this.outputUnits),
+        });
       }
     }
     if (this.flavor === 'krush' && role.cmd !== undefined && role.mapEvent) {

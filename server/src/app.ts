@@ -74,7 +74,7 @@ export class App {
     } else {
       for (const target of cfg.firebase) {
         try {
-          this.publishers.push(new FirebasePublisher(target, hub, recorder));
+          this.publishers.push(new FirebasePublisher(target, hub, recorder, cfg.outputUnits));
           console.log(`[${cfg.id}] firebase target "${target.connection}" (${target.flavor})`);
         } catch (err) {
           console.error(`[${cfg.id}] firebase target "${target.connection}" skipped:`, (err as Error).message);

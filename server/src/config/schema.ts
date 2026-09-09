@@ -1,6 +1,8 @@
 import { z } from 'zod';
 
 export const Units = z.enum(['miles', 'kilometers']);
+/** The value form is a schema; this is the type the rest of the server wants. */
+export type UnitSystem = z.infer<typeof Units>;
 
 export const TrackerSchema = z.object({
   imei: z.string().regex(/^\d{15}$/, 'IMEI must be 15 digits'),

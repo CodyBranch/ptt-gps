@@ -22,6 +22,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '0.12.1',
+    date: '2026-09-09',
+    summary: 'The scoreboard says which unit it is showing.',
+    changed: [
+      'Distances published to the PTT scoreboard carry their unit — `1.2k` or `1.2 mi` — rather than a bare number that means whichever the meet happens to be set to.',
+      'The clock path is deliberately unchanged: it parses that value rather than displaying it, so a unit there would be a string where a number is expected.',
+    ],
+  },
+  {
     version: '0.12.0',
     date: '2026-09-03',
     summary: 'Races carry a programme number, a start time, and a running order.',
