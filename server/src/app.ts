@@ -70,7 +70,7 @@ export class App {
     };
 
     if (cfg.firebase.length === 0 || !hub) {
-      this.publishers.push(new DebugPublisher(recorder));
+      this.publishers.push(new DebugPublisher(recorder, false, cfg.outputUnits));
     } else {
       for (const target of cfg.firebase) {
         try {
@@ -80,7 +80,7 @@ export class App {
           console.error(`[${cfg.id}] firebase target "${target.connection}" skipped:`, (err as Error).message);
         }
       }
-      if (this.publishers.length === 0) this.publishers.push(new DebugPublisher(recorder));
+      if (this.publishers.length === 0) this.publishers.push(new DebugPublisher(recorder, false, cfg.outputUnits));
     }
 
     for (const race of cfg.races) {

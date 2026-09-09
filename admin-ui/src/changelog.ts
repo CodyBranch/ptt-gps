@@ -26,8 +26,8 @@ export const RELEASES: Release[] = [
     date: '2026-09-09',
     summary: 'The scoreboard says which unit it is showing.',
     changed: [
-      'Distances published to the PTT scoreboard carry their unit — `1.2k` or `1.2 mi` — rather than a bare number that means whichever the meet happens to be set to.',
-      'The clock path is deliberately unchanged: it parses that value rather than displaying it, so a unit there would be a string where a number is expected.',
+      'Distances published to Firebase carry their unit — `1.2k` or `1.2 mi` — rather than a bare number that means whichever the meet happens to be set to.',
+      'The clock shows it too, formatted once and written to both, so two displays of one distance cannot disagree about what it says.',
     ],
   },
   {

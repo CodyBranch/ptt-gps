@@ -7,9 +7,9 @@ import type { RoleState, TrackerState } from '../src/engine/race-engine.js';
  * What actually reaches Firebase.
  *
  * The scoreboard and the clock read the same distance from two different
- * paths, and only one of them displays it verbatim. These tests exist to keep
- * that distinction: adding a unit to the scoreboard must not add one to the
- * value the clock parses.
+ * paths, and both display it, so both carry the unit. A number on a board
+ * means nothing without one, and which unit a meet is set to is not visible
+ * from the digits.
  */
 
 /** A database that records writes instead of making them. */
@@ -54,13 +54,18 @@ describe('what the scoreboard is sent', () => {
     expect(scoreboard?.value).toEqual({ Distance: '1.2k' });
   });
 
-  it('leaves the clock a bare number to parse', () => {
-    // Meta/Clock is consumed, not displayed. A unit suffix here would be a
-    // string where a number is expected, which is how a scoreboard change
-    // quietly breaks a clock.
-    for (const units of ['miles', 'kilometers'] as const) {
-      const clock = publish(units, 1.24).find((w) => w.path.includes('Meta/Clock'));
-      expect(clock?.value).toEqual({ distanceComplete: '1.2' });
+  it('sends the clock the same string as the scoreboard', () => {
+    // Two displays showing one distance should not disagree about what it
+    // says, so they are formatted once and written twice.
+    for (const [units, expected] of [
+      ['miles', '1.2 mi'],
+      ['kilometers', '1.2k'],
+    ] as const) {
+      const writes = publish(units, 1.24);
+      const clock = writes.find((w) => w.path.includes('Meta/Clock'));
+      const board = writes.find((w) => w.path.includes('PTT-Scoreboard'));
+      expect(clock?.value).toEqual({ distanceComplete: expected });
+      expect(board?.value).toEqual({ Distance: expected });
     }
   });
 

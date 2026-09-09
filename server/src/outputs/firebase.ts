@@ -10,10 +10,10 @@ import { scoreboardDistance, slotSuffix, type Publisher, type PublishRecorder } 
  *
  * flavor "ptt" (ptt-franklin):
  *   <meet>/PTT-Scoreboard/1        { Distance<slot>: "12.3 mi", showDistance: "Y"|"N" }
- *   <meet>/Meta/Clock              { distanceComplete<slot>: "12.3", showDistance: bool }
+ *   <meet>/Meta/Clock              { distanceComplete<slot>: "12.3 mi", showDistance: bool }
  *   <meet>/GPS/<imei>              full tracker data
  * flavor "krush" (franklin-f56f3):
- *   <meet>/Meta/Clock              { distanceComplete<slot>: "12.3", showDistance: bool }
+ *   <meet>/Meta/Clock              { distanceComplete<slot>: "12.3 mi", showDistance: bool }
  *   <meet>/GPSMap/<cmd>            { distance: "12.34", event: "elite_women", timestamp }
  *   <meet>/GPS/<imei>              full tracker data
  *
@@ -44,18 +44,17 @@ export class FirebasePublisher implements Publisher {
   }
 
   roleDistance(meetId: number, role: RoleState, distanceOut: number, state: TrackerState): void {
-    const d1 = distanceOut.toFixed(1);
     const d2 = distanceOut.toFixed(2);
+    // Both displays show the unit: a distance on a board or a clock means
+    // nothing without it, and which one a meet is set to is not visible from
+    // the number.
+    const shown = scoreboardDistance(distanceOut, this.outputUnits);
 
     if (role.clockSlot !== undefined) {
       const suffix = slotSuffix(role.clockSlot);
-      this.update(`${meetId}/Meta/Clock`, { [`distanceComplete${suffix}`]: d1 });
+      this.update(`${meetId}/Meta/Clock`, { [`distanceComplete${suffix}`]: shown });
       if (this.flavor === 'ptt') {
-        // The scoreboard carries the unit; the clock above does not, because
-        // its consumer parses that value rather than displaying it.
-        this.update(`${meetId}/PTT-Scoreboard/1`, {
-          [`Distance${suffix}`]: scoreboardDistance(distanceOut, this.outputUnits),
-        });
+        this.update(`${meetId}/PTT-Scoreboard/1`, { [`Distance${suffix}`]: shown });
       }
     }
     if (this.flavor === 'krush' && role.cmd !== undefined && role.mapEvent) {

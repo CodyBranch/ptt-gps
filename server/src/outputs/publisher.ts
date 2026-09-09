@@ -36,12 +36,19 @@ export type PublishRecorder = (target: string, path: string, value: unknown) => 
 /** Dev/dry-run publisher: logs writes and records them via the recorder. */
 export class DebugPublisher implements Publisher {
   readonly name = 'debug';
-  constructor(private record: PublishRecorder, private verbose = false) {}
+  constructor(
+    private record: PublishRecorder,
+    private verbose = false,
+    /** Matches the Firebase publisher so the log shows what would be sent. */
+    private outputUnits: UnitSystem = 'miles',
+  ) {}
 
   roleDistance(meetId: number, role: RoleState, distanceOut: number, state: TrackerState): void {
     if (this.verbose) console.log(`[publish] ${meetId} role=${role.key} dist=${distanceOut.toFixed(2)} (${state.label})`);
     if (role.clockSlot !== undefined) {
-      this.record('debug', `${meetId}/Meta/Clock`, { [`distanceComplete${slotSuffix(role.clockSlot)}`]: distanceOut.toFixed(1) });
+      this.record('debug', `${meetId}/Meta/Clock`, {
+        [`distanceComplete${slotSuffix(role.clockSlot)}`]: scoreboardDistance(distanceOut, this.outputUnits),
+      });
     }
     if (role.cmd !== undefined) {
       this.record('debug', `${meetId}/GPSMap/${role.cmd}`, { distance: distanceOut.toFixed(2), event: role.mapEvent, timestamp: Date.now() });
