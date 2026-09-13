@@ -47,6 +47,7 @@ export function RolesPanel({
   readonly,
   ask,
   onActivate,
+  onSetAuto,
   onSetSource,
   onVehicle,
   onMoveTracker,
@@ -65,6 +66,8 @@ export function RolesPanel({
   readonly?: boolean;
   ask: (req: ConfirmRequest) => void;
   onActivate: (roleKey: string, imei: string) => void;
+  /** Follow whichever tracker is furthest along, or go back to choosing by hand. */
+  onSetAuto: (roleKey: string, on: boolean) => void;
   onSetSource: (roleKey: string, source: 'gps' | 'splits') => void;
   onVehicle: (roleKey: string, vehicle: string) => void;
   onMoveTracker: (imei: string, vehicle: string) => void;
@@ -110,6 +113,24 @@ export function RolesPanel({
           });
         };
 
+        /** Let the vehicle's furthest-along tracker publish, switching on its own. */
+        const toggleAuto = () => {
+          if (!role) return;
+          // Switching off changes nothing that is publishing, so it needs no
+          // confirmation; switching on can move the output straight away.
+          if (role.autoActive) return onSetAuto(role.key, false);
+          ask({
+            title: `Follow the furthest tracker on ${vehicle.label}?`,
+            body:
+              `${role.label} publishes from whichever of this vehicle's trackers is furthest along the course, ` +
+              'switching on its own. A tracker flagged as off course is never chosen, and one has to pull ' +
+              'clearly ahead before it takes over, so two side by side do not trade places. Picking a ' +
+              'tracker by hand turns this off.',
+            confirmLabel: 'Follow furthest',
+            onConfirm: () => onSetAuto(role.key, true),
+          });
+        };
+
         /** Put this vehicle on a role, displacing whoever was on it. */
         const assign = (roleKey: string) => {
           if (roleKey === '') {
@@ -140,9 +161,35 @@ export function RolesPanel({
         };
 
         return (
-          <div key={vehicle.key} className={`role-card ${activeStale ? 'alert' : ''} ${role ? '' : 'idle'}`}>
+          <div
+            key={vehicle.key}
+            className={`role-card ${activeStale ? 'alert' : ''} ${role ? '' : 'idle'} ${
+              vehicle.trackers.length > 1 ? 'multi' : ''
+            }`}
+          >
             <div className="role-head">
               <span className="role-label">{vehicle.label || vehicle.key}</span>
+              {role &&
+                vehicle.trackers.length > 1 &&
+                (readonly ? (
+                  role.autoActive && (
+                    <span className="auto-badge" title="Following whichever tracker is furthest along">
+                      AUTO
+                    </span>
+                  )
+                ) : (
+                  <button
+                    className={`auto-toggle ${role.autoActive ? 'on' : ''}`}
+                    title={
+                      role.autoActive
+                        ? 'Automatic: following whichever tracker is furthest along. Click to choose by hand.'
+                        : 'Choosing by hand. Click to follow whichever tracker is furthest along.'
+                    }
+                    onClick={toggleAuto}
+                  >
+                    AUTO
+                  </button>
+                ))}
               {role && !readonly && (
                 <span className="source-toggle" title="Which feed publishes this role's distance">
                   <button className={onSplits ? '' : 'on'} onClick={() => switchSource('gps')}>
@@ -187,7 +234,7 @@ export function RolesPanel({
               )}
             </div>
 
-            {activeStale && vehicle.trackers.length > 1 && (
+            {activeStale && vehicle.trackers.length > 1 && !role?.autoActive && (
               <div className="failover-hint">Active tracker stale — switch to backup?</div>
             )}
             {roleSim && (
@@ -224,24 +271,50 @@ export function RolesPanel({
                 });
               };
 
+              /** Publish from this tracker - which, on automatic, means taking over by hand. */
+              const pick = () => {
+                if (readonly || !role || isActive) return;
+                if (!role.autoActive) return onActivate(role.key, imei);
+                ask({
+                  title: `Publish ${role.label} from ${t?.label ?? imei}?`,
+                  body: 'This turns off automatic selection for this vehicle, so it stays on this tracker until you change it.',
+                  confirmLabel: 'Use this tracker',
+                  onConfirm: () => onActivate(role.key, imei),
+                });
+              };
+              const multi = vehicle.trackers.length > 1;
+
               return (
                 <div
                   key={imei}
                   className={`role-tracker ${isActive ? 'active' : ''} ${
                     imei === selectedImei ? 'selected' : ''
                   }`}
-                  onClick={() => !readonly && role && !isActive && onActivate(role.key, imei)}
+                  onClick={pick}
                   title={
                     role
                       ? isActive
-                        ? 'Publishing this role'
-                        : 'Make this the publishing tracker'
+                        ? role.autoActive
+                          ? `Reporting ${role.label} - chosen automatically as the furthest along`
+                          : `Reporting ${role.label}`
+                        : role.autoActive
+                          ? 'Backup. Click to report from this one instead, which turns automatic off'
+                          : 'Backup. Click to report from this one instead'
                       : 'This vehicle is not covering a role'
                   }
                 >
                   <span className={`radio ${isActive ? 'on' : ''}`} />
                   <span className="t-swatch" style={{ background: colors[imei] }} />
-                  <span className="t-name">{t?.label ?? imei}</span>
+                  <span className="t-name">
+                    <span className="t-name-text">{t?.label ?? imei}</span>
+                    {/* A word, not just a filled dot: on a two-tracker vehicle
+                        the dot was the only thing saying which one reported. */}
+                    {role && multi && (isActive ? (
+                      <span className="t-role-badge reporting">{role.autoActive ? 'REPORTING · AUTO' : 'REPORTING'}</span>
+                    ) : (
+                      <span className="t-role-badge backup">backup</span>
+                    ))}
+                  </span>
                   <BatteryBar tracker={t} />
                   <GpsChip tracker={t} />
                   <span className="t-dist">

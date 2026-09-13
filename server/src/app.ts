@@ -55,6 +55,14 @@ export class App {
   private publishContextSession: number | null = null;
   /** Master output switch — owned globally (index.ts), mirrored here. */
   publishEnabled = true;
+  /**
+   * The operator has hidden the distance on the scoreboard and clock.
+   * Distances keep publishing underneath; only showDistance is held off.
+   * Persisted, because recovering a race after a restart re-asserts
+   * showDistance and would otherwise put back a number someone deliberately
+   * took down.
+   */
+  distanceHidden = false;
   private out: AppEvents;
   /** Per-IMEI comms health from the shared gate (gaps/rejections). */
   private healthFn: (imei: string) => unknown;
@@ -90,6 +98,20 @@ export class App {
         `[${cfg.id}] race "${race.id}": course ${engine.course.length.toFixed(2)} ${race.units}, ` +
           `${engine.trackers.size} trackers, ${engine.roles.length} roles`,
       );
+    }
+
+    this.distanceHidden = store.getSetting(`distance-hidden:${cfg.id}`) === '1';
+
+    // Automatic selection is an operator decision taken during a race; a
+    // restart mid-race must not quietly put every role back on its primary.
+    try {
+      const stored = JSON.parse(store.getSetting(`auto-active:${cfg.id}`) ?? '[]') as Array<[string, string]>;
+      for (const [raceId, roleKey] of stored) {
+        const role = this.engines.get(raceId)?.roles.find((r) => r.key === roleKey);
+        if (role) role.autoActive = true;
+      }
+    } catch {
+      // A corrupt setting just means nothing starts on automatic.
     }
   }
 
@@ -196,7 +218,7 @@ export class App {
         engine.setStatus('live', by);
         if (firstLive && this.publishEnabled) {
           this.publishContextSession = sessionId;
-          for (const p of this.publishers) p.showDistance(this.cfg.meetId, true);
+          for (const p of this.publishers) p.showDistance(this.cfg.meetId, !this.distanceHidden);
         }
         break;
       }
@@ -307,7 +329,7 @@ export class App {
     }
     if (recovered > 0 && this.publishEnabled) {
       this.publishContextSession = this.sessions.values().next().value ?? null;
-      for (const p of this.publishers) p.showDistance(this.cfg.meetId, true);
+      for (const p of this.publishers) p.showDistance(this.cfg.meetId, !this.distanceHidden);
     }
     return recovered;
   }
@@ -328,11 +350,49 @@ export class App {
     }
     this.publishEnabled = enabled;
     if (enabled && anyLive) {
-      for (const p of this.publishers) p.showDistance(this.cfg.meetId, true);
+      for (const p of this.publishers) p.showDistance(this.cfg.meetId, !this.distanceHidden);
     }
     for (const sessionId of this.sessions.values()) {
       this.store.addSessionEvent(sessionId, 'publishing', { enabled, by });
     }
+  }
+
+  /** Hide or show the distance on the scoreboard and clock, without stopping publishing. */
+  setDistanceHidden(hidden: boolean, by?: string): void {
+    if (hidden === this.distanceHidden) return;
+    this.distanceHidden = hidden;
+    this.store.setSetting(`distance-hidden:${this.cfg.id}`, hidden ? '1' : '0');
+    // Written only while a race runs. Outside one showDistance is already off,
+    // and turning it on would put up a distance nothing is updating; the
+    // preference is kept and applied when the next race starts.
+    if (this.publishEnabled && this.sessions.size > 0) {
+      this.publishContextSession = this.sessions.values().next().value ?? null;
+      for (const p of this.publishers) p.showDistance(this.cfg.meetId, !hidden);
+    }
+    for (const sessionId of this.sessions.values()) {
+      this.store.addSessionEvent(sessionId, 'distance-visibility', { hidden, by });
+    }
+  }
+
+  /** Put a role on or off automatic tracker selection, and remember it. */
+  setAutoActive(raceId: string, roleKey: string, on: boolean, by?: string): void {
+    const engine = this.engines.get(raceId);
+    if (!engine) throw new Error(`Unknown race: ${raceId}`);
+    engine.setAutoActive(roleKey, on, by);
+    this.persistAutoActive();
+  }
+
+  /**
+   * Save which roles are on automatic, read back from the engines themselves -
+   * so a manual pick, which switches automatic off inside the engine, is
+   * captured the same way as the toggle.
+   */
+  persistAutoActive(): void {
+    const on: Array<[string, string]> = [];
+    for (const [raceId, engine] of this.engines) {
+      for (const role of engine.roles) if (role.autoActive) on.push([raceId, role.key]);
+    }
+    this.store.setSetting(`auto-active:${this.cfg.id}`, JSON.stringify(on));
   }
 
   /**
@@ -463,6 +523,7 @@ export class App {
         endDate: this.cfg.endDate,
       },
       publishEnabled: this.publishEnabled,
+      distanceHidden: this.distanceHidden,
       races: inRunningOrder(this.cfg.races).map((r) => this.raceSnapshot(r.id)),
     };
   }

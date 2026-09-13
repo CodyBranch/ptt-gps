@@ -446,6 +446,9 @@ export default function App() {
         readonly={viewer}
         ask={ask}
         onActivate={(roleKey, imei) => api.setActive(r.eventId, r.raceId, roleKey, imei).catch(oops('Failover failed'))}
+        onSetAuto={(roleKey, on) =>
+          api.setAutoActive(r.eventId, r.raceId, roleKey, on).catch(oops('Automatic selection failed'))
+        }
         onSetSource={(roleKey, source) => api.setSource(r.eventId, r.raceId, roleKey, source).catch(oops('Source switch failed'))}
         onVehicle={(roleKey, vehicle) =>
           api.setVehicle(r.eventId, r.raceId, roleKey, vehicle).catch(oops('Reassignment failed'))
@@ -837,6 +840,32 @@ export default function App() {
             </span>
           )}
           {!viewer ? (
+            <>
+            {/* Separate from the publishing switch below: this only tells the
+                scoreboard and clock whether to show the number. Distances keep
+                flowing, so showing it again is immediate. */}
+            <button
+              className={`publish-toggle distance ${ev.distanceHidden ? 'off' : 'on'}`}
+              title={
+                ev.distanceHidden
+                  ? 'showDistance is off: the scoreboard and clock are not showing the distance. Distances keep publishing.'
+                  : 'showDistance is on while a race is live.'
+              }
+              onClick={() => {
+                const hide = !ev.distanceHidden;
+                ask({
+                  title: hide ? `Hide the distance for ${ev.event.name}?` : `Show the distance for ${ev.event.name}?`,
+                  body: hide
+                    ? 'Sets showDistance off in Firebase, so the scoreboard and clock stop showing it. Distances keep publishing underneath, so showing it again is immediate.'
+                    : 'Sets showDistance back on while a race is live. With nothing live, it takes effect when the next race starts.',
+                  confirmLabel: hide ? 'Hide distance' : 'Show distance',
+                  danger: hide,
+                  onConfirm: () => api.setDistanceHidden(ev.event.id, hide).catch(oops('Distance visibility failed')),
+                });
+              }}
+            >
+              {ev.distanceHidden ? 'DISTANCE HIDDEN' : 'DISTANCE SHOWN'}
+            </button>
             <button
               className={`publish-toggle ${ev.publishEnabled ? 'on' : 'off'}`}
               title={`Output switch for ${ev.event.name} only`}
@@ -855,6 +884,7 @@ export default function App() {
             >
               {ev.publishEnabled ? '⬆ PUBLISHING' : '⛔ OUTPUTS OFF'}
             </button>
+            </>
           ) : (
             !ev.publishEnabled && <span className="publish-toggle off">⛔ OUTPUTS OFF</span>
           )}

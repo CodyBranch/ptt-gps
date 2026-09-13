@@ -509,6 +509,8 @@ export function startApi(
       const engine = app.engines.get(req.params.raceId as string);
       if (!engine) throw new Error('unknown race');
       engine.setActive(req.params.roleKey as string, req.body.imei, req.operator);
+      // A hand pick switches automatic selection off, which has to survive a restart.
+      app.persistAutoActive();
       broadcast('race', app.raceSnapshot(req.params.raceId as string));
     }),
   );
@@ -520,6 +522,15 @@ export function startApi(
       const engine = app.engines.get(req.params.raceId as string);
       if (!engine) throw new Error('unknown race');
       engine.setSource(req.params.roleKey as string, req.body.source, req.operator);
+      broadcast('race', app.raceSnapshot(req.params.raceId as string));
+    }),
+  );
+
+  ex.post(
+    '/api/events/:eventId/races/:raceId/roles/:roleKey/auto',
+    act((req) => {
+      const app = eventApp(req);
+      app.setAutoActive(req.params.raceId as string, req.params.roleKey as string, req.body?.on === true, req.operator);
       broadcast('race', app.raceSnapshot(req.params.raceId as string));
     }),
   );
@@ -546,6 +557,15 @@ export function startApi(
     '/api/events/:eventId/publishing',
     act((req) => {
       ctx.setPublishing(req.params.eventId as string, !!req.body.enabled, (req as OpRequest).operator);
+    }),
+  );
+
+  ex.post(
+    '/api/events/:eventId/distance-visibility',
+    act((req) => {
+      const app = eventApp(req);
+      app.setDistanceHidden(req.body?.hidden === true, (req as OpRequest).operator);
+      broadcastSnapshot();
     }),
   );
 

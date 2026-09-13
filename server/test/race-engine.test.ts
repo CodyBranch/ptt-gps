@@ -448,3 +448,106 @@ describe('RaceEngine', () => {
     expect(engine.trackers.get(LEAD_A)!.speedCalMph).toBeCloseTo(12, 0);
   });
 });
+
+/** A fix moved perpendicular off the course line, far enough to be flagged. */
+function offCourseFix(engine: RaceEngine, imei: string, dMiles: number, tUtcMs: number, offMiles: number): Fix {
+  const f = fixAt(engine, imei, dMiles, tUtcMs);
+  const p = turf.destination([f.lon, f.lat], offMiles, 0, { units: 'miles' });
+  return { ...f, lon: p.geometry.coordinates[0], lat: p.geometry.coordinates[1] };
+}
+
+describe('automatic tracker selection', () => {
+  const live = (cfg = makeConfig()) => {
+    const ctx = makeEngine(cfg);
+    ctx.engine.setStatus('armed');
+    ctx.engine.setStatus('live');
+    return ctx;
+  };
+  const lead = (engine: RaceEngine) => engine.roles.find((r) => r.key === 'lead')!;
+
+  it('is off by default, so a vehicle behaves as it always did', () => {
+    const { engine } = live();
+    engine.onFix(fixAt(engine, LEAD_A, 0.2, T0));
+    engine.onFix(fixAt(engine, LEAD_B, 0.4, T0 + 1000));
+    expect(lead(engine).autoActive).toBe(false);
+    expect(lead(engine).activeImei).toBe(LEAD_A);
+  });
+
+  it('takes the furthest tracker, and publishes it on the fix that put it in front', () => {
+    const { engine, published } = live();
+    engine.setAutoActive('lead', true, 'op');
+    engine.onFix(fixAt(engine, LEAD_A, 0.2, T0));
+    engine.onFix(fixAt(engine, LEAD_B, 0.4, T0 + 1000));
+    expect(lead(engine).activeImei).toBe(LEAD_B);
+    // Elected before publishing, so LEAD_B's own fix is the one that went out
+    // rather than waiting for its next report.
+    expect(published.map((p) => p.imei)).toEqual([LEAD_A, LEAD_B]);
+  });
+
+  it('does not hand over for a lead inside the margin', () => {
+    // Two trackers on one vehicle report a few metres apart on independent
+    // schedules; the strict maximum would swap them on nearly every report.
+    const { engine, events } = live();
+    engine.setAutoActive('lead', true, 'op');
+    engine.onFix(fixAt(engine, LEAD_A, 0.3, T0));
+    engine.onFix(fixAt(engine, LEAD_B, 0.305, T0 + 1000));
+    expect(lead(engine).activeImei).toBe(LEAD_A);
+    expect(events.filter((e) => e.type === 'active-tracker')).toHaveLength(0);
+
+    engine.onFix(fixAt(engine, LEAD_B, 0.34, T0 + 11_000));
+    expect(lead(engine).activeImei).toBe(LEAD_B);
+  });
+
+  it('never chooses a tracker flagged as off course, however far along it reads', () => {
+    const { engine } = live();
+    engine.setAutoActive('lead', true, 'op');
+    engine.onFix(fixAt(engine, LEAD_A, 0.3, T0));
+    // Half a mile off the line: its snapped distance is ahead, and untrustworthy.
+    engine.onFix(offCourseFix(engine, LEAD_B, 0.45, T0 + 1000, 0.5));
+    expect(engine.trackers.get(LEAD_B)!.suspect).toBe(true);
+    expect(lead(engine).activeImei).toBe(LEAD_A);
+  });
+
+  it('moves off the reporting tracker when it goes off course, even onto one behind', () => {
+    const { engine } = live();
+    engine.setAutoActive('lead', true, 'op');
+    engine.onFix(fixAt(engine, LEAD_A, 0.4, T0));
+    engine.onFix(fixAt(engine, LEAD_B, 0.35, T0 + 1000));
+    expect(lead(engine).activeImei).toBe(LEAD_A);
+
+    engine.onFix(offCourseFix(engine, LEAD_A, 0.45, T0 + 10_000, 0.5));
+    expect(lead(engine).activeImei).toBe(LEAD_B);
+  });
+
+  it('elects the moment it is switched on, and says it chose automatically', () => {
+    const { engine, events } = live();
+    engine.onFix(fixAt(engine, LEAD_A, 0.2, T0));
+    engine.onFix(fixAt(engine, LEAD_B, 0.4, T0 + 1000));
+    expect(lead(engine).activeImei).toBe(LEAD_A);
+
+    engine.setAutoActive('lead', true, 'op');
+    expect(lead(engine).activeImei).toBe(LEAD_B);
+    expect(events.find((e) => e.type === 'auto-active')?.payload).toMatchObject({ role: 'lead', on: true });
+    expect(events.find((e) => e.type === 'active-tracker')?.payload).toMatchObject({ to: LEAD_B, auto: true });
+  });
+
+  it('a hand pick turns automatic off, so the next fix does not undo it', () => {
+    const { engine } = live();
+    engine.setAutoActive('lead', true, 'op');
+    engine.onFix(fixAt(engine, LEAD_A, 0.2, T0));
+    engine.onFix(fixAt(engine, LEAD_B, 0.4, T0 + 1000));
+    expect(lead(engine).activeImei).toBe(LEAD_B);
+
+    engine.setActive('lead', LEAD_A, 'op');
+    expect(lead(engine).autoActive).toBe(false);
+    engine.onFix(fixAt(engine, LEAD_B, 0.6, T0 + 11_000));
+    expect(lead(engine).activeImei).toBe(LEAD_A);
+  });
+
+  it('does nothing before the race is racing, when there are no distances', () => {
+    const { engine } = makeEngine();
+    engine.setAutoActive('lead', true, 'op');
+    engine.onFix(fixAt(engine, LEAD_B, 0.4, T0));
+    expect(lead(engine).activeImei).toBe(LEAD_A);
+  });
+});

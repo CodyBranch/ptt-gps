@@ -22,6 +22,18 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '0.13.0',
+    date: '2026-09-13',
+    summary: 'Which tracker is reporting, an automatic choice between them, and a switch for the distance display.',
+    added: [
+      "AUTO on any vehicle carrying more than one tracker: the role reports from whichever is furthest along the course and switches on its own. A tracker flagged as off course is never chosen, and one has to lead by about 16 m before it takes over, so two trackers side by side do not trade places. Picking a tracker by hand turns it off, and it survives a restart.",
+      "A Distance Shown / Hidden switch beside Publishing. It sets showDistance in Firebase without stopping anything publishing underneath, so showing the distance again is immediate. A hidden distance stays hidden across a restart: recovering a live race no longer puts it back up.",
+    ],
+    fixed: [
+      "It is obvious which of a vehicle's trackers is reporting: a REPORTING badge, a green edge and a tint, with the others marked backup. The highlight had never worked - its rule named classes the markup did not use - so a filled dot was the only sign.",
+    ],
+  },
+  {
     version: '0.12.1',
     date: '2026-09-09',
     summary: 'The scoreboard says which unit it is showing.',

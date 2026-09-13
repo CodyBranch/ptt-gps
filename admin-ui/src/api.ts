@@ -38,6 +38,10 @@ export const api = {
   setActive: (eventId: string, raceId: string, roleKey: string, imei: string) =>
     post(`/api/events/${eventId}/races/${raceId}/roles/${roleKey}/active`, { imei }),
 
+  /** Follow whichever tracker is furthest along, or go back to choosing by hand. */
+  setAutoActive: (eventId: string, raceId: string, roleKey: string, on: boolean) =>
+    post(`/api/events/${eventId}/races/${raceId}/roles/${roleKey}/auto`, { on }),
+
   setVehicle: (eventId: string, raceId: string, roleKey: string, vehicle: string) =>
     post(`/api/events/${eventId}/races/${raceId}/roles/${roleKey}/vehicle`, { vehicle }),
 
@@ -81,6 +85,8 @@ export const api = {
     getJson(`/api/events/${eventId}/races/${raceId}/course`),
 
   setPublishing: (eventId: string, enabled: boolean) => post(`/api/events/${eventId}/publishing`, { enabled }),
+  setDistanceHidden: (eventId: string, hidden: boolean) =>
+    post(`/api/events/${eventId}/distance-visibility`, { hidden }),
 
   // --- events ---
   events: (): Promise<{ loaded: string[]; events: import('./types').EventListing[] }> => getJson('/api/events'),

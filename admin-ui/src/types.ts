@@ -58,6 +58,8 @@ export interface RoleState {
   vehicle: string;
   trackers: string[];
   activeImei: string;
+  /** Following whichever of the vehicle's trackers is furthest along. */
+  autoActive?: boolean;
   /** Which feed publishes the role's headline distance. */
   source: 'gps' | 'splits';
   cmd?: number;
@@ -97,6 +99,8 @@ export interface EventSnap {
   event: EventMeta;
   /** Per-event master output switch. */
   publishEnabled: boolean;
+  /** showDistance held off in Firebase, while distances keep publishing. */
+  distanceHidden?: boolean;
   races: RaceSnap[];
 }
 

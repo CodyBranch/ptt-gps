@@ -368,7 +368,11 @@ export const MANUAL: { title: string; subtitle: string; sections: Section[] } = 
         { t: 'h3', text: 'A tracker has gone quiet — switch to the backup' },
         {
           t: 'p',
-          text: 'Click any other tracker on the vehicle card to make it the publishing one. The card warns you when the active tracker has gone stale. Backups are computed all along, so the one you switch to already has a warm window and the right distance — the handover is seamless.',
+          text: 'On a vehicle carrying more than one tracker, the one publishing is marked **REPORTING** and the others **backup**. Click a backup to make it the reporting one. The card warns you when the reporting tracker has gone stale. Backups are computed all along, so the one you switch to already has a warm window and the right distance — the handover is seamless.',
+        },
+        {
+          t: 'p',
+          text: 'Or press **AUTO** on the card and let the vehicle choose for itself: it reports from whichever tracker is furthest along the course, switching on its own. A tracker flagged as off course is never chosen, and one has to lead by about 16 m before it takes over, so two trackers side by side do not trade places. Clicking a tracker by hand turns AUTO off for that vehicle. It is remembered across a restart.',
         },
         { t: 'h3', text: 'A tracker is on the wrong bike — move it' },
         { t: 'shot', src: 'race-move-tracker.png', caption: 'The ⇄ control moves a tracker to another vehicle.' },
@@ -391,6 +395,11 @@ export const MANUAL: { title: string; subtitle: string; sections: Section[] } = 
         {
           t: 'p',
           text: 'The **⏱** toggle on a vehicle card switches that role to publishing from the external split-time feed instead of GPS. Tracker data keeps flowing and keeps being recorded; only the headline distance changes source.',
+        },
+        { t: 'h3', text: 'Take the distance off the board — hide it' },
+        {
+          t: 'p',
+          text: '**DISTANCE SHOWN** beside the publishing switch sets showDistance in Firebase, which is what tells the scoreboard and clock whether to display the number. Hiding it leaves everything else publishing, so showing it again is immediate. With no race live it only records the choice, which applies when the next race starts, and a hidden distance stays hidden across a restart.',
         },
         {
           t: 'note',

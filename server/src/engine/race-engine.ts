@@ -29,6 +29,12 @@ export interface RoleState extends RoleConfig {
   /** Undefined while no vehicle is covering the role. */
   activeImei?: string;
   /**
+   * Choose the active tracker automatically: whichever of the vehicle's
+   * trackers is furthest along the course. Off until an operator turns it on,
+   * and turned off again by picking a tracker by hand.
+   */
+  autoActive?: boolean;
+  /**
    * Which feed publishes this role's headline distance: the active tracker's
    * GPS (normal), or the external split-time feed (when GPS is unusable).
    */
@@ -53,6 +59,15 @@ export interface EngineHooks {
  * a meet resets cleanly.
  */
 export class RaceEngine {
+  /**
+   * How far a tracker must lead the current one, in course units, before
+   * automatic selection hands it the role: about 16 m on a course measured in
+   * miles, 10 m in kilometres. Two trackers on one vehicle sit within a few
+   * metres of each other, and below this they would trade the role on every
+   * report.
+   */
+  static readonly AUTO_MARGIN = 0.01;
+
   readonly race: RaceConfig;
   readonly course: Course;
   readonly snap: SnapConfig;
@@ -81,7 +96,7 @@ export class RaceEngine {
         window: initialWindow(snap, this.course.length),
       });
     }
-    this.roles = roles.map((r) => ({ ...r, activeImei: r.trackers[0], source: 'gps' as const }));
+    this.roles = roles.map((r) => ({ ...r, activeImei: r.trackers[0], source: 'gps' as const, autoActive: false }));
   }
 
   /**
@@ -137,7 +152,7 @@ export class RaceEngine {
       const old = prev.get(r.key);
       const activeImei =
         old?.activeImei && r.trackers.includes(old.activeImei) ? old.activeImei : r.trackers[0];
-      return { ...r, activeImei, source: old?.source ?? ('gps' as const) };
+      return { ...r, activeImei, source: old?.source ?? ('gps' as const), autoActive: old?.autoActive ?? false };
     });
     this.roles.length = 0;
     this.roles.push(...merged);
@@ -190,6 +205,15 @@ export class RaceEngine {
     };
 
     this.hooks.onTrackerUpdate(this.race.id, state);
+
+    // A role on automatic follows whichever of its trackers is furthest along.
+    // Decided before publishing, so a fix that puts its own tracker in front
+    // is the one that goes out.
+    if (racing) {
+      for (const role of this.roles) {
+        if (role.autoActive && role.trackers.includes(fix.imei)) this.electActive(role);
+      }
+    }
 
     if (this.status === 'live') {
       for (const role of this.roles) {
@@ -254,6 +278,7 @@ export class RaceEngine {
     role.trackers = vehicle.trackers;
     role.activeImei = vehicle.trackers[0];
     this.hooks.onSessionEvent(this.race.id, 'role-vehicle', { role: roleKey, from, to: vehicleKey, by });
+    if (role.autoActive) this.electActive(role);
     const state = this.trackers.get(role.activeImei);
     if (state) this.hooks.onTrackerUpdate(this.race.id, state);
   }
@@ -289,6 +314,7 @@ export class RaceEngine {
       if (!role.activeImei || !role.trackers.includes(role.activeImei)) {
         role.activeImei = role.trackers[0];
       }
+      if (role.autoActive) this.electActive(role);
     }
     this.hooks.onSessionEvent(this.race.id, 'tracker-moved', { imei, from, to: toVehicleKey || null, by });
     const state = this.trackers.get(imei);
@@ -307,9 +333,64 @@ export class RaceEngine {
     if (!role.trackers.includes(imei)) {
       throw new Error(`Tracker ${imei} is not in role ${roleKey}`);
     }
+    // A deliberate pick overrides automatic selection; otherwise the next fix
+    // would quietly undo what the operator just chose.
+    if (role.autoActive) {
+      role.autoActive = false;
+      this.hooks.onSessionEvent(this.race.id, 'auto-active', { role: roleKey, on: false, by });
+    }
     const prev = role.activeImei;
     role.activeImei = imei;
     this.hooks.onSessionEvent(this.race.id, 'active-tracker', { role: roleKey, from: prev, to: imei, by });
+  }
+
+  /**
+   * Turn automatic selection on or off for a role.
+   *
+   * Turning it on elects straight away rather than at the next fix, so the
+   * operator sees the choice it makes.
+   */
+  setAutoActive(roleKey: string, on: boolean, by?: string): void {
+    const role = this.roles.find((r) => r.key === roleKey);
+    if (!role) throw new Error(`Unknown role: ${roleKey}`);
+    if (!!role.autoActive === on) return;
+    role.autoActive = on;
+    this.hooks.onSessionEvent(this.race.id, 'auto-active', { role: roleKey, on, by });
+    if (on) this.electActive(role);
+  }
+
+  /**
+   * Make the furthest-along usable tracker the active one.
+   *
+   * Two things stop this simply taking the maximum. A fix the engine has
+   * flagged suspect is further off the course than the race allows, and its
+   * distance is exactly the number not to trust, so it cannot win. And two
+   * trackers on one vehicle report within a few metres of each other on
+   * independent schedules: the strict maximum would hand the role back and
+   * forth every few seconds and let the published distance step backwards. A
+   * challenger has to lead by AUTO_MARGIN - unless the current tracker is no
+   * longer usable at all, in which case the best one simply takes over.
+   */
+  private electActive(role: RoleState): void {
+    const usable = (imei: string | undefined): TrackerState | undefined => {
+      if (!imei || !role.trackers.includes(imei)) return undefined;
+      const s = this.trackers.get(imei);
+      return s && s.distance !== undefined && !s.suspect ? s : undefined;
+    };
+
+    let best: TrackerState | undefined;
+    for (const imei of role.trackers) {
+      const s = usable(imei);
+      if (s && (!best || s.distance! > best.distance!)) best = s;
+    }
+    if (!best || best.imei === role.activeImei) return;
+
+    const current = usable(role.activeImei);
+    if (current && best.distance! - current.distance! < RaceEngine.AUTO_MARGIN) return;
+
+    const from = role.activeImei;
+    role.activeImei = best.imei;
+    this.hooks.onSessionEvent(this.race.id, 'active-tracker', { role: role.key, from, to: best.imei, auto: true });
   }
 
   /**

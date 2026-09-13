@@ -182,6 +182,17 @@ aside {
   font-weight: 800; cursor: pointer; letter-spacing: 0.5px;
 }
 .source-toggle button.on { background: var(--accent); color: #fff; }
+/* Automatic furthest-tracker selection, beside the feed switch it relates to. */
+.auto-toggle {
+  margin-left: auto; background: var(--panel2); color: var(--dim); border: 1px solid var(--border);
+  border-radius: 5px; padding: 2px 7px; font-size: 10px; font-weight: 800; letter-spacing: 0.5px; cursor: pointer;
+}
+.auto-toggle.on { background: var(--ok); color: #04130b; border-color: var(--ok); }
+.role-head .auto-toggle + .source-toggle { margin-left: 6px; }
+.auto-badge {
+  margin-left: auto; font-size: 10px; font-weight: 800; letter-spacing: 0.5px; color: var(--ok);
+  border: 1px solid var(--ok); border-radius: 4px; padding: 1px 6px;
+}
 .role-head .role-dist { margin-left: 8px; }
 .role-dist.from-splits { color: var(--warn); }
 /* A grid, not a flex run: the name takes the slack so the row fills the card,
@@ -192,7 +203,6 @@ aside {
   grid-template-columns: auto auto minmax(0, 1fr) auto auto auto auto auto;
 }
 .role-tracker label { display: flex; align-items: center; gap: 7px; flex: 1; cursor: pointer; }
-.role-tracker.is-active .t-label { color: var(--ok); font-weight: 700; }
 /* Shown on the map. With a colour dot on every row a faint tint no longer
    reads, so the selected one gets an edge and a lift. */
 .role-tracker.selected, .tracker-table tr.selected td {
@@ -202,6 +212,29 @@ aside {
 .role-tracker.selected { border-radius: 5px; padding-left: 5px; margin-left: -5px; }
 .tracker-table tr.selected td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 .tracker-table tr.selected .t-label { color: var(--text); font-weight: 700; }
+
+/* The reporting tracker. It used to be marked by a filled dot alone, because
+   the rule meant to highlight it named classes the markup never used. It gets
+   a green edge, a tint and a word now - all distinct from the accent edge that
+   means "shown on the map", since a row can be either, both or neither. */
+.roles-panel .role-tracker { border-radius: 5px; padding-left: 6px; margin-left: -6px; cursor: pointer; }
+.roles-panel .role-tracker.active { background: rgba(31, 168, 96, 0.13); box-shadow: inset 3px 0 0 var(--ok); }
+.roles-panel .role-tracker.active .t-name-text { color: var(--text); font-weight: 700; }
+.roles-panel .role-card.multi .role-tracker:not(.active) { opacity: 0.7; }
+.roles-panel .role-card.multi .role-tracker:not(.active):hover,
+.roles-panel .role-card.multi .role-tracker.selected { opacity: 1; }
+.roles-panel .role-card.multi .role-tracker:not(.active):hover { background: var(--panel); }
+.roles-panel .role-tracker.active.selected {
+  background: #24344d; box-shadow: inset 3px 0 0 var(--ok), inset 6px 0 0 var(--accent);
+}
+.roles-panel .role-tracker .t-name { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.roles-panel .role-tracker .t-name-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.t-role-badge {
+  flex: none; font-size: 9.5px; font-weight: 800; letter-spacing: 0.5px;
+  padding: 1px 5px; border-radius: 3px; white-space: nowrap;
+}
+.t-role-badge.reporting { background: var(--ok); color: #04130b; }
+.t-role-badge.backup { color: var(--dim); border: 1px solid var(--border); font-weight: 600; letter-spacing: 0; }
 .t-dist { font-variant-numeric: tabular-nums; color: var(--dim); min-width: 48px; text-align: right; }
 .t-age { font-size: 12px; min-width: 44px; text-align: right; font-variant-numeric: tabular-nums; }
 .t-age.fresh, td.fresh { color: var(--ok); }
@@ -312,6 +345,14 @@ button.mini.primary.danger-solid { background: var(--bad); border-color: var(--b
 .publish-toggle.off {
   background: var(--brand-red); color: #fff; border-color: var(--brand-red);
   animation: publish-off-pulse 1.6s ease-in-out infinite;
+}
+/* Hiding the distance is a deliberate, recoverable choice rather than an
+   outage, so it is amber and still - not the pulsing red that means nothing
+   is going out at all. */
+.publish-toggle.distance { margin-right: 6px; }
+.publish-toggle.distance.on { background: transparent; color: var(--text); border-color: var(--border); }
+.publish-toggle.distance.off {
+  background: rgba(255, 176, 46, 0.15); color: var(--warn); border-color: var(--warn); animation: none;
 }
 @keyframes publish-off-pulse {
   50% { opacity: 0.6; }
@@ -775,7 +816,7 @@ button.linklike {
   /* One race picker instead of a row of tabs. Tabs of different widths wrapped
      into two or three ragged rows as soon as an event had a few races, and ate
      the top of the screen; this is one line whatever the race count. */
-  .event-subnav { flex-wrap: nowrap; gap: 8px; padding: 8px 10px; }
+  .event-subnav { flex-wrap: wrap; gap: 8px; padding: 8px 10px; }
   .subnav-races { display: none; }
   .subnav-race-select {
     display: block; flex: 1 1 auto; min-width: 0; height: 32px; padding: 0 8px;
@@ -785,7 +826,16 @@ button.linklike {
   /* the word would crowd the row; the gear reads well enough on its own */
   .subnav-setup .btn-word { display: none; }
   .subnav-setup { flex: none; padding: 4px 9px; }
-  .event-subnav .publish-toggle { flex: none; }
+  /* Two output switches do not fit beside the race picker on a phone - the
+     second pushed the page 20px past a 375px screen. They share a row of their
+     own instead, half each. The picker's basis is what forces that break: with
+     it at 55%, a half-width switch can never squeeze in beside it, so the bar
+     is always two tidy rows rather than whatever happens to fit. */
+  .event-subnav .publish-toggle {
+    flex: 1 1 calc(50% - 4px); box-sizing: border-box; justify-content: center;
+    white-space: nowrap; margin-right: 0;
+  }
+  .subnav-race-select { flex-basis: 55%; }
   /* The page title clears the fixed hamburger, and the bar wraps: as a single
      nowrap row its controls — the owner filter, "+ Add device", Save — were
      pushed past the screen edge with no way to scroll to them. */
