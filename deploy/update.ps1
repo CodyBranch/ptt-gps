@@ -135,6 +135,17 @@ try {
   # happens to live in the repo, written on the box through the console, so a
   # production tree is dirty by design and blocking on them would refuse every
   # deploy forever.
+  # Put the lockfile back before anything judges the tree. npm rewrites it
+  # while installing, so a deploy leaves it modified - and the restore further
+  # down only ever cleans up after its own install. Without this, one dirtied
+  # lockfile stops every later deploy at the interlock, a hundred lines before
+  # the code that would have fixed it.
+  $lockBefore = & $git status --porcelain -- package-lock.json
+  if ($lockBefore) {
+    & $git checkout -- package-lock.json
+    Write-Host 'Restored package-lock.json, which a previous install rewrote.' -ForegroundColor Cyan
+  }
+
   $dirty = & $git status --porcelain
   $dataChanges = @()
   $codeChanges = @()

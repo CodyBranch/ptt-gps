@@ -31,7 +31,7 @@ export interface UpdateInfo {
   branch: string;
   current: string;
   commits: PendingCommit[];
-  /** Local edits to code, which block a deploy. Event data is excluded. */
+  /** Local edits to code, which block a deploy. Event data and generated lockfiles are excluded. */
   blockedBy: string[];
   checkedAt: number;
   error?: string;
@@ -64,7 +64,24 @@ export function blockingChanges(porcelain: string): string[] {
     .split('\n')
     .map((line) => line.replace(/\r$/, ''))
     .filter((line) => line.length > 3)
-    .filter((line) => !pathOf(line).startsWith('events/'));
+    .filter((line) => {
+      const file = pathOf(line);
+      return !file.startsWith('events/') && !isGenerated(file);
+    });
+}
+
+/**
+ * Files a deploy writes itself, which must never block one.
+ *
+ * npm rewrites package-lock.json as a side effect of installing, so a deploy
+ * leaves it modified. Treating that as a local change meant the next deploy
+ * refused - and the repair that puts the lockfile back lives inside the deploy
+ * being refused, so nothing could clear it without someone logging on to the
+ * machine. The deploy script restores it; blocking on it only guaranteed the
+ * script never ran.
+ */
+function isGenerated(file: string): boolean {
+  return file === 'package-lock.json' || file.endsWith('/package-lock.json');
 }
 
 /** The path a porcelain line refers to; for a rename, where it ended up. */
