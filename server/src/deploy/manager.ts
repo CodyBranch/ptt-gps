@@ -33,6 +33,15 @@ export interface UpdateInfo {
   commits: PendingCommit[];
   /** Local edits to code, which block a deploy. Event data and generated lockfiles are excluded. */
   blockedBy: string[];
+  /**
+   * The tree is at a commit the running build predates.
+   *
+   * Being on the newest commit is not the same as running it: a pull by hand,
+   * or a deploy that pulled and then failed, leaves the code current and the
+   * service serving what came before. Without this the console reports "up to
+   * date" and refuses to deploy, while the server runs something older.
+   */
+  buildStale: boolean;
   checkedAt: number;
   error?: string;
 }
@@ -168,6 +177,7 @@ export class DeployManager {
       current: 'unknown',
       commits: [],
       blockedBy: [],
+      buildStale: false,
       checkedAt: Date.now(),
     };
 
@@ -191,12 +201,34 @@ export class DeployManager {
         : [];
 
       info.blockedBy = blockingChanges(await this.run(['status', '--porcelain']));
+      info.buildStale = await this.buildIsStale();
     } catch (err) {
       info.error = err instanceof Error ? err.message : String(err);
     }
 
     this.cached = info;
     return info;
+  }
+
+  /**
+   * Is the built output older than the commit the tree sits on?
+   *
+   * The same question deploy/update.ps1 asks, and it has to be asked in both
+   * places: the script uses it to decide whether to rebuild, the console to
+   * know that "no commits waiting" does not mean "nothing to do".
+   */
+  private async buildIsStale(): Promise<boolean> {
+    const dist = path.join(this.root, 'server', 'dist', 'index.js');
+    try {
+      if (!fs.existsSync(dist)) return true;
+      const headMs = Date.parse((await this.run(['log', '-1', '--format=%cI', 'HEAD'])).trim());
+      if (!Number.isFinite(headMs)) return false;
+      return fs.statSync(dist).mtimeMs < headMs;
+    } catch {
+      // Not knowing is not the same as being stale; say no rather than
+      // offering a rebuild nobody asked for.
+      return false;
+    }
   }
 
   /** Discard the cache so the next check really fetches. */

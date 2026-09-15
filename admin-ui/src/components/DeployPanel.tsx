@@ -86,6 +86,10 @@ export function DeployPanel({ onUpdateCount }: { onUpdateCount?: (n: number | nu
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      // A refusal is usually about state this page is showing stale - the
+      // commits may already be pulled. Re-read, so the list stops
+      // contradicting the reason it just gave.
+      await load();
     } finally {
       setBusy(false);
     }
@@ -97,6 +101,13 @@ export function DeployPanel({ onUpdateCount }: { onUpdateCount?: (n: number | nu
   const status = info?.status;
   const pending = update?.commits ?? [];
   const blocked = update?.blockedBy ?? [];
+  /**
+   * Nothing to pull, but the running build is older than the code here - from
+   * a pull by hand, or a deploy that pulled and then failed. There is still a
+   * deploy to do; it just has no commits to list.
+   */
+  const needsRebuild = pending.length === 0 && !!update?.buildStale;
+  const action = pending.length > 0 ? `Deploy ${pending.length} commit${pending.length === 1 ? '' : 's'}` : 'Rebuild and restart';
   const current = stageIndex(status?.stage ?? '');
 
   return (
@@ -177,24 +188,34 @@ export function DeployPanel({ onUpdateCount }: { onUpdateCount?: (n: number | nu
             </div>
           )}
 
-          {pending.length === 0 && !update?.error && blocked.length === 0 && (
+          {pending.length === 0 && !needsRebuild && !update?.error && blocked.length === 0 && (
             <p className="deploy-none">Up to date.</p>
           )}
 
-          {pending.length > 0 && (
+          {(pending.length > 0 || needsRebuild) && (
             <>
-              <p className="deploy-count">
-                {pending.length} commit{pending.length === 1 ? '' : 's'} waiting on{' '}
-                <span className="mono">{update?.branch}</span>:
-              </p>
-              <ul className="deploy-commits">
-                {pending.map((c) => (
-                  <li key={c.sha}>
-                    <span className="mono sha">{c.sha}</span>
-                    <span>{c.subject}</span>
-                  </li>
-                ))}
-              </ul>
+              {needsRebuild && (
+                <p className="deploy-warn">
+                  The code here is current, but the server is running an older build of it. Rebuilding applies
+                  what is already on this machine.
+                </p>
+              )}
+              {pending.length > 0 && (
+                <>
+                  <p className="deploy-count">
+                    {pending.length} commit{pending.length === 1 ? '' : 's'} waiting on{' '}
+                    <span className="mono">{update?.branch}</span>:
+                  </p>
+                  <ul className="deploy-commits">
+                    {pending.map((c) => (
+                      <li key={c.sha}>
+                        <span className="mono sha">{c.sha}</span>
+                        <span>{c.subject}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
 
               {!info?.safeToRestart && (
                 <p className="deploy-warn">
@@ -208,7 +229,7 @@ export function DeployPanel({ onUpdateCount }: { onUpdateCount?: (n: number | nu
                 onClick={() => setConfirming(true)}
                 disabled={busy || blocked.length > 0 || !info?.safeToRestart}
               >
-                Deploy {pending.length} commit{pending.length === 1 ? '' : 's'}
+                {action}
               </button>
             </>
           )}
@@ -218,12 +239,15 @@ export function DeployPanel({ onUpdateCount }: { onUpdateCount?: (n: number | nu
       {confirming && (
         <ConfirmDialog
           req={{
-            title: `Deploy ${pending.length} commit${pending.length === 1 ? '' : 's'}?`,
-            body:
-              'The new code is pulled, built and tested while this server keeps running. Only then does it ' +
-              'restart, which takes a few seconds and briefly drops tracker connections. If the new build ' +
-              'does not come back, it rolls back automatically.',
-            confirmLabel: 'Deploy',
+            title: needsRebuild ? 'Rebuild and restart the server?' : `${action}?`,
+            body: needsRebuild
+              ? 'The code on this machine is built and tested while the server keeps running. Only then does ' +
+                'it restart, which takes a few seconds and briefly drops tracker connections. Nothing is ' +
+                'pulled: this applies what is already here.'
+              : 'The new code is pulled, built and tested while this server keeps running. Only then does it ' +
+                'restart, which takes a few seconds and briefly drops tracker connections. If the new build ' +
+                'does not come back, it rolls back automatically.',
+            confirmLabel: needsRebuild ? 'Rebuild' : 'Deploy',
             onConfirm: () => void start(false),
           }}
           onClose={() => setConfirming(false)}

@@ -336,6 +336,8 @@ export interface UpdateInfo {
   commits: PendingCommit[];
   /** Local code changes on the box, which block a deploy. Event data excluded. */
   blockedBy: string[];
+  /** The tree is at a commit the running build predates. */
+  buildStale?: boolean;
   checkedAt: number;
   error?: string;
 }

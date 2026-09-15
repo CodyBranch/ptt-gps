@@ -348,7 +348,9 @@ export function startApi(
   ex.get('/api/deploy', auth.adminOnly, async (_req, res) => {
     // A deploy that never started should say so, not sit on the page forever.
     deploy.reapAbandoned();
-    const [info, { armed, live }] = [await deploy.check(), raceCounts()];
+    // A minute, not the default ten: the panel shows this list and acts on it,
+    // and the two disagreeing is what makes a refusal look like a bug.
+    const [info, { armed, live }] = [await deploy.check(60_000), raceCounts()];
     res.json({
       ok: true,
       version: serverVersion,
@@ -371,7 +373,7 @@ export function startApi(
     try {
       const info = await deploy.check(30_000);
       if (info.error) throw new Error(info.error);
-      if (!info.commits.length) throw new Error('nothing to deploy');
+      if (!info.commits.length && !info.buildStale) throw new Error('nothing to deploy');
       if (info.blockedBy.length) {
         throw new Error(`local code changes on this machine: ${info.blockedBy.join('; ')}`);
       }
