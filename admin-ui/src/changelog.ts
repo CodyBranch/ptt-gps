@@ -22,6 +22,17 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '0.13.1',
+    date: '2026-09-17',
+    summary: 'The map stops drawing trails over the course.',
+    changed: [
+      'Basemap paths and tracks are hidden on the race map. On a cross-country course a park trail is drawn the same shape, colour and weight as the course line, so the map could not answer the one question it exists for: which line are we following. Streets and their labels stay.',
+    ],
+    added: [
+      'A **Trails** toggle beside **Labels** brings them back, for when which path a course follows is exactly what you need to see.',
+    ],
+  },
+  {
     version: '0.13.0',
     date: '2026-09-13',
     summary: 'Which tracker is reporting, an automatic choice between them, and a switch for the distance display.',

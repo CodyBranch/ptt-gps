@@ -348,6 +348,7 @@ export const MANUAL: { title: string; subtitle: string; sections: Section[] } = 
             'Tracker dots sit on the raw GPS coordinates — not snapped to the course — so you can see a vehicle that has gone off route.',
             '**Labels** turns the name-and-distance text on and off. With the pack bunched at a start line those labels overlap into a pile; the colours still tell them apart.',
             '**Satellite** helps when the question is which side of a tree line something is on.',
+            '**Trails** brings back the basemap paths and tracks, which are hidden by default. A park trail is drawn the same shape, colour and weight as a course line, so on a cross-country course the map could not otherwise answer which line the race follows.',
             'Selecting a tracker highlights it and draws its snap window along the course. Selecting it again clears it.',
           ],
         },

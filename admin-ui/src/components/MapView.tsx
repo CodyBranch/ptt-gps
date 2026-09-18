@@ -17,6 +17,22 @@ export interface CourseMarker {
 // Mapbox publishable (pk.) token, supplied at build time — see .env.example.
 // It is public by nature, but it is an account credential and GitHub's push
 // protection rejects it in source, so it lives in the build environment.
+/**
+ * Basemap layers that draw footpaths and tracks, and the labels naming them.
+ *
+ * On a cross-country course the park's own trails are the same shape, colour
+ * and weight as the course line, so the map stops answering the one question
+ * it exists to answer: which line are we following. Mapbox draws class `path`
+ * in the -path, -steps and -pedestrian layers and class `track` as a minor
+ * road, and trails are mapped as either, so both have to go. Matched by
+ * suffix because each of these exists three times over - at surface level, on
+ * bridges and in tunnels.
+ */
+const TRAIL_LAYER_SUFFIXES = ['-path', '-steps', '-pedestrian', '-minor', '-minor-case'];
+const TRAIL_LABEL_LAYERS = new Set(['path-pedestrian-label']);
+const isTrailLayer = (id: string): boolean =>
+  TRAIL_LABEL_LAYERS.has(id) || TRAIL_LAYER_SUFFIXES.some((suffix) => id.endsWith(suffix));
+
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN ?? '';
 if (!MAPBOX_TOKEN) {
   console.error('[map] VITE_MAPBOX_TOKEN is not set — copy admin-ui/.env.example to .env; maps will not render without it.');
@@ -511,7 +527,33 @@ export function MapView({
   // Timing boxes are off by default: they are course furniture, and the map is
   // primarily about where the vehicles are.
   const [showDecoders, setShowDecoders] = useState(false);
+  // Off by default: a park's trails look exactly like a course line, and the
+  // satellite imagery already shows where the paths are.
+  const [showTrails, setShowTrails] = useState(false);
   const decoderMarkersRef = useRef(new Map<string, mapboxgl.Marker>());
+
+  /**
+   * Show or hide the basemap's own paths and tracks.
+   *
+   * Re-applied whenever our layers are, because setStyle replaces every layer
+   * in the basemap along with them.
+   */
+  const applyTrailVisibility = (show: boolean) => {
+    const map = mapRef.current;
+    // Not caution but a requirement: setLayoutProperty throws "Style is not
+    // done loading" otherwise, and that escaped far enough to take the whole
+    // race view down with it.
+    if (!map || !map.isStyleLoaded()) return;
+    const want = show ? 'visible' : 'none';
+    for (const layer of map.getStyle()?.layers ?? []) {
+      if (!isTrailLayer(layer.id)) continue;
+      // Only when it differs. This runs on every idle, and setting a layout
+      // property repaints, which idles again - an unconditional write here is
+      // a loop.
+      if ((map.getLayoutProperty(layer.id, 'visibility') ?? 'visible') === want) continue;
+      map.setLayoutProperty(layer.id, 'visibility', want);
+    }
+  };
 
   /** (Re-)add per-race course layers + the window-slice layer (lost on setStyle). */
   const applyCourseLayers = (fit: boolean) => {
@@ -578,6 +620,7 @@ export function MapView({
       paint: { 'line-color': '#ffb02e', 'line-width': 6, 'line-opacity': 0.85 },
     });
     if (fit && !bounds.isEmpty()) map.fitBounds(bounds, { padding: 48 });
+    applyTrailVisibility(showTrails);
   };
 
   // init once
@@ -593,6 +636,28 @@ export function MapView({
     mapRef.current = map;
     return () => map.remove();
   }, []);
+
+  /**
+   * Hiding the basemap's trails, whenever the basemap is in a state to allow
+   * it.
+   *
+   * `idle` is the dependable hook. The initial style finishes loading during
+   * map construction, so a listener added here misses its `style.load`
+   * entirely - which is why the first attempt at this silently never ran - and
+   * a style switch replaces every layer again afterwards. `idle` fires after
+   * both, by which point setLayoutProperty is legal.
+   */
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const apply = () => applyTrailVisibility(showTrails);
+    apply();
+    map.on('idle', apply);
+    return () => {
+      map.off('idle', apply);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showTrails, styleKey]);
 
   // load courses whenever the set of races changes
   const raceKey = races.map((r) => r.raceId).join('|');
@@ -776,6 +841,17 @@ export function MapView({
           onClick={() => setShowLabels((v) => !v)}
         >
           Labels
+        </button>
+        <button
+          className={showTrails ? 'on' : ''}
+          title={
+            showTrails
+              ? 'Hide the basemap paths and tracks, which look like course lines'
+              : 'Show the basemap paths and tracks'
+          }
+          onClick={() => setShowTrails((v) => !v)}
+        >
+          Trails
         </button>
         {decoders && decoders.length > 0 && (
           <button
