@@ -258,6 +258,27 @@ as "already done". Twelve hours of lateness is accepted because a sender that
 lost its connection at the gun is still right about when the gun went; a time
 in the future is not, beyond five minutes of clock skew between the machines.
 
+### The feed is the confirmation, not the reply
+
+A start or finish that applies pushes a fresh `race` message to everyone
+subscribed to that meet, emitted before the POST returns — 4 ms after the call
+on a local server. Drive your display from that message rather than from your
+own request succeeding: it is the same message the console draws from, so the
+two cannot disagree, and it also arrives when an operator here presses the
+button instead of you.
+
+One thing to take from the reply rather than the message: a finished race's
+`race` message carries `sessionId: null`, because the session is closed and
+gone. The id of the session your finish closed is in the POST reply.
+
+### Undoing one
+
+A start or finish applied in error is undone from the console: reset the race
+there and it goes back to `scheduled`, after which a pushed start is accepted
+again and opens a new session. That is what the 409 on a finished race means by
+"reopen it from the console" — there is no API for it, because a race that has
+to be un-run is a conversation between people standing at the finish.
+
 ### What "finish" means here
 
 **The leader is home, not the results are final.** A race is finished by GPS
