@@ -169,12 +169,14 @@ describe('the meet list a consumer maps against', () => {
       id: 'boston-2026',
       name: 'Boston 2026',
       meetId: 42,
+      externalId: null,
       startDate: '2026-04-20',
       endDate: '2026-04-20',
       races: [
         {
           id: 'r1',
           name: 'Marathon',
+          externalId: null,
           orderIndex: 0,
           eventNumber: null,
           scheduledStart: null,
@@ -186,6 +188,16 @@ describe('the meet list a consumer maps against', () => {
         },
       ],
     });
+  });
+
+  it('carries the id of the system the meet was synced from, on the meet and on each race', () => {
+    const snap = snapshot();
+    (snap as any).events[0].event.externalId = 'nx-meet-9';
+    (snap as any).events[0].races[0].externalId = 'nx-race-1';
+
+    const summary = eventSummary('boston-2026', snap.events[0] as never);
+    expect(summary.externalId).toBe('nx-meet-9');
+    expect(summary.races[0].externalId).toBe('nx-race-1');
   });
 
   it('reports absent dates as null rather than leaving the field out', () => {

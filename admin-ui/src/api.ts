@@ -214,6 +214,8 @@ export const api = {
   }> => getJson('/api/feed-tokens'),
   createFeedToken: (label: string) => send('/api/feed-tokens', 'POST', { label }),
   setFeedTokenEnabled: (id: number, enabled: boolean) => send(`/api/feed-tokens/${id}`, 'PATCH', { enabled }),
+  setFeedTokenWriteSetup: (id: number, canWriteSetup: boolean) =>
+    send(`/api/feed-tokens/${id}`, 'PATCH', { canWriteSetup }),
   deleteFeedToken: (id: number) => send(`/api/feed-tokens/${id}`, 'DELETE'),
   regenerateIngestToken: async (): Promise<string> => (await send('/api/ingest-token', 'POST')).token,
 

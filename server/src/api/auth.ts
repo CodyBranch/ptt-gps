@@ -204,6 +204,11 @@ export class AuthService {
     this.store.deleteFeedToken(id);
   }
 
+  /** Let this token push a meet into setup, or take that back. */
+  setFeedTokenWriteSetup(id: number, allowed: boolean): void {
+    this.store.setFeedTokenWriteSetup(id, allowed);
+  }
+
   setFeedTokenEnabled(id: number, enabled: boolean): void {
     this.store.setFeedTokenEnabled(id, enabled);
   }

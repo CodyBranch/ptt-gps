@@ -22,6 +22,21 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '0.14.0',
+    date: '2026-09-19',
+    summary: 'Another system can hand us a meet.',
+    added: [
+      'A meet can be pushed in over the API — its races, their programme numbers, scheduled starts, running order, units and courses — so a schedule that already exists somewhere else is not re-keyed here on the morning of a meet. It is a merge and never a replace: trackers, vehicles, roles, Firebase targets, listener ports and snap settings are untouched, a race nobody sent is kept rather than removed, and a course already in the library is matched on its geometry rather than its name so re-sending a meet does not litter it with copies.',
+      'A **Setup write** switch on each live-feed token, off until you turn it on. It is what lets a token push a meet in; everything else a token can do is still read-only, and none of them can start a race.',
+      'Races and meets carry the id they had in the system they were synced from, and it goes out on the live feed, so that system can find its own races again without matching on names or dates.',
+      'A dry run that plans the whole thing and writes nothing, so the sending system can show an operator exactly what would change first. Integration notes in `docs/meet-sync.md`.',
+    ],
+    changed: [
+      "A sync into a meet with a race armed or live leaves that race's course and units alone, and the meet's output units with it, and says so in the reply — changing either mid-race reinterprets every distance already published. Send it again after the race finishes and it lands.",
+      'Two meets a year apart share a name, so a sync never merges into an event on its name alone: it creates one and hands back the events that share the name, to be linked deliberately.',
+    ],
+  },
+  {
     version: '0.13.1',
     date: '2026-09-17',
     summary: 'The map stops drawing trails over the course.',

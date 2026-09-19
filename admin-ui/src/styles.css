@@ -1393,6 +1393,11 @@ button.mini.on { border-color: var(--warn); color: var(--warn); }
 }
 .feed-token-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .feed-token-actions .spacer { flex: 1 1 auto; }
+.feed-token-write {
+  margin-left: 6px; padding: 1px 6px; border-radius: 999px; font-size: 10px; font-weight: 700;
+  letter-spacing: 0.04em; text-transform: uppercase; vertical-align: 1px;
+  background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn);
+}
 
 .feed-conn-head { font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--dim); margin: 18px 0 6px; }
 .feed-conns li {

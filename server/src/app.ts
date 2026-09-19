@@ -493,6 +493,8 @@ export class App {
       eventId: this.cfg.id,
       raceId,
       name: engine.race.name,
+      /** The id this race carries in the system that pushed it here, if any. */
+      externalId: engine.race.externalId ?? null,
       /** Programme number and scheduled start, for anything presenting a schedule. */
       eventNumber: engine.race.eventNumber ?? null,
       scheduledStart: engine.race.scheduledStart ?? null,
@@ -517,6 +519,7 @@ export class App {
         id: this.cfg.id,
         name: this.cfg.name,
         meetId: this.cfg.meetId,
+        externalId: this.cfg.externalId ?? null,
         reportIntervalS: this.cfg.reportIntervalS,
         viewerPrecision: this.cfg.viewerPrecision,
         startDate: this.cfg.startDate,

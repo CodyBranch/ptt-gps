@@ -107,6 +107,12 @@ export interface FeedRace {
   id: string;
   name: string;
   /**
+   * The id this race carries in the system that pushed it here, when a meet
+   * was synced in. A consumer that sent the meet can map straight back to its
+   * own record instead of matching on names.
+   */
+  externalId: string | null;
+  /**
    * This race's position in the meet's running order, from 0.
    *
    * Sort by this. Arrival order only conveys the order for the burst you get
@@ -140,12 +146,15 @@ export interface FeedEventSummary {
   id: string;
   name: string;
   meetId: number;
+  /** The id this meet carries in the system that pushed it here, if any. */
+  externalId: string | null;
   /** ISO dates from the event's setup, where set. */
   startDate: string | null;
   endDate: string | null;
   races: Array<{
     id: string;
     name: string;
+    externalId: string | null;
     /** Position in the running order, from 0. Matches the race messages. */
     orderIndex: number;
     eventNumber: number | null;
@@ -173,12 +182,14 @@ interface InternalSnapshot {
       name: string;
       meetId: number;
       reportIntervalS?: number;
+      externalId?: string | null;
       startDate?: string | null;
       endDate?: string | null;
     };
     races: Array<{
       raceId: string;
       name: string;
+      externalId?: string | null;
       eventNumber?: number | null;
       scheduledStart?: string | null;
       status: string;
@@ -282,6 +293,7 @@ export function feedMessages(snapshot: InternalSnapshot, nowMs: number): FeedMes
         race: {
           id: race.raceId,
           name: race.name,
+          externalId: race.externalId ?? null,
           orderIndex,
           eventNumber: race.eventNumber ?? null,
           scheduledStart: race.scheduledStart ?? null,
@@ -305,6 +317,7 @@ export function eventSummary(id: string, snap: InternalSnapshot['events'][number
     id,
     name: snap.event.name,
     meetId: snap.event.meetId,
+    externalId: snap.event.externalId ?? null,
     startDate: snap.event.startDate ?? null,
     endDate: snap.event.endDate ?? null,
     // The snapshot's races are already in running order, so their position in
@@ -312,6 +325,7 @@ export function eventSummary(id: string, snap: InternalSnapshot['events'][number
     races: snap.races.map((r, orderIndex) => ({
       id: r.raceId,
       name: r.name,
+      externalId: r.externalId ?? null,
       orderIndex,
       eventNumber: r.eventNumber ?? null,
       scheduledStart: r.scheduledStart ?? null,

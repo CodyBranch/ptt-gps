@@ -60,6 +60,8 @@ export interface FeedTokenRow {
   last_seen_ms: number | null;
   last_ip: string | null;
   enabled: number;
+  /** 1 when this token may push a meet into setup as well as read the feed. */
+  can_write_setup: number;
 }
 
 export class Store {
@@ -159,7 +161,8 @@ export class Store {
         created_at_ms INTEGER NOT NULL,
         last_seen_ms INTEGER,
         last_ip TEXT,
-        enabled INTEGER NOT NULL DEFAULT 1
+        enabled INTEGER NOT NULL DEFAULT 1,
+        can_write_setup INTEGER NOT NULL DEFAULT 0
       );
       CREATE TABLE IF NOT EXISTS auth_tokens (
         token_hash TEXT PRIMARY KEY,
@@ -183,6 +186,13 @@ export class Store {
     const fleetCols = this.db.prepare(`PRAGMA table_info(fleet)`).all() as Array<{ name: string }>;
     if (!fleetCols.some((c) => c.name === 'owner')) {
       this.db.exec(`ALTER TABLE fleet ADD COLUMN owner TEXT`);
+    }
+    // additive migration: a feed token may be allowed to write setup. Off for
+    // every token that already exists, since they were handed out on the
+    // promise that a feed token can only read.
+    const feedCols = this.db.prepare(`PRAGMA table_info(feed_tokens)`).all() as Array<{ name: string }>;
+    if (feedCols.length > 0 && !feedCols.some((c) => c.name === 'can_write_setup')) {
+      this.db.exec(`ALTER TABLE feed_tokens ADD COLUMN can_write_setup INTEGER NOT NULL DEFAULT 0`);
     }
     // Device history: every event-roster assignment change, and an issue log
     // (broken antennas, flaky batteries) with open/resolved state.
@@ -708,7 +718,7 @@ export class Store {
 
   listFeedTokens(): FeedTokenRow[] {
     return this.db
-      .prepare(`SELECT id, label, token, created_at_ms, last_seen_ms, last_ip, enabled FROM feed_tokens ORDER BY id`)
+      .prepare(`SELECT id, label, token, created_at_ms, last_seen_ms, last_ip, enabled, can_write_setup FROM feed_tokens ORDER BY id`)
       .all() as FeedTokenRow[];
   }
 
@@ -717,7 +727,7 @@ export class Store {
       .prepare(`INSERT INTO feed_tokens (label, token, created_at_ms, enabled) VALUES (?, ?, ?, 1)`)
       .run(label, token, Date.now());
     return this.db
-      .prepare(`SELECT id, label, token, created_at_ms, last_seen_ms, last_ip, enabled FROM feed_tokens WHERE id = ?`)
+      .prepare(`SELECT id, label, token, created_at_ms, last_seen_ms, last_ip, enabled, can_write_setup FROM feed_tokens WHERE id = ?`)
       .get(info.lastInsertRowid) as FeedTokenRow;
   }
 
@@ -725,7 +735,7 @@ export class Store {
   feedTokenByValue(token: string): FeedTokenRow | undefined {
     return this.db
       .prepare(
-        `SELECT id, label, token, created_at_ms, last_seen_ms, last_ip, enabled
+        `SELECT id, label, token, created_at_ms, last_seen_ms, last_ip, enabled, can_write_setup
          FROM feed_tokens WHERE token = ? AND enabled = 1`,
       )
       .get(token) as FeedTokenRow | undefined;
@@ -733,6 +743,10 @@ export class Store {
 
   deleteFeedToken(id: number): void {
     this.db.prepare(`DELETE FROM feed_tokens WHERE id = ?`).run(id);
+  }
+
+  setFeedTokenWriteSetup(id: number, allowed: boolean): void {
+    this.db.prepare(`UPDATE feed_tokens SET can_write_setup = ? WHERE id = ?`).run(allowed ? 1 : 0, id);
   }
 
   setFeedTokenEnabled(id: number, enabled: boolean): void {

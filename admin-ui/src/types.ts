@@ -371,6 +371,8 @@ export interface FeedToken {
   lastSeenMs: number | null;
   lastIp: string | null;
   enabled: boolean;
+  /** May push a meet into setup, as well as read the feed. Off by default. */
+  canWriteSetup: boolean;
 }
 
 export interface FeedConnection {

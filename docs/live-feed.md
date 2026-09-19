@@ -43,9 +43,13 @@ off one partner does not disconnect everyone else, and the console can show you
 which consumers are actually connected and what each is watching. A single
 shared token can answer neither question.
 
-A token is read-only: it cannot start races, change setup, or write data.
-Disabling or revoking one **disconnects anything using it immediately** — not
-at its next reconnect.
+A token is read-only unless it is given **Setup write** in the same panel, and
+even then it cannot start a race or write positions — only push a meet's races
+and courses in, which is described in [meet-sync.md](meet-sync.md). Leave it
+off for anything that only reads the feed.
+
+Disabling or revoking a token **disconnects anything using it immediately** —
+not at its next reconnect.
 
 ```js
 import { io } from 'socket.io-client';
@@ -79,12 +83,14 @@ Sent by the server as soon as you connect. You do not have to ask.
       "id": "boston-2026-demo",
       "name": "Boston Marathon 2026 (demo)",
       "meetId": 9999,
+      "externalId": "nx-meet-2231",
       "startDate": "2026-04-20",
       "endDate": "2026-04-20",
       "races": [
         {
           "id": "wheelchair",
           "name": "Wheelchair",
+          "externalId": "nx-race-4417",
           "orderIndex": 0,
           "eventNumber": 11,
           "scheduledStart": "09:02",
@@ -97,6 +103,7 @@ Sent by the server as soon as you connect. You do not have to ask.
         {
           "id": "marathon",
           "name": "Marathon",
+          "externalId": "nx-race-4418",
           "orderIndex": 1,
           "eventNumber": 12,
           "scheduledStart": "09:30",
@@ -120,6 +127,11 @@ match on that alone. Where they do not, the dates and course lengths are what
 distinguish one meet from another — names do not. "10K" is not a distinguishing
 name, two races in one meet often share a course, and the same event runs again
 next year under exactly the same title.
+
+If your system is the one that pushed this meet in (see
+[meet-sync.md](meet-sync.md)), `externalId` is better than any of this: it is
+your own id, handed back, on the meet and on every race it created. Match on it
+and nothing else has to be guessed.
 
 Each race also carries `orderIndex`, `eventNumber`, `scheduledStart`, `units`,
 `courseLength`, `courseLengthMeters` and `sessionId`, so you can line races up
@@ -186,6 +198,7 @@ race every few seconds.
   "race": {
     "id": "marathon",
     "name": "Marathon",
+    "externalId": "nx-race-4418",
     "orderIndex": 1,
     "eventNumber": 12,
     "scheduledStart": "09:30",
@@ -255,9 +268,10 @@ Each entry describes a meet loaded on the server.
 | `id` | string | The meet id. This is what you pass to `subscribe` |
 | `name` | string | Display name |
 | `meetId` | number | The number this meet is known by in the wider timing system. Your primary key for matching, where you have it |
+| `externalId` | string \| null | The id the meet carried in the system that synced it here. Null for a meet built by hand |
 | `startDate` | string \| null | `YYYY-MM-DD`, from the meet's setup |
 | `endDate` | string \| null | `YYYY-MM-DD`. Differs from `startDate` for a multi-day meet |
-| `races` | array | Each with `id`, `name`, `orderIndex`, `eventNumber`, `scheduledStart`, `status`, `units`, `courseLength`, `courseLengthMeters` and `sessionId` — the same meanings as in the `race` message below |
+| `races` | array | Each with `id`, `name`, `externalId`, `orderIndex`, `eventNumber`, `scheduledStart`, `status`, `units`, `courseLength`, `courseLengthMeters` and `sessionId` — the same meanings as in the `race` message below |
 
 ### `race`
 
@@ -265,6 +279,7 @@ Each entry describes a meet loaded on the server.
 | --- | --- | --- |
 | `id` | string | Race id, unique within the meet |
 | `name` | string | Display name |
+| `externalId` | string \| null | The id this race carried in the system that synced it here. Null for a race added by hand |
 | `orderIndex` | number | Position in the meet's running order, from 0. **Sort on this** — see above |
 | `eventNumber` | number \| null | The number this race carries in the meet programme, where the meet uses them. Null for a road race with one start |
 | `scheduledStart` | string \| null | Scheduled start as `"HH:MM"`, 24-hour, **local to the meet**. Null if not scheduled |

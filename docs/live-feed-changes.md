@@ -10,6 +10,32 @@ that never worked.
 
 ---
 
+## v0.13.2 — your own ids, handed back
+
+**Two new fields, both additive: `externalId` on a meet and on a race.** Where
+a meet was pushed in by another system rather than built by hand, these carry
+that system's own ids back out — on the meet in `hello` and `events`, and on
+every race in both the meet list and the `race` messages.
+
+Nothing was removed or renamed and `protocol` stays **1**. A consumer that does
+not know the fields is unaffected; one that pushed the meet in should match on
+them in preference to `meetId`, dates or names.
+
+```js
+// a meet you sent us, found without inference
+const mine = hello.events.find((e) => e.externalId === myMeet.id);
+const race = mine.races.find((r) => r.externalId === myRace.id);
+```
+
+Both are `null` for a meet an operator built here, which is the common case —
+keep whatever matching you already do as the fallback.
+
+Pushing a meet in is described in [meet-sync.md](meet-sync.md). It needs a feed
+token that has been given **Setup write** in the console; existing tokens are
+unchanged and remain read-only.
+
+---
+
 ## v0.12.0 — off course became a measurement
 
 **`position.offCourse` changed from a boolean to a number.** It now reports how

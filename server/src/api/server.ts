@@ -30,6 +30,7 @@ import { AuthService, hashPassword, type Role } from './auth.js';
 import { TunnelManager } from './tunnel.js';
 import { DeployManager } from '../deploy/manager.js';
 import { attachFeed } from './feed.js';
+import { registerMeetSync } from './meet-sync.js';
 
 /** Everything the API needs from the multi-event runtime in index.ts. */
 export interface ServerContext {
@@ -316,6 +317,21 @@ export function startApi(
     const updates = Array.isArray(req.body) ? req.body : [req.body];
     for (const u of updates) ctx.onSimulatedDistance(u ?? {});
     res.json({ ok: true, accepted: updates.length });
+  });
+
+  // A meet pushed in from another system: its races, their schedule and their
+  // courses, merged into an event here. Mounted with the other machine routes,
+  // before the operator-session middleware, because it authenticates with a
+  // feed token rather than a login.
+  registerMeetSync(ex, {
+    auth,
+    eventsDir: ctx.eventsDir,
+    apps: ctx.apps,
+    // Deferred: configFor is declared further down this function.
+    configFor: (eventId) => configFor(eventId),
+    updateEvent: (eventId, json) => ctx.updateEvent(eventId, json),
+    store: ctx.store,
+    onApplied: () => broadcastSnapshot(),
   });
 
   ex.post('/api/logout', (req, res) => {
@@ -1224,6 +1240,7 @@ export function startApi(
         lastSeenMs: t.last_seen_ms,
         lastIp: t.last_ip,
         enabled: !!t.enabled,
+        canWriteSetup: !!t.can_write_setup,
       })),
       connections: feed.connections(),
     });
@@ -1238,10 +1255,16 @@ export function startApi(
   });
 
   ex.patch('/api/feed-tokens/:id', auth.adminOnly, (req, res) => {
-    auth.setFeedTokenEnabled(Number(req.params.id), req.body?.enabled !== false);
-    // A disabled token must stop working now, not at the consumer's next
-    // reconnect - that is the whole point of being able to turn one off.
-    feed.disconnectToken(Number(req.params.id));
+    const id = Number(req.params.id);
+    if (typeof req.body?.enabled === 'boolean') {
+      auth.setFeedTokenEnabled(id, req.body.enabled);
+      // A disabled token must stop working now, not at the consumer's next
+      // reconnect - that is the whole point of being able to turn one off.
+      if (!req.body.enabled) feed.disconnectToken(id);
+    }
+    if (typeof req.body?.canWriteSetup === 'boolean') {
+      auth.setFeedTokenWriteSetup(id, req.body.canWriteSetup);
+    }
     res.json({ ok: true });
   });
 

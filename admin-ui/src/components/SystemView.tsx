@@ -504,6 +504,33 @@ function LiveFeedPanel({ onMsg, ask }: { onMsg: (m: Msg) => void; ask: (req: Con
     }
   };
 
+  const setWrite = async (t: FeedToken, on: boolean) => {
+    try {
+      await api.setFeedTokenWriteSetup(t.id, on);
+      await load();
+      onMsg({
+        kind: 'ok',
+        text: on ? `"${t.label}" may now push a meet into setup.` : `"${t.label}" is read-only again.`,
+      });
+    } catch (err) {
+      onMsg({ kind: 'err', text: (err as Error).message });
+    }
+  };
+
+  // Granting a token the run of Setup is worth a deliberate second, both ways:
+  // one of these edits the meet everyone is about to race.
+  const askWrite = (t: FeedToken) =>
+    t.canWriteSetup
+      ? void setWrite(t, false)
+      : ask({
+          title: `Let "${t.label}" write setup?`,
+          body:
+            'It will be able to create events and add or edit races and courses over the API. It still cannot start ' +
+            'a race, and it never removes a race or touches trackers, vehicles or roles.',
+          confirmLabel: 'Allow',
+          onConfirm: () => setWrite(t, true),
+        });
+
   const live = (id: number) => connections.filter((c) => c.tokenId === id).length;
 
   return (
@@ -511,8 +538,9 @@ function LiveFeedPanel({ onMsg, ask }: { onMsg: (m: Msg) => void; ask: (req: Con
       <p className="hint">
         Real-time race distances for other software. Connect socket.io to the{' '}
         <span className="mono">/feed</span> namespace with a token, subscribe to a meet, and receive a message
-        whenever anything in it changes. Read-only: a token cannot start races or change setup. See{' '}
-        <span className="mono">docs/live-feed.md</span>.
+        whenever anything in it changes. A token is read-only unless it is given <b>Setup write</b>, and none of
+        them can start a race. See <span className="mono">docs/live-feed.md</span>, and{' '}
+        <span className="mono">docs/meet-sync.md</span> for pushing a meet in.
       </p>
 
       <div className="form-row">
@@ -541,7 +569,10 @@ function LiveFeedPanel({ onMsg, ask }: { onMsg: (m: Msg) => void; ask: (req: Con
           {tokens.map((t) => (
             <li key={t.id} className={`feed-token ${t.enabled ? '' : 'off'}`}>
               <div className="feed-token-top">
-                <span className="feed-token-label">{t.label}</span>
+                <span className="feed-token-label">
+                  {t.label}
+                  {t.canWriteSetup && <span className="feed-token-write">setup write</span>}
+                </span>
                 {live(t.id) > 0 ? (
                   <span className="fwd-ok">● {live(t.id)} connected</span>
                 ) : (
@@ -571,6 +602,13 @@ function LiveFeedPanel({ onMsg, ask }: { onMsg: (m: Msg) => void; ask: (req: Con
                   Copy
                 </button>
                 <span className="spacer" />
+                <button
+                  className={`mini ${t.canWriteSetup ? 'on' : ''}`}
+                  title="May create events and edit races over the API"
+                  onClick={() => askWrite(t)}
+                >
+                  Setup write
+                </button>
                 <button className="mini" onClick={() => void toggle(t)}>
                   {t.enabled ? 'Disable' : 'Enable'}
                 </button>

@@ -73,6 +73,8 @@ export const SnapSchema = z.object({
 export const RaceSchema = z.object({
   id: z.string(),
   name: z.string(),
+  /** The id this race carries in the system that pushed it here, if any. */
+  externalId: z.string().optional(),
   /**
    * The number this race is known by in the meet programme. Optional, because
    * a road race with one start has no use for it, and a track or cross-country
@@ -131,6 +133,13 @@ export const EventSchema = z.object({
   id: z.string(),
   name: z.string(),
   meetId: z.number().int(),
+  /**
+   * The id this meet carries in whatever system pushed it here, and which
+   * system that was. Stored so a later push updates this event rather than
+   * creating a second one: names are nowhere near stable enough to match on.
+   */
+  externalId: z.string().optional(),
+  externalSource: z.string().optional(),
   /** Event dates (YYYY-MM-DD) — drive sorting and completed/hidden state. */
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
