@@ -327,6 +327,15 @@ export class App {
           (at ? ` — ${at}` : ' — no fixes yet'),
       );
     }
+    // Races that had already finished come back finished. Nothing is
+    // published and no session is reopened - this only stops the console, and
+    // anything reading the feed, from being told a race that ran this morning
+    // is still to come.
+    for (const raceId of this.store.finishedRaces(this.cfg.id)) {
+      if (this.sessions.has(raceId)) continue;
+      this.engines.get(raceId)?.setStatus('finished', 'recovery');
+    }
+
     if (recovered > 0 && this.publishEnabled) {
       this.publishContextSession = this.sessions.values().next().value ?? null;
       for (const p of this.publishers) p.showDistance(this.cfg.meetId, !this.distanceHidden);

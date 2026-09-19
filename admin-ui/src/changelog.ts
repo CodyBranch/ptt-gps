@@ -22,6 +22,23 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '0.15.0',
+    date: '2026-09-19',
+    summary: 'The timing system can start and finish races here.',
+    added: [
+      'A race can be started and finished over the API by the system holding the gun, at the times it sends rather than the times the message arrives — so a late delivery still stamps the race at the gun. Nobody has to watch for a start here and press the same button a second later.',
+      'A **Run races** switch on each live-feed token, separate from **Setup write** and off until you turn it on. Building a meet and running one are different jobs, the same way an admin login and a staff login are.',
+      'Arming and resetting stay here. They are how the person watching the course says the vehicles are in place, and how they undo a false start; neither is something a machine somewhere else can see.',
+    ],
+    changed: [
+      'A finish pushed in from the timing system means the leader is home and the lead vehicle is free for the next race — not that the results are final. Runners are still on the course and still being timed. It ends the GPS session and stops publishing that race, which is all finishing has ever meant here.',
+      'A repeated start is a no-op rather than a second session. A sender retries after a dropped connection, and re-running the start would have stranded the first session open and taken its recorded distances with it.',
+    ],
+    fixed: [
+      'A race that had finished comes back finished after a restart. Finishing was recorded nowhere that survived one, so a restart mid-meet told the console — and anything reading the feed — that every race run that morning was still to come. A race that was reset still comes back scheduled, because it is.',
+    ],
+  },
+  {
     version: '0.14.0',
     date: '2026-09-19',
     summary: 'Another system can hand us a meet.',

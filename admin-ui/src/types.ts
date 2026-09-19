@@ -373,6 +373,8 @@ export interface FeedToken {
   enabled: boolean;
   /** May push a meet into setup, as well as read the feed. Off by default. */
   canWriteSetup: boolean;
+  /** May start and finish races. A separate grant; off by default. */
+  canRunRaces: boolean;
 }
 
 export interface FeedConnection {

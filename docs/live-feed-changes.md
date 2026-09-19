@@ -10,6 +10,21 @@ that never worked.
 
 ---
 
+## v0.15.0 — a finished race stays finished
+
+No field changed. What changed is `status` after the GPS server restarts: a
+race that had already finished used to come back as `scheduled`, because a
+finish was recorded nowhere that survived a restart. It now comes back
+`finished`.
+
+If you branch on `status` — and especially if you drive the race from outside
+(see [meet-sync.md](meet-sync.md)) — this is the difference between seeing the
+morning's races correctly and seeing a meet that has run all day as still to
+come. A race that was reset rather than finished still comes back `scheduled`,
+which is what it is.
+
+---
+
 ## v0.13.2 — your own ids, handed back
 
 **Two new fields, both additive: `externalId` on a meet and on a race.** Where

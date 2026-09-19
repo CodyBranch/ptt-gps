@@ -510,7 +510,20 @@ function LiveFeedPanel({ onMsg, ask }: { onMsg: (m: Msg) => void; ask: (req: Con
       await load();
       onMsg({
         kind: 'ok',
-        text: on ? `"${t.label}" may now push a meet into setup.` : `"${t.label}" is read-only again.`,
+        text: on ? `"${t.label}" may now push a meet into setup.` : `"${t.label}" can no longer change setup.`,
+      });
+    } catch (err) {
+      onMsg({ kind: 'err', text: (err as Error).message });
+    }
+  };
+
+  const setRun = async (t: FeedToken, on: boolean) => {
+    try {
+      await api.setFeedTokenRunRaces(t.id, on);
+      await load();
+      onMsg({
+        kind: 'ok',
+        text: on ? `"${t.label}" may now start and finish races.` : `"${t.label}" can no longer run races.`,
       });
     } catch (err) {
       onMsg({ kind: 'err', text: (err as Error).message });
@@ -531,6 +544,19 @@ function LiveFeedPanel({ onMsg, ask }: { onMsg: (m: Msg) => void; ask: (req: Con
           onConfirm: () => setWrite(t, true),
         });
 
+  const askRun = (t: FeedToken) =>
+    t.canRunRaces
+      ? void setRun(t, false)
+      : ask({
+          title: `Let "${t.label}" run races?`,
+          body:
+            'It will be able to start and finish races over the API, at the times it sends - which is the point: ' +
+            'the gun time is theirs. It cannot arm or reset a race, and a finish means the leader is home, not ' +
+            'that the results are final.',
+          confirmLabel: 'Allow',
+          onConfirm: () => setRun(t, true),
+        });
+
   const live = (id: number) => connections.filter((c) => c.tokenId === id).length;
 
   return (
@@ -538,9 +564,9 @@ function LiveFeedPanel({ onMsg, ask }: { onMsg: (m: Msg) => void; ask: (req: Con
       <p className="hint">
         Real-time race distances for other software. Connect socket.io to the{' '}
         <span className="mono">/feed</span> namespace with a token, subscribe to a meet, and receive a message
-        whenever anything in it changes. A token is read-only unless it is given <b>Setup write</b>, and none of
-        them can start a race. See <span className="mono">docs/live-feed.md</span>, and{' '}
-        <span className="mono">docs/meet-sync.md</span> for pushing a meet in.
+        whenever anything in it changes. A token reads only what the feed carries until it is given{' '}
+        <b>Setup write</b> (push a meet in) or <b>Run races</b> (start and finish them at the times it sends).
+        See <span className="mono">docs/live-feed.md</span> and <span className="mono">docs/meet-sync.md</span>.
       </p>
 
       <div className="form-row">
@@ -572,6 +598,7 @@ function LiveFeedPanel({ onMsg, ask }: { onMsg: (m: Msg) => void; ask: (req: Con
                 <span className="feed-token-label">
                   {t.label}
                   {t.canWriteSetup && <span className="feed-token-write">setup write</span>}
+                  {t.canRunRaces && <span className="feed-token-write">run races</span>}
                 </span>
                 {live(t.id) > 0 ? (
                   <span className="fwd-ok">● {live(t.id)} connected</span>
@@ -608,6 +635,13 @@ function LiveFeedPanel({ onMsg, ask }: { onMsg: (m: Msg) => void; ask: (req: Con
                   onClick={() => askWrite(t)}
                 >
                   Setup write
+                </button>
+                <button
+                  className={`mini ${t.canRunRaces ? 'on' : ''}`}
+                  title="May start and finish races over the API"
+                  onClick={() => askRun(t)}
+                >
+                  Run races
                 </button>
                 <button className="mini" onClick={() => void toggle(t)}>
                   {t.enabled ? 'Disable' : 'Enable'}

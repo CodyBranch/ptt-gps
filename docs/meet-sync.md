@@ -1,17 +1,23 @@
-# Pushing a meet in
+# Pushing a meet in, and running it
 
-How another system hands this server a meet: its races, their schedule, and the
-courses they run on.
+How another system hands this server a meet - its races, their schedule, and
+the courses they run on - and then starts and finishes those races at the times
+it holds.
 
 The point is to stop an operator re-keying, on the morning of a meet, a
 schedule that already exists somewhere else. It is the counterpart to
 [live-feed.md](live-feed.md), which is how you read distances back out.
 
-- **Route**: `POST /api/sync/meet`
-- **Auth**: a feed token with **Setup write**, as `Authorization: Bearer …`
-- **Body**: JSON, up to 25 MB (courses travel as raw KML)
-- **Safe to repeat**: sending the same meet twice changes nothing the second
-  time. Send it again whenever your copy changes.
+- `POST /api/sync/meet` — the setup push. Needs **Setup write**.
+- `POST /api/sync/lifecycle` — start and finish. Needs **Run races**.
+- **Auth** on both: a feed token, as `Authorization: Bearer …`
+- **Safe to repeat**: both are. Sending the same meet twice changes nothing the
+  second time, and a repeated start never opens a second session.
+
+The two grants are separate and both start off. Building a meet and running one
+are different jobs here — it is the same line the console draws between an
+admin and a staff login — so a system that only needs one is never handed the
+other.
 
 ---
 
@@ -48,7 +54,8 @@ system. Then press **Setup write** on that token and confirm. Without it the
 route answers `403` — a token is read-only by default, and the one that reads
 the feed does not have to be the one that writes setup.
 
-A token that may write setup still cannot start a race or write positions.
+**Setup write** does not include starting races. That is **Run races**, below,
+granted the same way. Neither lets a token write positions.
 
 ---
 
@@ -200,12 +207,93 @@ an error — it is a warning, and the rest of the meet still lands.
 
 ---
 
+## Starting and finishing a race
+
+```
+POST /api/sync/lifecycle
+Authorization: Bearer <token with Run races>
+
+{
+  "source": "nexus-xc",
+  "eventId": "fsu-invite",
+  "raceId": "mens-8k",
+  "externalId": "nx-race-1",
+  "action": "start",
+  "atMs": 1788419071380,
+  "reason": "gun"
+}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `eventId` | The event id from the setup push. It must be **open** on this server |
+| `raceId` | The race id from the setup push. Falls back to `externalId` if it does not match, so a sender that never stored ours can still drive a race |
+| `action` | `start` or `finish`. Arm and reset are not reachable from here — they stay with the operator watching the course |
+| `atMs` | Epoch milliseconds: the gun for a start, the gun plus the winner's time for a finish. **Not "now"** — a late delivery still stamps the race at the gun |
+| `reason` | Free text, logged. `gun` and `first-finisher` are the useful ones |
+
+Replies:
+
+```json
+{ "ok": true, "status": "live", "sessionId": 12 }
+{ "ok": true, "status": "live", "sessionId": 12, "unchanged": true }
+{ "ok": false, "error": "this race has not started here, so there is nothing to finish", "status": "armed" }
+```
+
+`unchanged: true` means the race was already in that state. **Retry freely**: a
+start on a race that is already live is a no-op and never opens a second
+session, and a finish on a finished race is the same. `status` on a refusal is
+the race's status here, so a sender can see why.
+
+| Status | When |
+| --- | --- |
+| `200` `unchanged` | Already started, or already finished |
+| `400` | `action` is not `start` or `finish`; `atMs` missing, not a number, in the future, or more than 12 hours ago |
+| `404` | No such race in that event |
+| `409` | Start on a finished race, finish on one that never started, or the event is not open here |
+| `401` / `403` | As for the setup push. The 403 sentence is `this token cannot run races` |
+
+`atMs` is checked before anything else, so a broken timestamp is never reported
+as "already done". Twelve hours of lateness is accepted because a sender that
+lost its connection at the gun is still right about when the gun went; a time
+in the future is not, beyond five minutes of clock skew between the machines.
+
+### What "finish" means here
+
+**The leader is home, not the results are final.** A race is finished by GPS
+standards once first place crosses: the lead vehicle's job is over and it can
+be moved to the next race. Runners are still on the course and you are still
+timing them. On this side a finish ends the GPS session and stops publishing
+distances for that race, which is all it has ever meant here — nothing reads it
+as a result.
+
+### What stays with the operator
+
+Arming and resetting. Arming is how the person watching the course says the
+vehicles are in place, and resetting is how they undo a false start; neither is
+something a machine elsewhere can see. If an operator has already started or
+finished a race from the console, the feed says so and a push for the same
+thing comes back `unchanged`.
+
+Correcting the start time of a race that is already live is a console job too.
+There is no API for it: it rewrites every distance timestamp in an open
+session, and that wants the person who can see the consequences.
+
+---
+
 ## Reading it back
 
 Everything you send comes back on the live feed, and your own ids come with it:
 `externalId` on the meet in `hello`, and on every race in both the meet list
 and the `race` messages. Match on that and nothing has to be inferred from
 names or dates. See [live-feed.md](live-feed.md).
+
+**The `race` message is the authoritative status**, and there is one for every
+race in a subscribed meet — a race that is still `scheduled` is not silent. You
+get the full set on subscribe and the full set again whenever anything in the
+meet changes, including a lifecycle push from you or a button pressed in the
+console. The `events` list carries the same `status` for a meet you have not
+subscribed to.
 
 ---
 

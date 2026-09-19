@@ -62,6 +62,8 @@ export interface FeedTokenRow {
   enabled: number;
   /** 1 when this token may push a meet into setup as well as read the feed. */
   can_write_setup: number;
+  /** 1 when this token may start and finish races. Separate from setup. */
+  can_run_races: number;
 }
 
 export class Store {
@@ -162,7 +164,8 @@ export class Store {
         last_seen_ms INTEGER,
         last_ip TEXT,
         enabled INTEGER NOT NULL DEFAULT 1,
-        can_write_setup INTEGER NOT NULL DEFAULT 0
+        can_write_setup INTEGER NOT NULL DEFAULT 0,
+        can_run_races INTEGER NOT NULL DEFAULT 0
       );
       CREATE TABLE IF NOT EXISTS auth_tokens (
         token_hash TEXT PRIMARY KEY,
@@ -193,6 +196,12 @@ export class Store {
     const feedCols = this.db.prepare(`PRAGMA table_info(feed_tokens)`).all() as Array<{ name: string }>;
     if (feedCols.length > 0 && !feedCols.some((c) => c.name === 'can_write_setup')) {
       this.db.exec(`ALTER TABLE feed_tokens ADD COLUMN can_write_setup INTEGER NOT NULL DEFAULT 0`);
+    }
+    // additive migration: and separately, whether it may start and finish
+    // races. Building a meet and running one are different jobs here - that is
+    // what admin and staff logins already mean - so they are different grants.
+    if (feedCols.length > 0 && !feedCols.some((c) => c.name === 'can_run_races')) {
+      this.db.exec(`ALTER TABLE feed_tokens ADD COLUMN can_run_races INTEGER NOT NULL DEFAULT 0`);
     }
     // Device history: every event-roster assignment change, and an issue log
     // (broken antennas, flaky batteries) with open/resolved state.
@@ -423,6 +432,43 @@ export class Store {
     const q = `SELECT * FROM fixes WHERE accepted = 1 AND t_utc_ms >= ?
        AND imei IN (${imeis.map(() => '?').join(',')}) ORDER BY t_utc_ms`;
     return this.db.prepare(q).all(startMs, ...imeis) as Array<Record<string, unknown>>;
+  }
+
+  /**
+   * Races whose latest session is closed and ended in "finished".
+   *
+   * A finished race is not recorded anywhere in the event file, so without
+   * this a restart brought every race back as "scheduled" - the console said
+   * a meet that had run all morning was yet to start, and anything driving
+   * races from outside could start one a second time on the strength of it.
+   * A race that was reset rather than finished is not listed: its last status
+   * event is the reset, and it genuinely is scheduled again.
+   */
+  finishedRaces(eventId: string): string[] {
+    const rows = this.db
+      .prepare(
+        `SELECT s.race_id AS raceId,
+                (SELECT e.payload FROM session_events e
+                  WHERE e.session_id = s.id AND e.type = 'status'
+                  ORDER BY e.id DESC LIMIT 1) AS last
+           FROM sessions s
+          WHERE s.event_id = ?
+            AND s.ended_at_ms IS NOT NULL
+            AND s.id = (SELECT MAX(s2.id) FROM sessions s2
+                         WHERE s2.event_id = s.event_id AND s2.race_id = s.race_id)`,
+      )
+      .all(eventId) as Array<{ raceId: string; last: string | null }>;
+
+    const out: string[] = [];
+    for (const row of rows) {
+      if (!row.last) continue;
+      try {
+        if ((JSON.parse(row.last) as { to?: string }).to === 'finished') out.push(row.raceId);
+      } catch {
+        // A payload that will not parse is not evidence of anything.
+      }
+    }
+    return out;
   }
 
   endSession(sessionId: number, endedAtMs = Date.now()): void {
@@ -718,7 +764,7 @@ export class Store {
 
   listFeedTokens(): FeedTokenRow[] {
     return this.db
-      .prepare(`SELECT id, label, token, created_at_ms, last_seen_ms, last_ip, enabled, can_write_setup FROM feed_tokens ORDER BY id`)
+      .prepare(`SELECT id, label, token, created_at_ms, last_seen_ms, last_ip, enabled, can_write_setup, can_run_races FROM feed_tokens ORDER BY id`)
       .all() as FeedTokenRow[];
   }
 
@@ -727,7 +773,7 @@ export class Store {
       .prepare(`INSERT INTO feed_tokens (label, token, created_at_ms, enabled) VALUES (?, ?, ?, 1)`)
       .run(label, token, Date.now());
     return this.db
-      .prepare(`SELECT id, label, token, created_at_ms, last_seen_ms, last_ip, enabled, can_write_setup FROM feed_tokens WHERE id = ?`)
+      .prepare(`SELECT id, label, token, created_at_ms, last_seen_ms, last_ip, enabled, can_write_setup, can_run_races FROM feed_tokens WHERE id = ?`)
       .get(info.lastInsertRowid) as FeedTokenRow;
   }
 
@@ -735,7 +781,7 @@ export class Store {
   feedTokenByValue(token: string): FeedTokenRow | undefined {
     return this.db
       .prepare(
-        `SELECT id, label, token, created_at_ms, last_seen_ms, last_ip, enabled, can_write_setup
+        `SELECT id, label, token, created_at_ms, last_seen_ms, last_ip, enabled, can_write_setup, can_run_races
          FROM feed_tokens WHERE token = ? AND enabled = 1`,
       )
       .get(token) as FeedTokenRow | undefined;
@@ -747,6 +793,10 @@ export class Store {
 
   setFeedTokenWriteSetup(id: number, allowed: boolean): void {
     this.db.prepare(`UPDATE feed_tokens SET can_write_setup = ? WHERE id = ?`).run(allowed ? 1 : 0, id);
+  }
+
+  setFeedTokenRunRaces(id: number, allowed: boolean): void {
+    this.db.prepare(`UPDATE feed_tokens SET can_run_races = ? WHERE id = ?`).run(allowed ? 1 : 0, id);
   }
 
   setFeedTokenEnabled(id: number, enabled: boolean): void {

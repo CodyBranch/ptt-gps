@@ -7,6 +7,7 @@ import { parseCourse } from '../engine/course.js';
 import { planMeetSync, slugify, type SyncRequest } from '../sync/meet.js';
 import type { App } from '../app.js';
 import type { Store } from '../state/store.js';
+import { syncCaller } from './sync-token.js';
 
 /**
  * Taking a meet from another system - its races, their schedule, their courses
@@ -30,13 +31,6 @@ interface SyncDeps {
   /** Called after a real apply, so consoles see the new setup. */
   onApplied: () => void;
 }
-
-const bearer = (req: express.Request): string | undefined => {
-  const header = req.headers.authorization;
-  if (typeof header !== 'string') return undefined;
-  const match = /^Bearer\s+(.+)$/i.exec(header.trim());
-  return match ? match[1].trim() : undefined;
-};
 
 /** Coordinates rounded to ~10cm, which is far finer than a traced course. */
 const fingerprint = (coords: number[][]): string =>
@@ -80,20 +74,11 @@ export function registerMeetSync(ex: express.Express, deps: SyncDeps): void {
     // allows the same.
     express.json({ limit: '25mb' }),
     (req, res) => {
-      const ip = (req.socket.remoteAddress ?? '?').replace('::ffff:', '');
-      const token = bearer(req);
-      const row = token ? auth.feedTokenRow(token) : undefined;
-      if (!row) {
-        return void res.status(401).json({ ok: false, error: 'unknown or disabled token' });
-      }
-      if (!row.can_write_setup) {
-        // The exact sentence the sender shows its operator.
-        return void res.status(403).json({ ok: false, error: 'this token cannot write setup' });
-      }
-      auth.noteFeedTokenUse(row.id, ip);
+      const caller = syncCaller(req, res, auth, 'setup');
+      if (!caller) return;
 
       try {
-        res.json(applySync(req.body as SyncRequest, deps, row.label));
+        res.json(applySync(req.body as SyncRequest, deps, caller.row.label));
       } catch (err) {
         res.status(400).json({ ok: false, error: err instanceof Error ? err.message : String(err) });
       }

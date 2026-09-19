@@ -209,6 +209,11 @@ export class AuthService {
     this.store.setFeedTokenWriteSetup(id, allowed);
   }
 
+  /** Let this token start and finish races, or take that back. */
+  setFeedTokenRunRaces(id: number, allowed: boolean): void {
+    this.store.setFeedTokenRunRaces(id, allowed);
+  }
+
   setFeedTokenEnabled(id: number, enabled: boolean): void {
     this.store.setFeedTokenEnabled(id, enabled);
   }

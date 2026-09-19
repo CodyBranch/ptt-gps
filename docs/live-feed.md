@@ -43,10 +43,11 @@ off one partner does not disconnect everyone else, and the console can show you
 which consumers are actually connected and what each is watching. A single
 shared token can answer neither question.
 
-A token is read-only unless it is given **Setup write** in the same panel, and
-even then it cannot start a race or write positions — only push a meet's races
-and courses in, which is described in [meet-sync.md](meet-sync.md). Leave it
-off for anything that only reads the feed.
+A token reads only what the feed carries unless it is given **Setup write**
+(push a meet's races and courses in) or **Run races** (start and finish them at
+the times it sends) in the same panel. Both are separate grants, both start off,
+and neither lets a token write positions. They are described in
+[meet-sync.md](meet-sync.md); leave them off for anything that only reads.
 
 Disabling or revoking a token **disconnects anything using it immediately** —
 not at its next reconnect.

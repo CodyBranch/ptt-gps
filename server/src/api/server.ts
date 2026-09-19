@@ -31,6 +31,7 @@ import { TunnelManager } from './tunnel.js';
 import { DeployManager } from '../deploy/manager.js';
 import { attachFeed } from './feed.js';
 import { registerMeetSync } from './meet-sync.js';
+import { registerRaceLifecycleSync } from './race-sync.js';
 
 /** Everything the API needs from the multi-event runtime in index.ts. */
 export interface ServerContext {
@@ -333,6 +334,10 @@ export function startApi(
     store: ctx.store,
     onApplied: () => broadcastSnapshot(),
   });
+
+  // And starting or finishing a race from the system holding the gun. A
+  // separate grant: building a meet and running one are different jobs.
+  registerRaceLifecycleSync(ex, { auth, apps: ctx.apps });
 
   ex.post('/api/logout', (req, res) => {
     auth.logout(auth.tokenFromRequest(req));
@@ -1241,6 +1246,7 @@ export function startApi(
         lastIp: t.last_ip,
         enabled: !!t.enabled,
         canWriteSetup: !!t.can_write_setup,
+        canRunRaces: !!t.can_run_races,
       })),
       connections: feed.connections(),
     });
@@ -1264,6 +1270,9 @@ export function startApi(
     }
     if (typeof req.body?.canWriteSetup === 'boolean') {
       auth.setFeedTokenWriteSetup(id, req.body.canWriteSetup);
+    }
+    if (typeof req.body?.canRunRaces === 'boolean') {
+      auth.setFeedTokenRunRaces(id, req.body.canRunRaces);
     }
     res.json({ ok: true });
   });
