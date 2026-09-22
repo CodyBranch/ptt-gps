@@ -140,6 +140,49 @@ describe('matching a race that is already here', () => {
   });
 });
 
+describe('a field the sender has taken away', () => {
+  /**
+   * Absent and null are different statements. A sender that does not set
+   * programme numbers at all must not wipe the ones an operator typed; a
+   * sender that has removed a race's start time must be able to say so, or
+   * the schedule here keeps a time the meet no longer has.
+   */
+  it('clears a start time and a day sent explicitly as null', () => {
+    const current = existing() as Record<string, unknown>;
+    (current.races as Array<Record<string, unknown>>)[0].scheduledStart = '18:30';
+    (current.races as Array<Record<string, unknown>>)[0].date = '2026-09-25';
+
+    const out = plan(
+      request({
+        races: [{ externalId: 'nx-race-1', name: "Men's 8K", courseKey: 'c-8k', scheduledStart: null, date: null }],
+      }),
+      current,
+    );
+
+    const race = (out.config.races as Array<Record<string, unknown>>)[0];
+    expect(race.scheduledStart).toBeUndefined();
+    expect(race.date).toBeUndefined();
+    expect(out.races[0].action).toBe('updated');
+  });
+
+  it('leaves them alone when the keys are simply absent', () => {
+    const current = existing() as Record<string, unknown>;
+    (current.races as Array<Record<string, unknown>>)[0].scheduledStart = '18:30';
+
+    const out = plan(request({ races: [{ externalId: 'nx-race-1', name: "Men's 8K", courseKey: 'c-8k' }] }), current);
+
+    expect((out.config.races as Array<Record<string, unknown>>)[0].scheduledStart).toBe('18:30');
+    expect((out.config.races as Array<Record<string, unknown>>)[0].eventNumber).toBe(2);
+  });
+
+  it('never clears the id that finds the race again', () => {
+    const out = plan(
+      request({ races: [{ externalId: null, name: "Men's 8K", courseKey: 'c-8k', eventNumber: 2 }] }),
+    );
+    expect((out.config.races as Array<Record<string, unknown>>)[0].externalId).toBe('nx-race-1');
+  });
+});
+
 describe('races that are running', () => {
   it('leaves the course alone and says why', () => {
     const out = plan(

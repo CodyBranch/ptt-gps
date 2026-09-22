@@ -22,6 +22,14 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '0.16.1',
+    date: '2026-09-22',
+    summary: 'A meet sync can take a start time away again.',
+    fixed: [
+      "A race's scheduled start, day, programme number or running order can be removed by the system that sent them, by sending the field as empty rather than leaving it out. Only a new value could replace one before, so a race whose start time had come out of the sending system's schedule kept the old time here — and the sync reported it as unchanged. Leaving a field out still means \"no opinion\" and changes nothing, which is what stops a sender that does not use programme numbers from wiping the ones an operator typed.",
+    ],
+  },
+  {
     version: '0.16.0',
     date: '2026-09-22',
     summary: 'A meet that runs over two days reads like one.',

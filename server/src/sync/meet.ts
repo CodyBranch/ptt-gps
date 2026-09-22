@@ -96,6 +96,30 @@ function uniqueRaceId(name: string, taken: Set<string>): string {
 
 const str = (v: unknown): string | undefined => (typeof v === 'string' && v.length > 0 ? v : undefined);
 
+/**
+ * Apply one of the schedule fields the sender owns.
+ *
+ * A key that is absent and a key sent as null are different statements, and
+ * JSON is the only thing that can tell them apart. Absent means "no opinion":
+ * a sender that never sets programme numbers should not be wiping them.
+ * Explicitly null means "there is no longer one" - a race whose start time the
+ * operator took out of the schedule - and dropping that on the floor leaves a
+ * stale 18:30 on a race that has no time any more, reported as unchanged.
+ *
+ * So: absent leaves what is here, null clears it, a value replaces it.
+ */
+function applySent<K extends 'eventNumber' | 'order' | 'scheduledStart' | 'date'>(
+  target: RawRace,
+  incoming: SyncRace,
+  key: K,
+  wanted: 'number' | 'string',
+): void {
+  if (!(key in incoming)) return;
+  const value = incoming[key];
+  if (value === null || value === undefined || value === '') delete target[key];
+  else if (typeof value === wanted) target[key] = value;
+}
+
 export function planMeetSync(input: {
   request: SyncRequest;
   /** The raw event JSON being merged into. */
@@ -219,13 +243,17 @@ export function planMeetSync(input: {
     }
     target.name = incoming.name;
     target.course = course;
+    // The match key is the exception: a null here is never honoured. Clearing
+    // the id that finds this race again, remotely and in passing, is not a
+    // thing a sender should be able to do by mistake.
     if (incoming.externalId) target.externalId = incoming.externalId;
-    if (typeof incoming.eventNumber === 'number') target.eventNumber = incoming.eventNumber;
-    if (typeof incoming.order === 'number') target.order = incoming.order;
-    if (incoming.scheduledStart) target.scheduledStart = incoming.scheduledStart;
-    // Not held back for a running race: which day a race is on is a label on
-    // the schedule, not something a live engine has read.
-    if (incoming.date) target.date = incoming.date;
+
+    applySent(target, incoming, 'eventNumber', 'number');
+    applySent(target, incoming, 'order', 'number');
+    applySent(target, incoming, 'scheduledStart', 'string');
+    // The day is not held back for a running race: it is a label on the
+    // schedule, not something a live engine has read.
+    applySent(target, incoming, 'date', 'string');
 
     if (incoming.units) {
       if (running.has(raceId) && target.units && target.units !== incoming.units) {

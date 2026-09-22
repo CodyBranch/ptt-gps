@@ -134,6 +134,17 @@ something another event is snapping to.
 | `units` | string | `miles` or `kilometers` for this race's distances |
 | `courseKey` | string \| null | Points at an entry in `courses`. `null` when the course is not traced yet |
 
+**An absent field and a null one mean different things.** A key you leave out
+is "no opinion" and keeps whatever is here — a sender that does not use
+programme numbers never wipes ones an operator typed. A key sent explicitly as
+`null` is "there is no longer one" and clears it, which is how you remove a
+start time or a day that has come out of your schedule. This applies to
+`eventNumber`, `order`, `scheduledStart` and `date`.
+
+`externalId` is the exception: a null there is ignored. It is the key that
+finds this race again, and clearing it remotely, in passing, is not something a
+sender should be able to do by accident.
+
 **A meet that runs over more than one day needs `date` per race.** The meet's
 own `startDate` and `endDate` cannot answer it — nothing says which of the two a
 given race belongs to, and a three-day meet has no answer at all. Without it a
