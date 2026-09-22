@@ -206,6 +206,36 @@ describe('new races', () => {
     });
   });
 
+  it('carries the day each race runs, for a meet that spans two of them', () => {
+    const out = plan(
+      request({
+        races: [
+          { externalId: 'nx-e1', name: 'Elite Women 6K', courseKey: 'c-5k', scheduledStart: '18:30', date: '2026-09-25', order: 0 },
+          { externalId: 'nx-1', name: 'Open Men 8K', courseKey: 'c-8k', scheduledStart: '07:55', date: '2026-09-26', order: 4 },
+        ],
+      }),
+    );
+
+    const races = out.config.races as Array<Record<string, unknown>>;
+    // The Friday twilight race is first despite the later clock time: the
+    // running order says so, and the date is what explains it to a reader.
+    expect(races.map((r) => [r.date, r.scheduledStart, r.order])).toEqual([
+      // The race already here, which the sender did not mention, is untouched.
+      [undefined, undefined, undefined],
+      ['2026-09-25', '18:30', 0],
+      ['2026-09-26', '07:55', 4],
+    ]);
+  });
+
+  it('changes the day of a race that is running, since no engine has read it', () => {
+    const out = plan(
+      request({ races: [{ externalId: 'nx-race-1', name: "Men's 8K", courseKey: 'c-8k', date: '2026-09-26' }] }),
+      existing() as Record<string, unknown>,
+      { runningRaceIds: new Set(['mens-8k']) },
+    );
+    expect((out.config.races as Array<{ date: string }>)[0].date).toBe('2026-09-26');
+  });
+
   it('builds a whole meet from nothing when the event is being created', () => {
     const fresh = { id: 'new-meet', name: 'New Meet', meetId: 0, trackers: [], roles: [], races: [] };
     const out = planMeetSync({

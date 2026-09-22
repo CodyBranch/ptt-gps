@@ -10,6 +10,22 @@ that never worked.
 
 ---
 
+## v0.16.0 — which day a race runs
+
+**One new field, additive: `date` on a race**, as `"YYYY-MM-DD"`. It appears in
+the meet list and in `race` messages, beside `scheduledStart`.
+
+It is null for a one-day meet, which is most of them. For a meet that runs
+across more than one day it is the only thing that separates a Friday twilight
+race at 18:30 from a Saturday race at 07:55 — the meet's own `startDate` and
+`endDate` cannot say which day a given race belongs to, and a three-day meet
+has no answer at all.
+
+`orderIndex` is unchanged and still runs across the whole meet, so sorting is
+correct with or without this. Group by `date`, sort by `orderIndex`.
+
+---
+
 ## v0.15.0 — a finished race stays finished
 
 No field changed. What changed is `status` after the GPS server restarts: a

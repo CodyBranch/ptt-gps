@@ -124,6 +124,8 @@ export interface FeedRace {
   eventNumber: number | null;
   /** Scheduled start as "HH:MM", local to the meet. Null if not scheduled. */
   scheduledStart: string | null;
+  /** "YYYY-MM-DD" for a race in a multi-day meet, else null. */
+  date: string | null;
   status: string;
   /** 'miles' or 'kilometers' - the units `distance` and `courseLength` use. */
   units: string;
@@ -159,6 +161,7 @@ export interface FeedEventSummary {
     orderIndex: number;
     eventNumber: number | null;
     scheduledStart: string | null;
+    date: string | null;
     status: string;
     units: string;
     courseLength: number;
@@ -192,6 +195,7 @@ interface InternalSnapshot {
       externalId?: string | null;
       eventNumber?: number | null;
       scheduledStart?: string | null;
+      date?: string | null;
       status: string;
       units: string;
       courseLength: number;
@@ -297,6 +301,7 @@ export function feedMessages(snapshot: InternalSnapshot, nowMs: number): FeedMes
           orderIndex,
           eventNumber: race.eventNumber ?? null,
           scheduledStart: race.scheduledStart ?? null,
+          date: race.date ?? null,
           status: race.status,
           units: race.units,
           courseLength: round(race.courseLength, 4),
@@ -329,6 +334,7 @@ export function eventSummary(id: string, snap: InternalSnapshot['events'][number
       orderIndex,
       eventNumber: r.eventNumber ?? null,
       scheduledStart: r.scheduledStart ?? null,
+      date: r.date ?? null,
       status: r.status,
       units: r.units,
       courseLength: round(r.courseLength, 4),

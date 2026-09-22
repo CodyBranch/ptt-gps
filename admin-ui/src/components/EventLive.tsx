@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import { toDisplay, unitAbbr } from '../api';
 import type { EventSnap, Units } from '../types';
 import { raceLabel } from '../format';
@@ -69,13 +70,31 @@ export function RaceRows({
   onOpenRace: (raceId: string) => void;
 }) {
   if (ev.races.length === 0) return <p className="hint">No races configured yet.</p>;
+
+  /**
+   * A two-day meet is broken up by day; a one-day meet is not.
+   *
+   * Races are already in running order, and the order runs across the whole
+   * meet rather than restarting each morning - so the days come out as runs of
+   * consecutive races and a heading goes wherever the date changes. Without
+   * this a Friday twilight race at 18:30 sits above a Saturday race at 07:55
+   * with nothing to explain it.
+   */
+  const days = new Set(ev.races.map((r) => r.date).filter(Boolean));
+  const showDays = days.size > 1;
+  let lastDay: string | null | undefined;
+
   return (
     <>
       {ev.races.map((race) => {
         const imeis = race.trackers.map((t) => t.imei);
         const on = imeis.filter((i) => isReporting(i, ev, lastSeen, now)).length;
+        const heading = showDays && race.date !== lastDay;
+        if (heading) lastDay = race.date;
         return (
-          <button key={race.raceId} className="ev-race" onClick={() => onOpenRace(race.raceId)}>
+          <Fragment key={race.raceId}>
+          {heading && <div className="ev-race-day">{race.date ? dayLabel(race.date) : 'Day not set'}</div>}
+          <button className="ev-race" onClick={() => onOpenRace(race.raceId)}>
             <span className={`status-dot ${race.status}`} />
             <span className="ev-race-name">{raceLabel(race)}</span>
             {/* A scheduled start is the next thing anyone asks after the name. */}
@@ -88,8 +107,26 @@ export function RaceRows({
               {on}/{imeis.length}
             </span>
           </button>
+          </Fragment>
         );
       })}
     </>
   );
+}
+
+/**
+ * "Friday, Sep 25" from "2026-09-25".
+ *
+ * Built field by field rather than handed to Date, which reads a bare date as
+ * UTC midnight - west of Greenwich that renders as the day before, which is
+ * precisely the mistake this label exists to prevent.
+ */
+function dayLabel(iso: string): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  if (!y || !m || !d) return iso;
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, {
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric',
+  });
 }

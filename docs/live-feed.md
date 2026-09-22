@@ -95,6 +95,7 @@ Sent by the server as soon as you connect. You do not have to ask.
           "orderIndex": 0,
           "eventNumber": 11,
           "scheduledStart": "09:02",
+          "date": null,
           "status": "scheduled",
           "units": "miles",
           "courseLength": 26.294,
@@ -108,6 +109,7 @@ Sent by the server as soon as you connect. You do not have to ask.
           "orderIndex": 1,
           "eventNumber": 12,
           "scheduledStart": "09:30",
+          "date": null,
           "status": "live",
           "units": "miles",
           "courseLength": 26.294,
@@ -138,6 +140,12 @@ Each race also carries `orderIndex`, `eventNumber`, `scheduledStart`, `units`,
 `courseLength`, `courseLengthMeters` and `sessionId`, so you can line races up
 without subscribing first. Where a meet uses programme numbers, `eventNumber`
 is the natural key to match races on.
+
+**A multi-day meet carries `date` per race**, because a meet's own start and
+end dates cannot say which day a given race is on. The running order still runs
+across the whole meet rather than restarting each morning, so sorting by
+`orderIndex` is correct with or without the date; `date` is what lets you group
+the schedule into days and print them.
 
 **Sort races by `orderIndex`** — a race's position in the meet's running order,
 from 0. That order is what the meet intends to run, which is not necessarily by
@@ -203,6 +211,7 @@ race every few seconds.
     "orderIndex": 1,
     "eventNumber": 12,
     "scheduledStart": "09:30",
+    "date": null,
     "status": "live",
     "units": "miles",
     "courseLength": 26.294,
@@ -272,7 +281,7 @@ Each entry describes a meet loaded on the server.
 | `externalId` | string \| null | The id the meet carried in the system that synced it here. Null for a meet built by hand |
 | `startDate` | string \| null | `YYYY-MM-DD`, from the meet's setup |
 | `endDate` | string \| null | `YYYY-MM-DD`. Differs from `startDate` for a multi-day meet |
-| `races` | array | Each with `id`, `name`, `externalId`, `orderIndex`, `eventNumber`, `scheduledStart`, `status`, `units`, `courseLength`, `courseLengthMeters` and `sessionId` — the same meanings as in the `race` message below |
+| `races` | array | Each with `id`, `name`, `externalId`, `orderIndex`, `eventNumber`, `scheduledStart`, `date`, `status`, `units`, `courseLength`, `courseLengthMeters` and `sessionId` — the same meanings as in the `race` message below |
 
 ### `race`
 
@@ -284,6 +293,7 @@ Each entry describes a meet loaded on the server.
 | `orderIndex` | number | Position in the meet's running order, from 0. **Sort on this** — see above |
 | `eventNumber` | number \| null | The number this race carries in the meet programme, where the meet uses them. Null for a road race with one start |
 | `scheduledStart` | string \| null | Scheduled start as `"HH:MM"`, 24-hour, **local to the meet**. Null if not scheduled |
+| `date` | string \| null | `"YYYY-MM-DD"`, the day this race runs. Null unless the meet spans more than one day. **Group on this, sort on `orderIndex`** — a Friday twilight race at 18:30 runs before a Saturday race at 07:55 |
 | `status` | string | `scheduled`, `armed`, `live`, `finished` |
 | `units` | string | `miles` or `kilometers` — what `distance` and `courseLength` are in |
 | `courseLength` | number | Course length in `units` |

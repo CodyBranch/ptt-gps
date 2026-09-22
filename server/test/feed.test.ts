@@ -180,6 +180,7 @@ describe('the meet list a consumer maps against', () => {
           orderIndex: 0,
           eventNumber: null,
           scheduledStart: null,
+          date: null,
           status: 'live',
           units: 'miles',
           courseLength: 26.2,
@@ -188,6 +189,16 @@ describe('the meet list a consumer maps against', () => {
         },
       ],
     });
+  });
+
+  it('carries the day a race runs, so a two-day meet can be grouped without asking anyone', () => {
+    const snap = snapshot();
+    (snap as any).events[0].races[0].date = '2026-09-25';
+
+    const summary = eventSummary('gans-creek', snap.events[0] as never);
+    expect(summary.races[0].date).toBe('2026-09-25');
+    // A one-day meet sets nothing, and says so rather than leaving the key out.
+    expect(eventSummary('e', snapshot().events[0] as never).races[0].date).toBeNull();
   });
 
   it('carries the id of the system the meet was synced from, on the meet and on each race', () => {

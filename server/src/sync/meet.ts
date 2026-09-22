@@ -24,6 +24,8 @@ export interface SyncRace {
   eventNumber?: number | null;
   /** "HH:MM", local to the meet. */
   scheduledStart?: string | null;
+  /** "YYYY-MM-DD", the day this race runs. Only a multi-day meet needs it. */
+  date?: string | null;
   order?: number | null;
   units?: UnitSystem | null;
   /** Key into the request's courses list; null when the course is not traced yet. */
@@ -221,6 +223,9 @@ export function planMeetSync(input: {
     if (typeof incoming.eventNumber === 'number') target.eventNumber = incoming.eventNumber;
     if (typeof incoming.order === 'number') target.order = incoming.order;
     if (incoming.scheduledStart) target.scheduledStart = incoming.scheduledStart;
+    // Not held back for a running race: which day a race is on is a label on
+    // the schedule, not something a live engine has read.
+    if (incoming.date) target.date = incoming.date;
 
     if (incoming.units) {
       if (running.has(raceId) && target.units && target.units !== incoming.units) {

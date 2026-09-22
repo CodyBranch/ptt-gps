@@ -22,6 +22,19 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '0.16.0',
+    date: '2026-09-22',
+    summary: 'A meet that runs over two days reads like one.',
+    added: [
+      'A race can carry the day it runs on. A meet already had a start and an end date, but nothing said which of the two a given race belonged to — and a three-day meet had no answer at all. On a two-day meet the console now breaks the race list into days under their own headings, so a Friday twilight race at 18:30 sitting above a Saturday race at 07:55 reads as the schedule rather than as a sorting fault.',
+      'A **Day** column in Setup, on meets that span more than one day. Setting an end date later than the start brings it out; a one-day meet is not given a column of identical dates.',
+      'The day goes out on the live feed with everything else — in the meet list and in each race message — so a consumer can group a schedule by day without asking anyone which races are on which.',
+    ],
+    changed: [
+      'The running order is still what sequences a meet, and it runs across the whole meet rather than restarting each morning. The date describes a race; it does not order one.',
+    ],
+  },
+  {
     version: '0.15.0',
     date: '2026-09-19',
     summary: 'The timing system can start and finish races here.',

@@ -507,6 +507,7 @@ export class App {
       /** Programme number and scheduled start, for anything presenting a schedule. */
       eventNumber: engine.race.eventNumber ?? null,
       scheduledStart: engine.race.scheduledStart ?? null,
+      date: engine.race.date ?? null,
       order: engine.race.order ?? null,
       status: engine.status,
       units: engine.race.units,

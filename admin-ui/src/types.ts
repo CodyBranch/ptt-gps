@@ -73,6 +73,8 @@ export interface RaceSnap {
   name: string;
   eventNumber: number | null;
   scheduledStart: string | null;
+  /** "YYYY-MM-DD" for a race in a multi-day meet, else null. */
+  date: string | null;
   order: number | null;
   status: RaceStatus;
   units: 'miles' | 'kilometers';
@@ -151,6 +153,8 @@ export interface EventConfigT {
     eventNumber?: number;
     /** Scheduled start as "HH:MM", local to the meet. */
     scheduledStart?: string;
+    /** "YYYY-MM-DD". Only a meet that runs across more than one day needs it. */
+    date?: string;
     /** Running order; blank keeps the position in the file. */
     order?: number;
   }>;

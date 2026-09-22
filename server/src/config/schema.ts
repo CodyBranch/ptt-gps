@@ -95,6 +95,23 @@ export const RaceSchema = z.object({
     .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use 24-hour HH:MM, e.g. 09:00')
     .optional(),
   /**
+   * The day this race is run, as "YYYY-MM-DD".
+   *
+   * A meet's own startDate and endDate cannot answer this: nothing says which
+   * of the two a given race belongs to, and a three-day meet has no answer at
+   * all. Without it a Friday twilight race at 18:30 and a Saturday race at
+   * 07:55 are indistinguishable by time, and anything grouping or sorting on
+   * the clock puts Saturday first.
+   *
+   * Optional, and most meets are one day and will never set it. The running
+   * order is still `order` - the date describes a race, it does not sequence
+   * one.
+   */
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD, e.g. 2026-09-25')
+    .optional(),
+  /**
    * Where this race sits in the running order. Lower first; ties fall back to
    * the order races appear in the file, so an event that never sets it behaves
    * exactly as it always did.

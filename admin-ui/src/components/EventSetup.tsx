@@ -102,6 +102,11 @@ export function EventSetup({
 
   const courseFor = (file: string) => courses.find((k) => k.file === file);
 
+  /** Does this meet run across more than one day? Only then is a day per race
+   *  worth a column - see the note above the races table. */
+  const multiDay =
+    (!!cfg.startDate && !!cfg.endDate && cfg.startDate !== cfg.endDate) || cfg.races.some((r) => r.date);
+
   return (
     <div className="setup">
       <div className="setup-bar">
@@ -463,12 +468,21 @@ export function EventSetup({
 
         <section>
           <h3>Races</h3>
+          {/* The day column only exists for a meet that has days. Most meets
+              are one day and would be given a column of identical dates, and
+              this table is already wide for the space it sits in. Setting an
+              end date later than the start is what brings it out. */}
           <table className="setup-table">
             <thead>
               <tr>
                 <th className="col-order" title="Running order. Lower first; blank keeps the position below.">#</th>
                 <th className="col-evno" title="Programme number, where the meet uses them">Event</th>
                 <th className="col-start" title="Scheduled start, 24-hour, local to the meet">Start</th>
+                {multiDay && (
+                  <th className="col-day" title="The day this race runs">
+                    Day
+                  </th>
+                )}
                 <th>ID</th><th>Name</th><th>Course</th><th>Distance</th><th>Units</th><th></th>
               </tr>
             </thead>
@@ -512,6 +526,17 @@ export function EventSetup({
                         }
                       />
                     </td>
+                    {multiDay && (
+                      <td className="col-day">
+                        <input
+                          type="date"
+                          min={cfg.startDate}
+                          max={cfg.endDate}
+                          value={race.date ?? ''}
+                          onChange={(e) => edit((c) => (c.races[i].date = e.target.value || undefined))}
+                        />
+                      </td>
+                    )}
                     <td>
                       <input value={race.id} onChange={(e) => edit((c) => (c.races[i].id = e.target.value))} />
                     </td>

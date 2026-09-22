@@ -83,6 +83,7 @@ granted the same way. Neither lets a token write positions.
       "name": "Men's 8K",
       "eventNumber": 2,
       "scheduledStart": "09:30",
+      "date": "2026-10-03",
       "order": 1,
       "units": "kilometers",
       "courseKey": "c-8k"
@@ -128,9 +129,20 @@ something another event is snapping to.
 | `name` | string | Required |
 | `eventNumber` | number | Programme number |
 | `scheduledStart` | string | `"HH:MM"`, 24-hour, local to the meet |
+| `date` | string | `"YYYY-MM-DD"`, the day this race runs. Only a meet spanning more than one day needs it |
 | `order` | number | Running order. This is what the console and the feed sort by |
 | `units` | string | `miles` or `kilometers` for this race's distances |
 | `courseKey` | string \| null | Points at an entry in `courses`. `null` when the course is not traced yet |
+
+**A meet that runs over more than one day needs `date` per race.** The meet's
+own `startDate` and `endDate` cannot answer it — nothing says which of the two a
+given race belongs to, and a three-day meet has no answer at all. Without it a
+Friday twilight race at 18:30 sorts above a Saturday race at 07:55 with nothing
+to explain why, and the console groups the schedule by it.
+
+`order` is still what sequences the meet, and it runs across the whole meet
+rather than restarting each morning. The date describes a race; it does not
+order one.
 
 **A race with no course is skipped, not created.** There is nothing for the
 engine to snap to, so it would not build. It comes back as `skipped` with a
