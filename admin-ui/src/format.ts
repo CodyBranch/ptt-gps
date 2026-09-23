@@ -11,3 +11,18 @@ export function raceLabel(race: { name: string; eventNumber?: number | null }): 
     ? race.name
     : `${race.eventNumber}. ${race.name}`;
 }
+
+/**
+ * Characters a device id may contain, and whether a given one is usable.
+ *
+ * Mirrors DEVICE_ID in `server/src/config/schema.ts`, which is the rule that
+ * actually decides: a tracker IMEI is exactly fifteen digits, and anything
+ * else has to carry a letter. That second branch is for the in-vehicle
+ * routers, whose ids are short serials like "16CD" - and the letter is what
+ * keeps a fourteen-digit IMEI from being waved through as one.
+ */
+export const DEVICE_ID_CHARS = /[^A-Za-z0-9._-]/g;
+
+export function isDeviceId(id: string): boolean {
+  return /^\d{15}$/.test(id) || (/[A-Za-z]/.test(id) && /^[A-Za-z0-9._-]{2,24}$/.test(id));
+}

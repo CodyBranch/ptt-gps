@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { LineFramer } from '../src/ingest/framer.js';
-import { parseNmeaFrame, parseNmeaTime } from '../src/ingest/parsers/nmea.js';
+import { deviceIdOf, parseNmeaFrame, parseNmeaTime } from '../src/ingest/parsers/nmea.js';
 
 /**
  * NMEA from the in-vehicle Peplink routers.
@@ -158,5 +158,29 @@ describe('framing a router stream', () => {
     const a = withChecksum(body);
     const b = withChecksum(body.replace('11.2', '0.0'));
     expect(push(`${a}\n${b}\r\n`)).toEqual([a, b]);
+  });
+});
+
+describe('finding the device id for the wire log', () => {
+  /**
+   * The wire log indexes every frame by device so that "everything from this
+   * one" is a lookup rather than a search. It pulled a 15-digit IMEI out of
+   * the text, which no router id looks like - so without this, filtering the
+   * log by a router found nothing at all.
+   */
+  it('reads the short serial a router actually sends', () => {
+    // "16CD" is what these units reported on the legacy system.
+    expect(deviceIdOf(withChecksum(body.replace('PEP-LEAD1', '16CD')))).toBe('16CD');
+  });
+
+  it('agrees with the parser, because they are the same rule', () => {
+    const sentence = withChecksum(body.replace('PEP-LEAD1', '16CD'));
+    expect(deviceIdOf(sentence)).toBe(parseNmeaFrame(sentence, 'peplink', 0).fixes[0].imei);
+  });
+
+  it('finds nothing in a sentence with no id, or in a tracker frame', () => {
+    expect(deviceIdOf(withChecksum('GPRMC,143512.00,A,3027.5698,N,08417.9721,W,11.2,187.4,230926,,,A'))).toBeUndefined();
+    expect(deviceIdOf('+RESP:GTFRI,3C0104,015181000128000,,0,0,1,1,0.0,0,0.0$')).toBeUndefined();
+    expect(deviceIdOf('')).toBeUndefined();
   });
 });

@@ -22,6 +22,18 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '0.18.1',
+    date: '2026-09-23',
+    summary: 'A vehicle router can actually be added now.',
+    fixed: [
+      'The **Fleet** page takes a router id such as `16CD`. Three places check the format of a device id and only the event roster had been taught the new rule, so the page that adds devices to the fleet — the one you would reach for first — still stripped the letters as you typed and then refused what was left. The field keeps what you type, and says which of the two forms is wrong when it is.',
+      'The wire log finds a router. It indexed every frame by looking for a 15-digit IMEI in the text, which no router id looks like, so filtering the log by one found nothing. NMEA is now asked where its own id lives.',
+    ],
+    added: [
+      'Adding a device whose id is not an IMEI points out that vehicle routers are wired in, so the battery box wants unticking — otherwise it shows in the fleet as a tracker that never charges.',
+    ],
+  },
+  {
     version: '0.18.0',
     date: '2026-09-23',
     summary: 'The router in the car can report the car.',

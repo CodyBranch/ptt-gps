@@ -22,7 +22,7 @@ import type { Forwarder } from '../ingest/forwarder.js';
 import type { FixGate } from '../ingest/hygiene.js';
 import type { FirebaseHub } from '../outputs/hub.js';
 import type { Store } from '../state/store.js';
-import { resolveRace } from '../config/schema.js';
+import { DEVICE_ID, resolveRace } from '../config/schema.js';
 import * as turf from '@turf/turf';
 import { SimEngine, type SimTrackerCfg } from '../sim/engine.js';
 import type { DecoderPoller } from '../decoders/poller.js';
@@ -32,6 +32,7 @@ import { DeployManager } from '../deploy/manager.js';
 import { attachFeed } from './feed.js';
 import { registerMeetSync } from './meet-sync.js';
 import { registerRaceLifecycleSync } from './race-sync.js';
+import { deviceIdOf } from '../ingest/parsers/nmea.js';
 
 /** Everything the API needs from the multi-event runtime in index.ts. */
 export interface ServerContext {
@@ -135,8 +136,10 @@ export function startApi(
    */
   const RAW_ROOM = 'raw-wire';
   /** IMEIs are 15 digits; pulling one out here makes "everything from this
-   *  device" an indexed lookup without parsing the frame. */
-  const imeiOf = (text: string): string | undefined => text.match(/\b(\d{15})\b/)?.[1];
+   *  device" an indexed lookup without parsing the frame. A vehicle router's
+   *  id is nothing like an IMEI, so NMEA is asked where its own id lives. */
+  const imeiOf = (text: string): string | undefined =>
+    text.match(/\b(\d{15})\b/)?.[1] ?? deviceIdOf(text);
 
   const emitRaw = (raw: string | Buffer, source: string, ip: string): void => {
     const binary = Buffer.isBuffer(raw);
@@ -1119,7 +1122,11 @@ export function startApi(
     auth.adminOnly,
     act((req) => {
       const { imei, label, model, hasBattery, notes, ownerId, retired } = req.body ?? {};
-      if (!/^\d{15}$/.test(imei ?? '')) throw new Error('IMEI must be 15 digits');
+      // The same rule the event roster uses: a tracker IMEI is exactly fifteen
+      // digits, and a vehicle router's short serial has a letter in it.
+      if (!DEVICE_ID.test(imei ?? '')) {
+        throw new Error("Use a 15-digit IMEI, or a router's device id containing a letter");
+      }
       if (!label || typeof label !== 'string') throw new Error('Label is required');
       ctx.store.upsertFleet({
         imei,

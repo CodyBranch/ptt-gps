@@ -67,6 +67,27 @@ export function parseNmeaTime(date: string, time: string): number {
   );
 }
 
+/**
+ * The unit id a router appends to a sentence, if it was given one.
+ *
+ * The last field is that id, unless it is the single character standard RMC
+ * may end with - the mode indicator, or the magnetic-variation direction on an
+ * older receiver. One character is the whole test, because no id is that short.
+ *
+ * Exported because the wire log indexes frames by device and these ids are
+ * nothing like an IMEI: without this, "everything from this device" finds no
+ * router traffic at all.
+ */
+export function deviceIdOf(sentence: string): string | undefined {
+  const raw = sentence.trim();
+  if (raw[0] !== '$') return undefined;
+  const star = raw.lastIndexOf('*');
+  const f = (star < 0 ? raw.slice(1) : raw.slice(1, star)).split(',');
+  if (!/^G[A-Z]RMC$/.test(f[0] ?? '')) return undefined;
+  const last = f[f.length - 1] ?? '';
+  return f.length > 10 && last.length > 1 ? last : undefined;
+}
+
 export function parseNmeaFrame(
   text: string,
   source: string,
@@ -99,12 +120,7 @@ export function parseNmeaFrame(
     }
   }
 
-  // The last field is the router's unit id, appended after the standard ones.
-  // A sentence that was not given one ends in a single character instead - the
-  // mode indicator, or the magnetic-variation direction on an older receiver -
-  // and one character is the whole test, because no id is that short.
-  const last = f[f.length - 1] ?? '';
-  const imei = f.length > 10 && last.length > 1 ? last : undefined;
+  const imei = deviceIdOf(raw);
   if (!imei) {
     // Without an id there is no way to know which vehicle this is. Worth
     // saying once per sentence rather than dropping it in silence: it means

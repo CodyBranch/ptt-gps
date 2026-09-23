@@ -14,7 +14,7 @@ export type UnitSystem = z.infer<typeof Units>;
  * branch, and the letter requirement is what keeps a 14-digit IMEI from
  * slipping through as one.
  */
-const DEVICE_ID = /^(\d{15}|(?=.*[A-Za-z])[A-Za-z0-9._-]{2,24})$/;
+export const DEVICE_ID = /^(\d{15}|(?=.*[A-Za-z])[A-Za-z0-9._-]{2,24})$/;
 
 export const TrackerSchema = z.object({
   imei: z.string().regex(DEVICE_ID, 'Use a 15-digit IMEI, or a device id containing a letter'),

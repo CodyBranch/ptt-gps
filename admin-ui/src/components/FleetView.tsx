@@ -5,6 +5,7 @@ import { api } from '../api';
 import { MiniMap } from './MapView';
 import type { DeviceAssignment, DeviceIssue, DeviceRow, FleetRow, Owner } from '../types';
 import { Toast } from './Toast';
+import { DEVICE_ID_CHARS, isDeviceId } from '../format';
 
 /**
  * Fleet page: the permanent tracker inventory — shared by every event.
@@ -524,7 +525,10 @@ function DeviceEditDialog({
   const [notes, setNotes] = useState(existing?.notes ?? '');
   const [retired, setRetired] = useState(existing ? !!existing.retired : false);
 
-  const imeiOk = /^\d{15}$/.test(imei);
+  const imeiOk = isDeviceId(imei);
+  // A 15-digit id is a tracker; anything else is a vehicle router, which is
+  // wired in and has no battery to report.
+  const looksLikeRouter = imeiOk && !/^\d{15}$/.test(imei);
   const duplicate = isNew && imeiOk && takenImeis.has(imei);
   const valid = imeiOk && !duplicate && label.trim().length > 0;
 
@@ -551,11 +555,11 @@ function DeviceEditDialog({
         <h3>{isNew ? 'Add a device' : `Edit ${existing!.label}`}</h3>
         <div className="dialog-row">
           <label>
-            IMEI (15 digits)
+            IMEI, or a router's device id
             <input
               value={imei}
               disabled={!isNew}
-              onChange={(e) => setImei(e.target.value.replace(/\D/g, ''))}
+              onChange={(e) => setImei(e.target.value.replace(DEVICE_ID_CHARS, ''))}
               placeholder="015181000128000"
               autoFocus={isNew}
             />
@@ -606,7 +610,19 @@ function DeviceEditDialog({
           </label>
         )}
         {duplicate && <p className="dialog-error">That IMEI is already in the fleet.</p>}
-        {imei !== '' && !imeiOk && <p className="hint">IMEI must be exactly 15 digits ({imei.length} so far).</p>}
+        {imei !== '' && !imeiOk && (
+          <p className="hint">
+            {/^\d*$/.test(imei)
+              ? `A tracker IMEI is exactly 15 digits (${imei.length} so far). A vehicle router's id has a letter in it.`
+              : 'Letters, digits, dot, dash and underscore only — at least two characters.'}
+          </p>
+        )}
+        {looksLikeRouter && hasBattery && (
+          <p className="hint">
+            That looks like a vehicle router rather than a tracker. They are wired into the vehicle, so untick{' '}
+            <b>battery</b> above or it will show as one that never charges.
+          </p>
+        )}
         <div className="dialog-actions">
           <span className="spacer" />
           <button className="mini" onClick={onClose}>
