@@ -312,6 +312,29 @@ One thing to take from the reply rather than the message: a finished race's
 `race` message carries `sessionId: null`, because the session is closed and
 gone. The id of the session your finish closed is in the POST reply.
 
+### Telling a re-run from a restart
+
+A meet occasionally runs a race again — a false start, a course problem. The
+operator resets it here, which puts it back to `scheduled` and leaves the old
+session closed behind it. **Watch the feed's `status` and treat a backwards
+move as the cue**: `live` or `finished` going back to `scheduled` means the
+race is to be run again, and whatever you recorded about having already started
+it no longer applies. Forwards moves are either your own doing or an operator
+pressing Start here.
+
+A restart of this server does not produce a false cue:
+
+- A race that had **finished** comes back finished.
+- A race that was **live** is resumed as live, with its session and its
+  distances, if the server comes back within **six hours** of the gun.
+- Beyond six hours its session is closed as abandoned and the race does read
+  `scheduled` again — but a gun that old is outside any sane recency guard, so
+  a sender that only starts races whose gun is recent will not act on it. Keep
+  that guard.
+
+The one thing a backwards move never tells you is *why*. If that matters, the
+console's own race timeline records who reset it and when.
+
 ### Undoing one
 
 A start or finish applied in error is undone from the console: reset the race
