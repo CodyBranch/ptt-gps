@@ -3,7 +3,7 @@ import path from 'node:path';
 import type { AuthService } from './auth.js';
 import { createEvent, listEvents, readCourseIn, saveCourseIn, ConfigManager, listCoursesIn } from '../config/manager.js';
 import { EventSchema } from '../config/schema.js';
-import { parseCourse } from '../engine/course.js';
+import { countPaths, parseCourse } from '../engine/course.js';
 import { planMeetSync, slugify, type SyncRequest } from '../sync/meet.js';
 import type { App } from '../app.js';
 import type { Store } from '../state/store.js';
@@ -224,6 +224,17 @@ export function registerMeetSync(ex: express.Express, deps: SyncDeps): void {
         );
         continue;
       }
+      // A route exported in pieces parses fine and measures short: only the
+      // first path is used. A person uploading one at the console can see the
+      // length on screen and notice; a machine cannot, so say it here.
+      const paths = countPaths(incoming.kml, true);
+      if (paths > 1) {
+        courseWarnings.push(
+          `Course "${incoming.name ?? incoming.key}" contains ${paths} separate paths and only the first was used ` +
+            `(${parsed.length.toFixed(2)} miles). Export the course as one continuous path.`,
+        );
+      }
+
       const wanted = fingerprint(parsed.line.geometry.coordinates as number[][]);
 
       const match = library.find((c) => {

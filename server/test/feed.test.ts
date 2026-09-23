@@ -46,7 +46,7 @@ describe('the external live feed payload', () => {
   it('carries the protocol version, so a consumer can refuse a shape it does not know', () => {
     const [msg] = feedMessages(snapshot(), NOW);
     expect(msg.protocol).toBe(PROTOCOL);
-    expect(msg.event).toEqual({ id: 'boston-2026', name: 'Boston 2026', meetId: 42 });
+    expect(msg.event).toEqual({ id: 'boston-2026', name: 'Boston 2026', meetId: 42, showDistance: true });
     expect(msg.race.id).toBe('r1');
     expect(msg.race.sessionId).toBe(4);
   });
@@ -158,6 +158,45 @@ describe('the external live feed payload', () => {
   });
 });
 
+describe('the distance-visibility switch', () => {
+  /**
+   * The operator hides a distance when it must not be in front of the public.
+   * A consumer putting distances on a public page is exactly who that is
+   * about, so the switch has to reach them - and an unread field fails
+   * silently, which is why it rides on every race message rather than being
+   * announced once.
+   */
+  it('rides on the meet of every race message', () => {
+    const snap = snapshot();
+    (snap as any).events[0].distanceHidden = true;
+
+    const messages = feedMessages(snap as never, Date.now());
+    expect(messages.length).toBeGreaterThan(0);
+    for (const m of messages) expect(m.event.showDistance).toBe(false);
+  });
+
+  it('reads as shown when nothing has been hidden', () => {
+    for (const m of feedMessages(snapshot() as never, Date.now())) {
+      expect(m.event.showDistance).toBe(true);
+    }
+  });
+
+  it('is on the meet list as well, for a consumer that has not subscribed yet', () => {
+    const snap = snapshot();
+    (snap as any).events[0].distanceHidden = true;
+    expect(eventSummary('boston-2026', snap.events[0] as never).showDistance).toBe(false);
+  });
+
+  it('is a meet-wide switch, not a per-race one', () => {
+    // Worth pinning: a consumer could reasonably expect this per race, and
+    // acting on it per race would leave distances up on every other race.
+    const snap = snapshot();
+    (snap as any).events[0].distanceHidden = true;
+    const summary = eventSummary('boston-2026', snap.events[0] as never);
+    expect(summary.races.some((r) => 'showDistance' in r)).toBe(false);
+  });
+});
+
 describe('the meet list a consumer maps against', () => {
   it('carries what is needed to line a meet up with a consumer record', () => {
     const snap = snapshot();
@@ -170,6 +209,7 @@ describe('the meet list a consumer maps against', () => {
       name: 'Boston 2026',
       meetId: 42,
       externalId: null,
+      showDistance: true,
       startDate: '2026-04-20',
       endDate: '2026-04-20',
       races: [

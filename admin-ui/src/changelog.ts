@@ -22,6 +22,18 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '0.17.0',
+    date: '2026-09-23',
+    summary: 'Hiding the distance now reaches everything showing it.',
+    fixed: [
+      'The **Distance Hidden** switch reaches software reading the live feed. It blanked the scoreboard and the clock, but a consumer on the feed had no way to know it had been pressed — so a public page fed from here would have kept showing the number just taken off the boards. It now travels with every race message and in the meet list, and a change is pushed immediately rather than at the next fix.',
+    ],
+    changed: [
+      'The switch stays a meet-wide one, and it still stops nothing underneath: distances keep flowing to anything reading the feed so that putting the number back is instant. It says do not display this, not do not send it — which is also why anything that conveys progress, a bar as much as a figure, should come down with it.',
+      'A meet pushed in over the API is warned when a course file holds more than one path. Only the first is ever used, so a route exported in pieces measures short while looking perfectly valid — the warning names the file and the length that was taken. An operator uploading one here sees the length on screen; a machine could not.',
+    ],
+  },
+  {
     version: '0.16.1',
     date: '2026-09-22',
     summary: 'A meet sync can take a start time away again.',

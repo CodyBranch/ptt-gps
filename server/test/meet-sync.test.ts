@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { planMeetSync, type SyncRequest } from '../src/sync/meet.js';
+import { countPaths } from '../src/engine/course.js';
 
 /**
  * The merge rules.
@@ -291,5 +292,49 @@ describe('new races', () => {
     expect(out.eventAction).toBe('created');
     expect(out.races[0].action).toBe('created');
     expect(out.config.trackers).toEqual([]);
+  });
+});
+
+describe('a course exported in pieces', () => {
+  /**
+   * Only the first path is ever used. A person uploading a course at the
+   * console sees the length and notices it is short; a machine sending one
+   * cannot, so the sync counts them and warns. This pins the counting.
+   */
+  const kml = (...parts: string[]) => `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2"><Document>${parts
+    .map((c) => `<Placemark><LineString><coordinates>${c}</coordinates></LineString></Placemark>`)
+    .join('')}</Document></kml>`;
+
+  const A = '-84.30,30.44,0 -84.299,30.4405,0 -84.298,30.441,0';
+  const B = '-84.29,30.45,0 -84.289,30.4505,0';
+
+  it('counts one path in a course exported whole', () => {
+    expect(countPaths(kml(A), true)).toBe(1);
+  });
+
+  it('counts the pieces of one exported in parts', () => {
+    expect(countPaths(kml(A, B), true)).toBe(2);
+    expect(countPaths(kml(A, B, B, A), true)).toBe(4);
+  });
+
+  it('counts a GeoJSON MultiLineString by its parts', () => {
+    const gj = JSON.stringify({
+      type: 'Feature',
+      properties: {},
+      geometry: {
+        type: 'MultiLineString',
+        coordinates: [
+          [[-84.3, 30.44], [-84.299, 30.4405]],
+          [[-84.29, 30.45], [-84.289, 30.4505]],
+        ],
+      },
+    });
+    expect(countPaths(gj, false)).toBe(2);
+  });
+
+  it('says nothing rather than throwing on a file it cannot read', () => {
+    expect(countPaths('not xml at all', true)).toBe(0);
+    expect(countPaths('{', false)).toBe(0);
   });
 });

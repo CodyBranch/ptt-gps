@@ -114,6 +114,24 @@ Each entry is a course you want available, keyed so races can point at it.
 | `kml` | string | The course as KML. A `LineString` is what is read from it |
 | `lengthMeters` | number | Optional and advisory — the server measures the line itself |
 
+**Send the course as one continuous path.** Only the first path in a file is
+used — a route exported in pieces parses cleanly and measures short, which
+looks like a working course until the distances are wrong all race. The reply
+warns when a file contains more than one, and gives the length of the piece
+that was taken so you can see at a glance that it is not the whole course:
+
+```
+Course "Broken 5K" contains 3 separate paths and only the first was used
+(0.79 miles). Export the course as one continuous path.
+```
+
+**The trace is taken literally.** No interpolation across gaps, no
+simplification, no snapping to anything. Distance along the course and distance
+off it are both measured against exactly the polyline you send, so a long
+straight chord where the real path curves is a stretch of course that runners
+are genuinely far from — and their fixes will read as far off the line, because
+they are.
+
 **Courses are matched on their geometry, not their name.** If the line you send
 is already in the course library the existing file is reused, whatever it is
 called; the same course arrives named differently from one season to the next,

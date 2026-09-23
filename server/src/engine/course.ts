@@ -115,6 +115,38 @@ export function locateOnCourse(course: Course, lat: number, lon: number): { at: 
   };
 }
 
+/**
+ * How many separate paths a course file contains.
+ *
+ * Only the first is used, and a route exported in pieces looks exactly like a
+ * whole one until the distances come out short - so anything accepting a
+ * course from somewhere other than a person at this console should say when
+ * it finds more than one.
+ */
+export function countPaths(text: string, isKml: boolean): number {
+  let features: Feature[];
+  try {
+    if (isKml) {
+      const doc = new DOMParser().parseFromString(text, 'text/xml');
+      features = kml(doc as unknown as Parameters<typeof kml>[0]).features as Feature[];
+    } else {
+      const gj = JSON.parse(text);
+      features =
+        gj.type === 'FeatureCollection' ? gj.features
+        : gj.type === 'Feature' ? [gj]
+        : [{ type: 'Feature', properties: {}, geometry: gj }];
+    }
+  } catch {
+    return 0;
+  }
+  let paths = 0;
+  for (const f of features) {
+    if (f.geometry?.type === 'LineString') paths++;
+    else if (f.geometry?.type === 'MultiLineString') paths += f.geometry.coordinates.length;
+  }
+  return paths;
+}
+
 function extractLine(features: Feature[]): Feature<LineString> | undefined {
   for (const f of features) {
     if (f.geometry?.type === 'LineString') return f as Feature<LineString>;

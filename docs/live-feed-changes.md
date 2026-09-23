@@ -10,6 +10,35 @@ that never worked.
 
 ---
 
+## v0.17.0 — the hide-distance switch reaches the feed
+
+**`event.showDistance`, a boolean, is now on every `race` message and every
+entry in the meet list.** It was not there before, and it should have been.
+
+**If you put distances on a public display, read it.** It is the operator's
+Distance Shown / Hidden switch — the one that blanks the scoreboard and the
+finish clock mid-race when a distance must not be in front of spectators. Until
+this release a feed consumer had no way to know it had been pressed, so a
+public page kept showing the number that had just been taken off the boards.
+
+```js
+// before — no way to know
+render(role.distance);
+
+// after
+render(m.event.showDistance ? role.distance : null);
+```
+
+Per meet, not per race: one switch covers every race in the meet. Distances
+keep arriving while it is false — the flag is about display, not delivery, so
+that putting the number back is instant. Anything that conveys progress counts
+as a distance, including a progress bar.
+
+Additive, and `protocol` stays **1**. A consumer that does not read it behaves
+exactly as before, which for a public display is the bug this fixes.
+
+---
+
 ## v0.16.0 — which day a race runs
 
 **One new field, additive: `date` on a race**, as `"YYYY-MM-DD"`. It appears in

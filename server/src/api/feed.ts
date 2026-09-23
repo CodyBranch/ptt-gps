@@ -150,6 +150,8 @@ export interface FeedEventSummary {
   meetId: number;
   /** The id this meet carries in the system that pushed it here, if any. */
   externalId: string | null;
+  /** False while the operator has this meet's distances hidden - see FeedEventRef. */
+  showDistance: boolean;
   /** ISO dates from the event's setup, where set. */
   startDate: string | null;
   endDate: string | null;
@@ -174,8 +176,30 @@ export interface FeedEventSummary {
 export interface FeedMessage {
   protocol: number;
   serverTimeMs: number;
-  event: { id: string; name: string; meetId: number };
+  event: FeedEventRef;
   race: FeedRace;
+}
+
+/**
+ * The meet a race message belongs to, and whether its distances may be shown.
+ *
+ * `showDistance` is the operator's Distance Shown / Hidden switch. It exists
+ * because there are moments when a distance must not be in front of the public
+ * - a vehicle on the wrong part of the course, a race not properly under way -
+ * and it is the same flag that blanks the scoreboard and the clock. A consumer
+ * putting distances on a public display is exactly the audience it protects,
+ * so it travels with every race message rather than being something to ask
+ * for.
+ *
+ * It is per meet, not per race: one switch takes every distance in the meet
+ * down and puts it back.
+ */
+export interface FeedEventRef {
+  id: string;
+  name: string;
+  meetId: number;
+  /** False while the operator has the meet's distances hidden. */
+  showDistance: boolean;
 }
 
 interface InternalSnapshot {
@@ -189,6 +213,8 @@ interface InternalSnapshot {
       startDate?: string | null;
       endDate?: string | null;
     };
+    /** The operator's switch, as the App holds it: hidden rather than shown. */
+    distanceHidden?: boolean;
     races: Array<{
       raceId: string;
       name: string;
@@ -293,7 +319,12 @@ export function feedMessages(snapshot: InternalSnapshot, nowMs: number): FeedMes
       out.push({
         protocol: PROTOCOL,
         serverTimeMs: nowMs,
-        event: { id: ev.event.id, name: ev.event.name, meetId: ev.event.meetId },
+        event: {
+          id: ev.event.id,
+          name: ev.event.name,
+          meetId: ev.event.meetId,
+          showDistance: !ev.distanceHidden,
+        },
         race: {
           id: race.raceId,
           name: race.name,
@@ -323,6 +354,7 @@ export function eventSummary(id: string, snap: InternalSnapshot['events'][number
     name: snap.event.name,
     meetId: snap.event.meetId,
     externalId: snap.event.externalId ?? null,
+    showDistance: !snap.distanceHidden,
     startDate: snap.event.startDate ?? null,
     endDate: snap.event.endDate ?? null,
     // The snapshot's races are already in running order, so their position in

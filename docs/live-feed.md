@@ -85,6 +85,7 @@ Sent by the server as soon as you connect. You do not have to ask.
       "name": "Boston Marathon 2026 (demo)",
       "meetId": 9999,
       "externalId": "nx-meet-2231",
+      "showDistance": true,
       "startDate": "2026-04-20",
       "endDate": "2026-04-20",
       "races": [
@@ -203,7 +204,12 @@ race every few seconds.
 {
   "protocol": 1,
   "serverTimeMs": 1788419071382,
-  "event": { "id": "boston-2026-demo", "name": "Boston Marathon 2026 (demo)", "meetId": 9999 },
+  "event": {
+    "id": "boston-2026-demo",
+    "name": "Boston Marathon 2026 (demo)",
+    "meetId": 9999,
+    "showDistance": true
+  },
   "race": {
     "id": "marathon",
     "name": "Marathon",
@@ -266,7 +272,7 @@ Every `race` message is wrapped in these.
 | --- | --- | --- |
 | `protocol` | number | The payload version. Currently `1`. **Check it and refuse a shape you do not know** rather than guessing at unfamiliar fields |
 | `serverTimeMs` | number | The server's clock when the message was built, epoch ms. Compare it with your own to spot clock skew: every age in the payload is computed against this clock, so if the two disagree by minutes, so will your idea of how fresh the data is |
-| `event` | object | `{ id, name, meetId }` — which meet this race belongs to |
+| `event` | object | `{ id, name, meetId, showDistance }` — which meet this race belongs to, and whether its distances may be shown |
 | `race` | object | The race and its roles. See below |
 
 ### The meet list (`hello` and `events`)
@@ -278,6 +284,7 @@ Each entry describes a meet loaded on the server.
 | `id` | string | The meet id. This is what you pass to `subscribe` |
 | `name` | string | Display name |
 | `meetId` | number | The number this meet is known by in the wider timing system. Your primary key for matching, where you have it |
+| `showDistance` | boolean | False while the operator has this meet's distances hidden. **If you display distances to the public, honour it** — see below |
 | `externalId` | string \| null | The id the meet carried in the system that synced it here. Null for a meet built by hand |
 | `startDate` | string \| null | `YYYY-MM-DD`, from the meet's setup |
 | `endDate` | string \| null | `YYYY-MM-DD`. Differs from `startDate` for a multi-day meet |
@@ -354,6 +361,42 @@ already receives from the Firebase output as `path_distoff`, so the two agree.
 a wrong clock would otherwise report positions that look hours old — or worse,
 permanently fresh. Both timestamps are given so you can spot a device whose
 clock has drifted (`fixMs` far from `receivedMs`).
+
+### `showDistance` — when a distance must not be displayed
+
+`event.showDistance` is on every `race` message and on every entry in the meet
+list. It is the operator's **Distance Shown / Hidden** switch in the console.
+
+**If your display is public, do not show a distance while it is false.** That
+is what the switch is for: there are moments during a race when a distance must
+not be in front of spectators — a vehicle on the wrong part of the course, a
+race not properly under way, a tracker reporting nonsense — and the operator
+takes it down in one press. The same flag blanks the scoreboard and the finish
+clock. A consumer that ignores it puts back on a public page the number
+somebody just took off the boards.
+
+- **Boolean**, `true` or `false`, never absent from a current server.
+- **Per meet, not per race.** One switch covers every race in the meet.
+- **It does not stop the data.** Distances keep arriving on the feed while it
+  is false, because putting the number back must be instant when the operator
+  presses it again. The flag is about display, not about delivery.
+- **It says nothing about positions.** Coordinates, speed and staleness keep
+  their meaning. But a progress bar, a percentage, or anything else that shows
+  how far along a vehicle is, is a distance drawn differently — hide those too.
+
+```js
+socket.on('race', (m) => {
+  const canShow = m.event.showDistance;
+  for (const role of m.race.roles) {
+    render(role.key, canShow ? formatDistance(role.distance, m.race.units) : '—', {
+      progress: canShow ? role.distance / m.race.courseLength : null,
+    });
+  }
+});
+```
+
+A change arrives as a fresh set of `race` messages, pushed immediately — the
+same ones an operator's own console redraws from.
 
 ### Precision
 
