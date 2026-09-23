@@ -22,6 +22,22 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '0.18.0',
+    date: '2026-09-23',
+    summary: 'The router in the car can report the car.',
+    added: [
+      'A Peplink router bolted into a lead vehicle can report its own position. It is already there for the cellular uplink and it already knows where it is, so the vehicle is on the map whether or not anybody remembered to charge a tracker and clip it to the dash. The legacy system took these and the port left it behind; this is that feature back.',
+      'A router joins the roster under its own device name and sits on a vehicle like any tracker, including as a role\'s reporting device. The roster takes any id with a letter in it — a tracker IMEI is still held to exactly fifteen digits, so a mistyped one is still caught.',
+      'Routers speak NMEA rather than the tracker protocol, so they need their own port: `--nmea-port 2000` at startup, or a `listeners` entry on the event with `"protocol": "nmea"`.',
+    ],
+    changed: [
+      'The NMEA port is off until it is asked for, which the tracker port is not. The legacy used 2000, but 2000 is not ours to assume — on this network another system already sends race status there, and a listener opened on spec would quietly accept its connections.',
+    ],
+    fixed: [
+      'Three pieces of arithmetic the legacy had wrong and this does not: it read the track angle as an altitude, published boat knots as though they were km/h, and read a frame counter from a field that does not exist in the sentence, so every packet carried NaN. A router reports position, speed and heading; there is no battery reading and no GPS quality, rather than the flat 100% the legacy invented.',
+    ],
+  },
+  {
     version: '0.17.0',
     date: '2026-09-23',
     summary: 'Hiding the distance now reaches everything showing it.',

@@ -4,8 +4,20 @@ export const Units = z.enum(['miles', 'kilometers']);
 /** The value form is a schema; this is the type the rest of the server wants. */
 export type UnitSystem = z.infer<typeof Units>;
 
+/**
+ * A device id: a 15-digit IMEI, or a router id carrying at least one letter.
+ *
+ * Trackers are keyed by IMEI everywhere and a mistyped one is worth catching,
+ * so the all-digit case is still held to exactly fifteen. The in-vehicle
+ * Peplink routers are not trackers and have short serials of their own, which
+ * is why the legacy import skipped them - they are admitted by the second
+ * branch, and the letter requirement is what keeps a 14-digit IMEI from
+ * slipping through as one.
+ */
+const DEVICE_ID = /^(\d{15}|(?=.*[A-Za-z])[A-Za-z0-9._-]{2,24})$/;
+
 export const TrackerSchema = z.object({
-  imei: z.string().regex(/^\d{15}$/, 'IMEI must be 15 digits'),
+  imei: z.string().regex(DEVICE_ID, 'Use a 15-digit IMEI, or a device id containing a letter'),
   label: z.string(),
   /** Vehicle-powered units (GV500CNA) report no battery percent. */
   hasBattery: z.boolean().default(true),
@@ -184,8 +196,20 @@ export const EventSchema = z.object({
    */
   viewerPrecision: ViewerPrecisionSchema.prefault({}),
   listeners: z
-    .array(z.object({ name: z.string(), port: z.number().int() }))
-    .default([{ name: 'queclink', port: 1000 }]),
+    .array(
+      z.object({
+        name: z.string(),
+        port: z.number().int(),
+        /**
+         * What speaks on this port. Trackers and the Franklin-GPS mirror are
+         * 'queclink'; an in-vehicle Peplink router forwarding its own GNSS
+         * position is 'nmea'. One protocol per port - the two are framed
+         * differently and cannot share one.
+         */
+        protocol: z.enum(['queclink', 'nmea']).default('queclink'),
+      }),
+    )
+    .default([{ name: 'queclink', port: 1000, protocol: 'queclink' }]),
   firebase: z.array(FirebaseTargetSchema).default([]),
   trackers: z.array(TrackerSchema),
   vehicles: z.array(VehicleSchema).default([]),

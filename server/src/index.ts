@@ -30,6 +30,17 @@ const eventArg = arg('event');
  * regardless of any roster, so there is no reason to stop accepting them.
  */
 const BASE_LISTEN_PORT = Number(arg('listen-port', '1000'));
+/**
+ * Where the in-vehicle Peplink routers forward their NMEA, when they do.
+ *
+ * Off unless asked for, which the tracker port is not. The legacy server took
+ * these on 2000, but 2000 is not ours to assume: on the PT Timing network a
+ * different system already sends race status there, and a listener opened on
+ * spec would quietly accept its connections and log its traffic as junk. So
+ * the port is named deliberately - `--nmea-port 2000` - or set per event in
+ * `listeners` with `"protocol": "nmea"`.
+ */
+const NMEA_LISTEN_PORT = Number(arg('nmea-port', '0'));
 const eventsDir = path.resolve(
   arg('events-dir') ??
     (eventArg ? path.dirname(eventArg) : fs.existsSync('../events') ? '../events' : 'events'),
@@ -285,27 +296,35 @@ const liveSockets = new Set<net.Socket>();
 let currentPorts = '';
 
 function syncListeners(): void {
-  const portNames = new Map<number, string>();
+  const portNames = new Map<number, { name: string; protocol: 'queclink' | 'nmea' }>();
   for (const m of managers.values()) {
     for (const l of m.resolved().listeners) {
-      if (!portNames.has(l.port)) portNames.set(l.port, l.name);
+      if (!portNames.has(l.port)) portNames.set(l.port, { name: l.name, protocol: l.protocol });
     }
   }
   // Always listening, even with no events — see BASE_LISTEN_PORT. An event that
   // names this port keeps its own label for it.
   if (Number.isFinite(BASE_LISTEN_PORT) && !portNames.has(BASE_LISTEN_PORT)) {
-    portNames.set(BASE_LISTEN_PORT, 'queclink');
+    portNames.set(BASE_LISTEN_PORT, { name: 'queclink', protocol: 'queclink' });
   }
-  const key = [...portNames.keys()].sort().join(',');
+  if (Number.isFinite(NMEA_LISTEN_PORT) && NMEA_LISTEN_PORT > 0 && !portNames.has(NMEA_LISTEN_PORT)) {
+    portNames.set(NMEA_LISTEN_PORT, { name: 'peplink', protocol: 'nmea' });
+  }
+  // The protocol is part of the key: changing what speaks on a port has to
+  // rebuild its listener, not just keep the socket open under a new label.
+  const key = [...portNames.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([port, l]) => `${port}:${l.protocol}`)
+    .join(',');
   if (key === currentPorts) return;
   for (const s of liveSockets) s.destroy();
   liveSockets.clear();
   for (const srv of listenerServers) srv.close();
   listenerServers = [];
   currentPorts = key;
-  for (const [port, name] of portNames) {
+  for (const [port, listener] of portNames) {
     const srv = startListener(
-      { name, port },
+      { name: listener.name, port, protocol: listener.protocol },
       {
         onFix,
         onTelemetry,

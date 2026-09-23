@@ -76,3 +76,37 @@ export class MixedFramer {
     return frames;
   }
 }
+
+/**
+ * Line framer for NMEA streams.
+ *
+ * The MixedFramer cannot be used for these: it treats '$' as the ASCII frame
+ * *terminator*, and an NMEA sentence *begins* with one. Feeding it a router's
+ * output yields an empty frame per sentence and holds each real sentence back
+ * until the next one arrives - so every position would be a second late, and
+ * the last one before a vehicle stopped would never appear at all.
+ *
+ * NMEA is line-oriented, so framing on the newline is both correct and simple.
+ */
+export class LineFramer {
+  private buf = '';
+  /** Lines discarded for being implausibly long - counted for health. */
+  corruptFrames = 0;
+
+  push(chunk: Buffer): Frame[] {
+    this.buf += chunk.toString('ascii');
+    const frames: Frame[] = [];
+    let nl: number;
+    while ((nl = this.buf.indexOf('\n')) >= 0) {
+      const line = this.buf.slice(0, nl).trim();
+      this.buf = this.buf.slice(nl + 1);
+      if (line !== '') frames.push({ kind: 'ascii', text: line });
+    }
+    if (this.buf.length > MAX_BUFFER) {
+      // A stream with no newline in 64KB is not NMEA.
+      this.corruptFrames++;
+      this.buf = '';
+    }
+    return frames;
+  }
+}

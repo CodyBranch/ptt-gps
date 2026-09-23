@@ -34,7 +34,7 @@ export interface Fix {
   countNumber?: number;
   /** Which listener/source produced this. */
   source: string;
-  protocol: 'gtfri-22' | 'gtfri-27' | 'atrack-pro';
+  protocol: 'gtfri-22' | 'gtfri-27' | 'atrack-pro' | 'nmea-rmc';
   /** Raw frame for the audit log: ASCII text, or hex for binary. */
   raw: string;
   receivedAtMs: number;

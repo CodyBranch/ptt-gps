@@ -286,6 +286,19 @@ export const MANUAL: { title: string; subtitle: string; sections: Section[] } = 
             'Retiring a device keeps its history but drops it out of the pickers.',
           ],
         },
+        { t: 'h3', text: 'Vehicle routers' },
+        {
+          t: 'p',
+          text: "A Peplink router already bolted into a lead car can report its own position, so the vehicle is on the map whether or not anybody remembered to charge a tracker. Point the router's GPS forwarding at the server and give it a device name; it joins the roster and a vehicle like any tracker, and can be a role's reporting device.",
+        },
+        {
+          t: 'bullets',
+          items: [
+            'The server has to be listening for them. Routers speak NMEA, which is a different language from the trackers, so it needs its own port — `--nmea-port 2000` when the server starts, or a `listeners` entry on the event with `"protocol": "nmea"`. It is off until you ask for it.',
+            'Add the router under **its device name**, not an IMEI: routers have short serials, and the roster takes any id with a letter in it.',
+            'They are wired into the vehicle, so there is no battery to show and no GPS-quality reading — a router reports position, speed and heading and nothing else.',
+          ],
+        },
       ],
     },
 

@@ -1,7 +1,8 @@
 import net from 'node:net';
-import { MixedFramer } from './framer.js';
+import { LineFramer, MixedFramer } from './framer.js';
 import { parseAsciiFrame } from './parsers/ascii-gtfri.js';
 import { parseBinaryFrame, parseHeartbeat } from './parsers/binary-pro.js';
+import { parseNmeaFrame } from './parsers/nmea.js';
 import type { Fix, Telemetry } from './types.js';
 
 export interface SourceEvents {
@@ -15,6 +16,12 @@ export interface SourceEvents {
 export interface ListenerConfig {
   name: string;
   port: number;
+  /**
+   * What speaks on this port. Trackers and the Franklin-GPS mirror are
+   * 'queclink'; an in-vehicle Peplink router forwarding its own position is
+   * 'nmea'. They cannot share a port - the two are framed differently.
+   */
+  protocol?: 'queclink' | 'nmea';
 }
 
 /**
@@ -24,16 +31,22 @@ export interface ListenerConfig {
  * nothing is written back to the socket.
  */
 export function startListener(cfg: ListenerConfig, events: SourceEvents): net.Server {
+  const nmea = cfg.protocol === 'nmea';
   const server = net.createServer((sock) => {
     const ip = (sock.remoteAddress ?? '?').replace('::ffff:', '');
-    const framer = new MixedFramer();
+    const framer = nmea ? new LineFramer() : new MixedFramer();
     events.onConnection('connect', ip, cfg.name);
 
     sock.on('data', (chunk: Buffer) => {
       const receivedAtMs = Date.now();
       for (const frame of framer.push(chunk)) {
         try {
-          if (frame.kind === 'ascii') {
+          if (frame.kind === 'ascii' && nmea) {
+            events.onRawFrame?.(frame.text, cfg.name, ip);
+            const { fixes, telemetry } = parseNmeaFrame(frame.text, cfg.name, receivedAtMs);
+            fixes.forEach(events.onFix);
+            telemetry.forEach(events.onTelemetry);
+          } else if (frame.kind === 'ascii') {
             events.onRawFrame?.(frame.text, cfg.name, ip);
             // one frame can carry a whole backlog of positions
             const { fixes, telemetry } = parseAsciiFrame(frame.text, cfg.name, receivedAtMs);
@@ -59,7 +72,7 @@ export function startListener(cfg: ListenerConfig, events: SourceEvents): net.Se
   });
 
   server.listen(cfg.port, () => {
-    console.log(`[ingest] listener "${cfg.name}" on tcp:${cfg.port}`);
+    console.log(`[ingest] listener "${cfg.name}" on tcp:${cfg.port} (${cfg.protocol ?? 'queclink'})`);
   });
   return server;
 }
