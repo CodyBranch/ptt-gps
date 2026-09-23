@@ -38,6 +38,8 @@ export function WireLog({ socket }: { socket: Socket | null }) {
   const [query, setQuery] = useState('');
   const [source, setSource] = useState('all');
   const [sources, setSources] = useState<string[]>([]);
+  /** What is listening right now, whether or not anything has spoken to it. */
+  const [listeners, setListeners] = useState<Array<{ name: string; port: number; protocol: string }>>([]);
   const [stats, setStats] = useState<{ frames: number; oldestMs: number | null }>();
   const [loading, setLoading] = useState(false);
   const [noMore, setNoMore] = useState(false);
@@ -63,6 +65,7 @@ export function WireLog({ socket }: { socket: Socket | null }) {
         // the API answers newest-first; the view reads oldest-at-top
         const page: RawFrame[] = (j.frames as RawFrame[]).slice().reverse();
         setSources(j.sources ?? []);
+        setListeners(j.listeners ?? []);
         setStats(j.stats);
         setNoMore(page.length < PAGE);
         setFrames((prev) => (before === undefined ? page : [...page, ...prev]).slice(-KEEP));
@@ -138,6 +141,10 @@ export function WireLog({ socket }: { socket: Socket | null }) {
 
   return (
     <div className="setup">
+      {/* Toolbar and status pinned together: the page scrolls itself to the
+          newest frame, so anything left in the flow above is never on screen
+          when someone is reading the log. */}
+      <div className="wire-head">
       <div className="setup-bar">
         <span className="setup-title">Wire log</span>
         <span className="spacer" />
@@ -149,11 +156,14 @@ export function WireLog({ socket }: { socket: Socket | null }) {
         />
         <select className="fleet-filter" value={source} onChange={(e) => setSource(e.target.value)}>
           <option value="all">All ports</option>
-          {sources.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
+          {sources.map((s) => {
+            const open = listeners.find((l) => l.name === s);
+            return (
+              <option key={s} value={s}>
+                {open ? `${s} — tcp:${open.port}` : s}
+              </option>
+            );
+          })}
         </select>
         <button
           className={`mini ${live ? 'on' : ''}`}
@@ -181,9 +191,19 @@ export function WireLog({ socket }: { socket: Socket | null }) {
             {stats.oldestMs !== null && ` back to ${day(stats.oldestMs)}`}
           </span>
         )}
+        {listeners.length > 0 && (
+          /* Which ports are open, named. Without this, a port that is listening
+             and silent looks exactly like one that was never opened — and that
+             is the question someone comes to this page to answer. */
+          <span className="dim">
+            {' · listening on '}
+            {listeners.map((l) => `${l.name} tcp:${l.port}`).join(', ')}
+          </span>
+        )}
         {!live && <span className="warn-text"> · history only, not following new frames</span>}
         {live && paused && <span className="warn-text"> · paused — frames are still being recorded</span>}
         {error && <span className="warn-text"> · {error}</span>}
+      </div>
       </div>
 
       <div className="wire-log" ref={listRef}>

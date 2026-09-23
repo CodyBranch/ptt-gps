@@ -294,6 +294,8 @@ function snapshotFor(eventId: string) {
 let listenerServers: net.Server[] = [];
 const liveSockets = new Set<net.Socket>();
 let currentPorts = '';
+/** What is listening right now, for the wire log to name even when silent. */
+let openListeners: Array<{ name: string; port: number; protocol: string }> = [];
 
 function syncListeners(): void {
   const portNames = new Map<number, { name: string; protocol: 'queclink' | 'nmea' }>();
@@ -322,6 +324,9 @@ function syncListeners(): void {
   for (const srv of listenerServers) srv.close();
   listenerServers = [];
   currentPorts = key;
+  openListeners = [...portNames.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([port, l]) => ({ name: l.name, port, protocol: l.protocol }));
   for (const [port, listener] of portNames) {
     const srv = startListener(
       { name: listener.name, port, protocol: listener.protocol },
@@ -375,6 +380,7 @@ const ctx: ServerContext = {
   snapshotAll,
   snapshotFor,
   onSimulatedDistance,
+  listeners: () => openListeners,
 };
 
 const { broadcast, emitRaw } = startApi(ctx, Number(arg('api-port', '8080')));

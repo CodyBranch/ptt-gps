@@ -56,6 +56,8 @@ export interface ServerContext {
   snapshotAll: () => unknown;
   snapshotFor: (eventId: string) => unknown;
   onSimulatedDistance: (data: Record<string, unknown>) => void;
+  /** The ports open right now, named. See the wire log's source filter. */
+  listeners: () => Array<{ name: string; port: number; protocol: string }>;
 }
 
 export function startApi(
@@ -1056,7 +1058,15 @@ export function startApi(
         imei: q.imei,
         q: q.q,
       }),
-      sources: ctx.store.wireSources(),
+      /**
+       * Every source the log could show: the ones that have sent something,
+       * plus every port open right now. A listener that has never been
+       * spoken to belongs in the list - its absence is otherwise
+       * indistinguishable from the port not being open at all, which is
+       * exactly the question someone filtering by it is asking.
+       */
+      sources: [...new Set([...ctx.store.wireSources(), ...ctx.listeners().map((l) => l.name)])].sort(),
+      listeners: ctx.listeners(),
       stats: ctx.store.wireStats(),
     });
   });

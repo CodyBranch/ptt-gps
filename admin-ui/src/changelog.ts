@@ -22,6 +22,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '0.18.2',
+    date: '2026-09-23',
+    summary: 'The wire log says which ports are open.',
+    fixed: [
+      'The port filter lists every port that is listening, not only the ones something has already sent on. A port nobody has spoken to was missing from the list entirely, which is indistinguishable from the port not being open — and telling those two apart is the reason to come to this page when a device has gone quiet. Each one now names its number too, so **peplink — tcp:2000** answers "is it even listening, and on what?" in one glance.',
+      'The line under the toolbar stays on screen. It carries what is listening and how far the log goes back, and it scrolled away the moment the log jumped to the newest frame — so in practice nobody ever saw it. It is pinned with the toolbar now, at any width.',
+    ],
+  },
+  {
     version: '0.18.1',
     date: '2026-09-23',
     summary: 'A vehicle router can actually be added now.',
