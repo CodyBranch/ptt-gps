@@ -294,7 +294,7 @@ export const MANUAL: { title: string; subtitle: string; sections: Section[] } = 
         {
           t: 'bullets',
           items: [
-            'The server has to be listening for them. Routers speak NMEA, which is a different language from the trackers, so it needs its own port — `--nmea-port 2000` when the server starts, or a `listeners` entry on the event with `"protocol": "nmea"`. It is off until you ask for it.',
+            'The server has to be listening for them. Routers speak NMEA, which is a different language from the trackers, so it needs its own port: turn it on under **System → Vehicle routers**, which takes effect straight away and survives a restart. It is off until you ask for it, because it is a port open to whatever can reach the machine.',
             'Add the router under **its device name**, not an IMEI: routers have short serials, and the roster takes any id with a letter in it.',
             'They are wired into the vehicle, so there is no battery to show and no GPS-quality reading — a router reports position, speed and heading and nothing else.',
           ],

@@ -38,6 +38,8 @@ export function SystemView({ ask }: { ask: (req: ConfirmRequest) => void }) {
           <LiveFeedPanel onMsg={setMsg} ask={ask} />
           <h3 className="section-gap">Split feed (external)</h3>
           <SplitFeedPanel onMsg={setMsg} ask={ask} />
+          <h3 className="section-gap">Vehicle routers (inbound)</h3>
+          <NmeaPortPanel onMsg={setMsg} />
           <h3 className="section-gap">Ping forwarding</h3>
           <ForwardsPanel onMsg={setMsg} ask={ask} />
         </section>
@@ -750,6 +752,108 @@ interface ForwardRow {
   sent?: number;
   dropped?: number;
   error?: string;
+}
+
+interface ListenerRow {
+  name: string;
+  port: number;
+  protocol: string;
+  error?: string;
+}
+
+/**
+ * The port in-vehicle routers forward their position to.
+ *
+ * A switch rather than a startup flag because the alternative is editing a
+ * Windows service definition and reinstalling it, and the moment anyone needs
+ * this is the moment a lead car is sitting in a car park waiting to connect.
+ * Off until someone turns it on: it is a port open to whatever can reach it.
+ */
+function NmeaPortPanel({ onMsg }: { onMsg: (m: Msg) => void }) {
+  const [listeners, setListeners] = useState<ListenerRow[]>([]);
+  const [port, setPort] = useState('');
+  const [current, setCurrent] = useState(0);
+  const [busy, setBusy] = useState(false);
+
+  const load = () =>
+    api
+      .listeners()
+      .then((r: { listeners: ListenerRow[]; nmeaPort: number }) => {
+        setListeners(r.listeners ?? []);
+        setCurrent(r.nmeaPort ?? 0);
+        setPort(r.nmeaPort ? String(r.nmeaPort) : '2000');
+      })
+      .catch(console.error);
+
+  useEffect(() => {
+    void load();
+  }, []);
+
+  const apply = async (next: number) => {
+    setBusy(true);
+    try {
+      await api.setNmeaPort(next);
+      onMsg({
+        kind: 'ok',
+        text: next === 0 ? 'Vehicle routers are switched off.' : `Listening for vehicle routers on tcp:${next}.`,
+      });
+    } catch (err) {
+      // A port that would not open throws with the reason. The panel reloads
+      // either way, so it shows the failure beside the port that caused it.
+      onMsg({ kind: 'err', text: (err as Error).message });
+    } finally {
+      await load();
+      setBusy(false);
+    }
+  };
+
+  const open = listeners.find((l) => l.protocol === 'nmea' && l.port === current && current > 0);
+
+  return (
+    <>
+      <p className="hint">
+        Peplink routers already in the vehicles can report their own position, so a car is on the map whether or not
+        a tracker was charged. Point the router&apos;s GPS forwarding here — NMEA, TCP, GPRMC, with its Vehicle ID
+        set — and add it to the fleet under that ID. See <span className="mono">Help → Fleet</span>.
+      </p>
+
+      <div className="form-row">
+        <label>
+          Port
+          <input
+            value={port}
+            inputMode="numeric"
+            placeholder="2000"
+            disabled={busy}
+            onChange={(e) => setPort(e.target.value.replace(/\D/g, '').slice(0, 5))}
+          />
+        </label>
+        {current > 0 ? (
+          <>
+            <button className="mini self-end" disabled={busy || Number(port) === current} onClick={() => void apply(Number(port))}>
+              Change port
+            </button>
+            <button className="mini danger self-end" disabled={busy} onClick={() => void apply(0)}>
+              Switch off
+            </button>
+          </>
+        ) : (
+          <button className="mini primary self-end" disabled={busy || !Number(port)} onClick={() => void apply(Number(port))}>
+            Start listening
+          </button>
+        )}
+      </div>
+
+      {current > 0 && !open?.error && (
+        <p className="hint">
+          <span className="fwd-ok">● Listening on tcp:{current}</span> — anything that can reach this machine on that
+          port can report a position, so it wants a firewall rule rather than an open door.
+        </p>
+      )}
+      {open?.error && <p className="dialog-error">Could not open the port: {open.error}</p>}
+      {current === 0 && <p className="hint dim">Off — nothing is listening for routers.</p>}
+    </>
+  );
 }
 
 function ForwardsPanel({ onMsg, ask }: { onMsg: (m: Msg) => void; ask: (req: ConfirmRequest) => void }) {

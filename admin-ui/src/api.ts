@@ -218,6 +218,9 @@ export const api = {
     send(`/api/feed-tokens/${id}`, 'PATCH', { canWriteSetup }),
   setFeedTokenRunRaces: (id: number, canRunRaces: boolean) =>
     send(`/api/feed-tokens/${id}`, 'PATCH', { canRunRaces }),
+
+  listeners: () => getJson('/api/listeners'),
+  setNmeaPort: (port: number) => send('/api/listeners/nmea', 'POST', { port }),
   deleteFeedToken: (id: number) => send(`/api/feed-tokens/${id}`, 'DELETE'),
   regenerateIngestToken: async (): Promise<string> => (await send('/api/ingest-token', 'POST')).token,
 

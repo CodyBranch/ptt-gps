@@ -31,10 +31,11 @@
   <description>Live race tracking: tracker ingest, race engines, and the operator console.</description>
 
   <executable>@@NODE@@</executable>
-  <!-- In-vehicle Peplink routers forward NMEA rather than tracker frames, so
-       they need their own port and it is not opened unless asked for. Add
-       `--nmea-port 2000` below to take them, and check nothing else on the
-       network already answers on the port you choose. -->
+  <!-- In-vehicle Peplink routers forward NMEA rather than tracker frames and
+       need their own port. Turn it on in the console under System - Vehicle
+       routers; it is stored and survives a restart, so it does not belong in
+       these arguments. `--nmea-port` exists as a starting default for a box
+       that has never been told. -->
   <arguments>"%BASE%\..\server\dist\index.js" --db "%BASE%\..\server\data\ptt.db" --events-dir "%BASE%\..\events" --api-port 8080</arguments>
   <workingdirectory>%BASE%\..\server</workingdirectory>
 

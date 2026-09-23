@@ -22,6 +22,21 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '0.19.0',
+    date: '2026-09-23',
+    summary: 'Vehicle routers are switched on from the console.',
+    added: [
+      'A **Vehicle routers** panel under System: give it a port, press **Start listening**, and in-vehicle Peplink routers can report from that moment. It was a startup flag, which meant editing a Windows service definition and reinstalling it — not a thing to be doing while a lead car sits in a car park waiting to connect. The choice is stored and comes back after a restart.',
+      'The panel says what it opened and what it could not: a port already carrying trackers is refused by name, and one held by another program says so rather than failing silently.',
+    ],
+    fixed: [
+      'A port that cannot be opened no longer takes the whole server down with it. `listen` had no error handler, so an unhandled error on one socket killed the process — every other port, every running race and the console with it. It now reports which port and why, and carries on.',
+    ],
+    changed: [
+      'The port stays off until someone turns it on. It accepts positions from anything that can reach the machine, which is worth a deliberate decision and a firewall rule rather than a default.',
+    ],
+  },
+  {
     version: '0.18.2',
     date: '2026-09-23',
     summary: 'The wire log says which ports are open.',

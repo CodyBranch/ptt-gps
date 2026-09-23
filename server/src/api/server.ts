@@ -57,7 +57,10 @@ export interface ServerContext {
   snapshotFor: (eventId: string) => unknown;
   onSimulatedDistance: (data: Record<string, unknown>) => void;
   /** The ports open right now, named. See the wire log's source filter. */
-  listeners: () => Array<{ name: string; port: number; protocol: string }>;
+  listeners: () => Array<{ name: string; port: number; protocol: string; error?: string }>;
+  /** The port vehicle routers forward NMEA to, or 0 when that is switched off. */
+  nmeaPort: () => number;
+  setNmeaPort: (port: number) => void;
 }
 
 export function startApi(
@@ -1069,6 +1072,44 @@ export function startApi(
       listeners: ctx.listeners(),
       stats: ctx.store.wireStats(),
     });
+  });
+
+  /** What is listening, and whether the vehicle-router port is on. */
+  ex.get('/api/listeners', (_req, res) => {
+    res.json({ ok: true, listeners: ctx.listeners(), nmeaPort: ctx.nmeaPort() });
+  });
+
+  /**
+   * Turn the vehicle-router port on or off, and say which port.
+   *
+   * A setting rather than a startup flag because the alternative is editing a
+   * Windows service definition and reinstalling it, which is not a thing to be
+   * doing while a lead car waits to connect. Takes effect immediately.
+   */
+  ex.post('/api/listeners/nmea', auth.adminOnly, (req, res) => {
+    const port = Number(req.body?.port ?? 0);
+    if (!Number.isInteger(port) || port < 0 || port > 65535) {
+      return void res.status(400).json({ ok: false, error: 'Port must be a whole number from 1 to 65535, or 0 to switch it off' });
+    }
+    // A port already carrying trackers would take NMEA framing and drop every
+    // frame; the clash is worth refusing rather than debugging later.
+    const clash = ctx.listeners().find((l) => l.port === port && l.protocol !== 'nmea');
+    if (port !== 0 && clash) {
+      return void res
+        .status(409)
+        .json({ ok: false, error: `tcp:${port} is already listening for "${clash.name}" (${clash.protocol})` });
+    }
+
+    ctx.setNmeaPort(port);
+    // Binding is asynchronous, so a port held by another process fails just
+    // after this returns. Give it a moment and report what actually happened.
+    setTimeout(() => {
+      const open = ctx.listeners().find((l) => l.protocol === 'nmea' && l.port === port);
+      // The choice is kept even when the bind failed - the port may be free
+      // again after whatever holds it stops - but this is not a success, and a
+      // caller that only checks `ok` must not be told it was.
+      res.json({ ok: !open?.error, port, listeners: ctx.listeners(), error: open?.error ?? null });
+    }, 250);
   });
 
   ex.post('/api/wire/clear', auth.adminOnly, (_req, res) => {

@@ -40,7 +40,19 @@ const BASE_LISTEN_PORT = Number(arg('listen-port', '1000'));
  * the port is named deliberately - `--nmea-port 2000` - or set per event in
  * `listeners` with `"protocol": "nmea"`.
  */
-const NMEA_LISTEN_PORT = Number(arg('nmea-port', '0'));
+const NMEA_PORT_ARG = Number(arg('nmea-port', '0'));
+
+/**
+ * The NMEA port the operator has chosen, or the one this process was started
+ * with. The console writes the setting, so turning vehicle routers on does not
+ * mean editing a service definition and reinstalling it - which on a race
+ * morning is the difference between a switch and a job.
+ */
+function nmeaPort(): number {
+  const saved = store.getSetting('nmea-port');
+  const n = saved === null || saved === undefined || saved === '' ? NMEA_PORT_ARG : Number(saved);
+  return Number.isFinite(n) && n > 0 && n < 65536 ? n : 0;
+}
 const eventsDir = path.resolve(
   arg('events-dir') ??
     (eventArg ? path.dirname(eventArg) : fs.existsSync('../events') ? '../events' : 'events'),
@@ -295,7 +307,9 @@ let listenerServers: net.Server[] = [];
 const liveSockets = new Set<net.Socket>();
 let currentPorts = '';
 /** What is listening right now, for the wire log to name even when silent. */
-let openListeners: Array<{ name: string; port: number; protocol: string }> = [];
+let openListeners: Array<{ name: string; port: number; protocol: string; error?: string }> = [];
+/** Ports that would not open, by port, so the console can say why. */
+const listenErrors = new Map<number, string>();
 
 function syncListeners(): void {
   const portNames = new Map<number, { name: string; protocol: 'queclink' | 'nmea' }>();
@@ -309,8 +323,9 @@ function syncListeners(): void {
   if (Number.isFinite(BASE_LISTEN_PORT) && !portNames.has(BASE_LISTEN_PORT)) {
     portNames.set(BASE_LISTEN_PORT, { name: 'queclink', protocol: 'queclink' });
   }
-  if (Number.isFinite(NMEA_LISTEN_PORT) && NMEA_LISTEN_PORT > 0 && !portNames.has(NMEA_LISTEN_PORT)) {
-    portNames.set(NMEA_LISTEN_PORT, { name: 'peplink', protocol: 'nmea' });
+  const nmea = nmeaPort();
+  if (nmea > 0 && !portNames.has(nmea)) {
+    portNames.set(nmea, { name: 'peplink', protocol: 'nmea' });
   }
   // The protocol is part of the key: changing what speaks on a port has to
   // rebuild its listener, not just keep the socket open under a new label.
@@ -324,6 +339,7 @@ function syncListeners(): void {
   for (const srv of listenerServers) srv.close();
   listenerServers = [];
   currentPorts = key;
+  listenErrors.clear();
   openListeners = [...portNames.entries()]
     .sort((a, b) => a[0] - b[0])
     .map(([port, l]) => ({ name: l.name, port, protocol: l.protocol }));
@@ -336,6 +352,11 @@ function syncListeners(): void {
         onRawFrame: (raw, src, ip) => {
           forwarder.write(raw);
           emitRaw(raw, src, ip);
+        },
+        onListenError: (message, cfg) => {
+          listenErrors.set(cfg.port, message);
+          const entry = openListeners.find((l) => l.port === cfg.port);
+          if (entry) entry.error = message;
         },
         onConnection: (event, ip, source) => {
           console.log(`[${source}] ${ip} ${event}`);
@@ -381,6 +402,14 @@ const ctx: ServerContext = {
   snapshotFor,
   onSimulatedDistance,
   listeners: () => openListeners,
+  nmeaPort,
+  setNmeaPort: (port: number) => {
+    store.setSetting('nmea-port', String(port));
+    // Rebuild now rather than at the next event change: the operator pressed
+    // this because a router is waiting to connect.
+    currentPorts = '';
+    syncListeners();
+  },
 };
 
 const { broadcast, emitRaw } = startApi(ctx, Number(arg('api-port', '8080')));

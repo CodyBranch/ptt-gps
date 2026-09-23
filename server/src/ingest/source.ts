@@ -9,6 +9,13 @@ export interface SourceEvents {
   onFix: (fix: Fix) => void;
   onTelemetry: (t: Telemetry) => void;
   onConnection: (event: 'connect' | 'close' | 'error', ip: string, source: string) => void;
+  /**
+   * The port could not be opened - almost always something else already has
+   * it. Reported rather than thrown: an unhandled 'error' on a net.Server
+   * takes the process down, so one bad port would stop the whole system
+   * including the ports that were fine.
+   */
+  onListenError?: (message: string, cfg: ListenerConfig) => void;
   /** Raw frame exactly as received — ASCII text or original binary bytes. */
   onRawFrame?: (raw: string | Buffer, source: string, ip: string) => void;
 }
@@ -69,6 +76,17 @@ export function startListener(cfg: ListenerConfig, events: SourceEvents): net.Se
     });
     sock.on('error', () => events.onConnection('error', ip, cfg.name));
     sock.on('close', () => events.onConnection('close', ip, cfg.name));
+  });
+
+  server.on('error', (err: NodeJS.ErrnoException) => {
+    const why =
+      err.code === 'EADDRINUSE'
+        ? `tcp:${cfg.port} is already in use by something else on this machine`
+        : err.code === 'EACCES'
+          ? `tcp:${cfg.port} needs permission this process does not have`
+          : (err.message ?? String(err));
+    console.error(`[ingest] listener "${cfg.name}" could not open ${why}`);
+    events.onListenError?.(why, cfg);
   });
 
   server.listen(cfg.port, () => {
