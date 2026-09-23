@@ -269,7 +269,7 @@ Authorization: Bearer <token with Run races>
 | --- | --- |
 | `eventId` | The event id from the setup push. It must be **open** on this server |
 | `raceId` | The race id from the setup push. Falls back to `externalId` if it does not match, so a sender that never stored ours can still drive a race |
-| `action` | `start` or `finish`. Arm and reset are not reachable from here — they stay with the operator watching the course |
+| `action` | `start` or `finish`, and nothing else. `arm` and `reset` exist at the console but are not reachable from here; anything else answers `400` |
 | `atMs` | Epoch milliseconds: the gun for a start, the gun plus the winner's time for a finish. **Not "now"** — a late delivery still stamps the race at the gun |
 | `reason` | Free text, logged. `gun` and `first-finisher` are the useful ones |
 
@@ -331,15 +331,50 @@ as a result.
 
 ### What stays with the operator
 
-Arming and resetting. Arming is how the person watching the course says the
-vehicles are in place, and resetting is how they undo a false start; neither is
-something a machine elsewhere can see. If an operator has already started or
+Arming and resetting, and the Distance Shown / Hidden switch.
+
+Arming is how the person watching the course says the vehicles are in place,
+and resetting is how they undo a false start or a race that has to be run
+again; neither is something a machine elsewhere can see. Hiding the distance is
+a judgement about what should be in front of spectators right now. All three
+are readable from the feed — `status` for the first two, `event.showDistance`
+for the third — so a sender can show their state without being able to set
+them. If an operator has already started or
 finished a race from the console, the feed says so and a push for the same
 thing comes back `unchanged`.
 
-Correcting the start time of a race that is already live is a console job too.
-There is no API for it: it rewrites every distance timestamp in an open
-session, and that wants the person who can see the consequences.
+**A gun time cannot be corrected once a race is live** — not over the API and
+not at the console either. Re-sending `start` with a different `atMs` is a
+no-op: the race is already live, so it answers `unchanged` and the time stands.
+What the recorded time governs is the session record and the point recorded
+fixes are replayed from after a restart; distances are snapped from position,
+not derived from it, so a wrong gun does not move anybody's distance.
+
+If the time has to be right, reset the race at the console and start it again.
+That opens a new session and leaves the first one closed behind it, so it is
+worth doing early or not at all.
+
+---
+
+## What has changed, and when
+
+The HTTP endpoints are not versioned separately: they move with the server's
+own version, shown at the foot of the console sidebar. This is the list to read
+before assuming a shape. The socket feed has its own contract and its own
+history in [live-feed-changes.md](live-feed-changes.md); its `protocol` is
+still **1**.
+
+| Version | Change |
+| --- | --- |
+| 0.14.0 | `POST /api/sync/meet`, with the **Setup write** token capability. Meets and races carry `externalId` |
+| 0.15.0 | `POST /api/sync/lifecycle` (`start` and `finish` only), with the separate **Run races** capability. A repeated start became a no-op rather than a second session |
+| 0.16.0 | `date` on a race, for a meet that runs across more than one day |
+| 0.16.1 | A field sent explicitly as `null` clears it. Leaving a key out still changes nothing |
+| 0.17.0 | The reply warns when a course file holds more than one path. `event.showDistance` added to the feed |
+
+Nothing has been removed or renamed since the first release of either endpoint.
+If that ever has to happen it will appear here first, and the old shape will go
+on working for a release.
 
 ---
 
