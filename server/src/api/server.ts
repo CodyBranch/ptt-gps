@@ -698,6 +698,8 @@ export function startApi(
       const courses: Record<string, [number, number][]> = {};
       for (let i = 0; i < resolved.races.length; i++) {
         const rawFile = raw.races[i].course;
+        // A race whose course has not been traced yet has nothing to export.
+        if (!rawFile || rawFile.trim() === '') continue;
         if (!courses[rawFile]) {
           courses[rawFile] = loadCourse(resolved.races[i].course, 'miles').line.geometry.coordinates as [number, number][];
         }

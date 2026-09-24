@@ -212,17 +212,47 @@ describe('races that are running', () => {
   });
 });
 
-describe('races that cannot be built yet', () => {
-  it('skips a new race with no course rather than writing one the engine refuses', () => {
+describe('races whose line has not been traced yet', () => {
+  /**
+   * The schedule is settled weeks out and the course is walked days before, so
+   * a meet that could only be sent once every course had a GPX could not be
+   * sent at all. The race lands without one and is linked to a course here.
+   */
+  it('takes a new race with no course, and says it needs one', () => {
     const out = plan(request({ races: [{ name: 'Open 3K', courseKey: null }] }));
-    expect(out.races[0]).toMatchObject({ action: 'skipped' });
-    expect(out.races[0].reason).toMatch(/no course/i);
-    expect(out.config.races).toHaveLength(1); // nothing added
+    expect(out.races[0].action).toBe('created');
+    expect(out.races[0].reason).toMatch(/no course yet/i);
+    expect(out.config.races).toHaveLength(2);
   });
 
-  it('skips when the course key is not among the courses sent', () => {
+  it('writes the empty course as a value, not as a missing key', () => {
+    const out = plan(request({ races: [{ name: 'Open 3K', courseKey: null }] }));
+    const added = out.config.races.find((r) => r.name === 'Open 3K')!;
+    expect(added.course).toBe('');
+  });
+
+  it('keeps the number and the time, which are the part that is known', () => {
+    const out = plan(request({
+      races: [{ name: 'Open 3K', courseKey: null, eventNumber: 4, scheduledStart: '09:30', order: 4 }],
+    }));
+    expect(out.config.races.find((r) => r.name === 'Open 3K')).toMatchObject({
+      eventNumber: 4, scheduledStart: '09:30', order: 4,
+    });
+  });
+
+  it('takes the race when the course key was not among the courses sent, and says so', () => {
     const out = plan(request({ races: [{ name: 'Open 3K', courseKey: 'c-never-sent' }] }));
-    expect(out.races[0].action).toBe('skipped');
+    expect(out.races[0].action).toBe('created');
+    expect(out.races[0].reason).toMatch(/was not in the request/);
+  });
+
+  it('a course linked later is kept when the meet is sent again without one', () => {
+    const first = plan(request({ races: [{ name: 'Open 3K', courseKey: null }] }));
+    // Somebody links it in Event Setup.
+    first.config.races.find((r) => r.name === 'Open 3K')!.course = 'courses/gans-3k.kml';
+    const again = plan(request({ races: [{ name: 'Open 3K', courseKey: null }] }), first.config);
+    expect(again.config.races.find((r) => r.name === 'Open 3K')!.course).toBe('courses/gans-3k.kml');
+    expect(again.races[0].reason).toBeUndefined();
   });
 });
 

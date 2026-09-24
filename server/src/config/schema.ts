@@ -129,8 +129,19 @@ export const RaceSchema = z.object({
    * exactly as it always did.
    */
   order: z.number().int().optional(),
-  /** Path to a KML or GeoJSON course file, relative to the event file. */
-  course: z.string(),
+  /**
+   * Path to a KML or GeoJSON course file, relative to the event file.
+   *
+   * Empty means the line has not been traced yet. A race in that state is real
+   * — it has a number, a time and a place in the running order — it simply
+   * cannot be tracked, so no engine is built for it and it does not appear on
+   * the live board. It shows in Event Setup with an empty course picker, which
+   * is where somebody links it once the course exists.
+   *
+   * This is how a meet pushed from Nexus arrives when the courses have not been
+   * walked yet: the schedule is known weeks out, the GPX never is.
+   */
+  course: z.string().default(''),
   units: Units.default('miles'),
   /**
    * Course markers (mile/km posts, aid stations) belong to the course, not to

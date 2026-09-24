@@ -41,6 +41,12 @@ export function parseEventConfig(
 
   const resolved: EventConfig = structuredClone(raw);
   for (const race of resolved.races) {
+    // A race whose line has not been traced yet is left as it is rather than
+    // resolved. Resolving it would be worse than useless: path.resolve against
+    // an empty string yields the event's own directory, which exists, so the
+    // check below would pass and the engine would later be handed a folder to
+    // read as a course.
+    if (race.course.trim() === '') continue;
     const coursePath = path.resolve(baseDir, race.course);
     if (!fs.existsSync(coursePath)) {
       throw new Error(`Race "${race.id}": course file not found: ${race.course}`);

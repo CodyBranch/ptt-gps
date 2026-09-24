@@ -31,6 +31,18 @@ function rowToFix(r: Record<string, unknown>): Fix {
   };
 }
 
+/**
+ * Whether this race has a line to snap to yet.
+ *
+ * A race pushed from a meet manager arrives with its number, its time and its
+ * place in the running order long before anybody has walked the course with a
+ * GPS. Such a race is real and belongs in the config — it is just not something
+ * an engine can be built for, so it is carried until its course is linked.
+ */
+export function trackable(race: { course?: string }): boolean {
+  return typeof race.course === 'string' && race.course.trim() !== '';
+}
+
 export interface AppEvents {
   emit: (event: string, payload: unknown) => void;
 }
@@ -92,6 +104,14 @@ export class App {
     }
 
     for (const race of cfg.races) {
+      // No line to snap to, no engine. The race still exists in the config and
+      // still shows in Event Setup, where its course gets linked; it simply
+      // cannot be tracked until then, and building an engine would only fail
+      // on a course file that is not there.
+      if (!trackable(race)) {
+        console.log(`[${cfg.id}] race "${race.id}": no course yet — not tracked until one is linked`);
+        continue;
+      }
       const engine = new RaceEngine(cfg, race, this.engineHooks());
       this.engines.set(race.id, engine);
       console.log(
@@ -475,7 +495,15 @@ export class App {
 
     for (const race of next.races) {
       const engine = this.engines.get(race.id);
+      // A course removed from a race that is not running drops its engine, the
+      // mirror of linking one: the race stays, the tracking stops.
+      if (!trackable(race)) {
+        if (engine && engine.status !== 'armed' && engine.status !== 'live') this.engines.delete(race.id);
+        continue;
+      }
       if (!engine) {
+        // Linking a course to a race that had none is how a pushed race becomes
+        // trackable, and it happens on this path rather than at startup.
         this.engines.set(race.id, new RaceEngine(next, race, this.engineHooks()));
         continue;
       }

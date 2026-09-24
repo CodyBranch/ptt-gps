@@ -225,16 +225,19 @@ export function planMeetSync(input: {
     }
 
     if (!course) {
-      // A race has to have a course: the schema requires one, and a race with
-      // nothing to snap to is not a race an engine can build.
-      reports.push({
-        externalId: incoming.externalId ?? undefined,
-        id: raceId,
-        name: incoming.name,
-        action: 'skipped',
-        reason: 'no course yet - trace it and send the meet again',
-      });
-      continue;
+      // The race is taken anyway, without a line to run on.
+      //
+      // It used to be refused here, on the grounds that an engine cannot be
+      // built without a course. True, but it made the wrong thing impossible:
+      // a schedule is settled weeks out and a course is traced days before, so
+      // refusing the race until the GPX exists meant the meet could not be sent
+      // at all, and every race had to be re-sent afterwards to pick up a course
+      // that was linked over here anyway.
+      //
+      // So the race lands, carrying its number, time and running order, and
+      // shows in Event Setup with an empty course picker. Linking a course
+      // there builds its engine. Nothing tracks it in the meantime.
+      reasons.push('no course yet — link one in Event Setup');
     }
 
     if (isNew) {
@@ -242,7 +245,9 @@ export function planMeetSync(input: {
       takenIds.add(raceId);
     }
     target.name = incoming.name;
-    target.course = course;
+    // Written as an empty string rather than left undefined, so "not traced
+    // yet" is a thing the file says rather than a key that happens to be absent.
+    target.course = course ?? '';
     // The match key is the exception: a null here is never honoured. Clearing
     // the id that finds this race again, remotely and in passing, is not a
     // thing a sender should be able to do by mistake.
