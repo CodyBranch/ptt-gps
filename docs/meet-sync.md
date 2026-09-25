@@ -173,9 +173,16 @@ to explain why, and the console groups the schedule by it.
 rather than restarting each morning. The date describes a race; it does not
 order one.
 
-**A race with no course is skipped, not created.** There is nothing for the
-engine to snap to, so it would not build. It comes back as `skipped` with a
-reason; trace the course, send the meet again, and it appears.
+**A race with no course is taken anyway.** Send it with `courseKey: null` and
+it lands carrying its number, time and running order, and appears in Event
+Setup with an empty course picker — which is where an operator links the line
+once it has been traced. Linking one builds its engine; nothing tracks the race
+until then, and it stays off the live board, which is correct because there is
+nothing to snap a tracker to.
+
+The reply says so: the race comes back `created` with a `reason` of
+`no course yet — link one in Event Setup`. You do not have to re-send the meet
+when the course exists, though re-sending is harmless.
 
 ### How a sent race is matched to one already here
 
@@ -211,8 +218,8 @@ when the answer to "did it find my event or make a new one?" matters.
   "courses": [{ "key": "c-8k", "file": "courses/apalachee-8k.kml", "action": "reused" }],
   "races": [
     { "externalId": "nx-race-1", "id": "mens-8k", "name": "Men's 8K", "action": "updated" },
-    { "externalId": "nx-race-2", "id": "open-3k", "name": "Open 3K", "action": "skipped",
-      "reason": "no course yet - trace it and send the meet again" }
+    { "externalId": "nx-race-2", "id": "open-3k", "name": "Open 3K", "action": "created",
+      "reason": "no course yet — link one in Event Setup" }
   ],
   "untouched": [{ "id": "alumni-2m", "name": "Alumni 2 Mile" }],
   "warnings": []
@@ -226,8 +233,8 @@ when the answer to "did it find my event or make a new one?" matters.
 | `event.loaded` | Whether the meet is active on this server right now |
 | `candidates` | Only when a new event was made: existing events sharing the name, so an operator can link them deliberately instead of the sync guessing |
 | `courses[].action` | `created` or `reused` |
-| `races[].action` | `created`, `updated`, `unchanged` or `skipped` |
-| `races[].reason` | Why something was skipped, or which field was held back and why |
+| `races[].action` | `created`, `updated` or `unchanged` |
+| `races[].reason` | What a race still needs, or which field was held back and why. Present on a race that landed without a course |
 | `untouched` | Races here that you did not send. Left alone — never deleted |
 | `warnings` | Things worth showing an operator: no meet number, units held back, a course that would not parse |
 
@@ -394,6 +401,7 @@ still **1**.
 | 0.16.0 | `date` on a race, for a meet that runs across more than one day |
 | 0.16.1 | A field sent explicitly as `null` clears it. Leaving a key out still changes nothing |
 | 0.17.0 | The reply warns when a course file holds more than one path. `event.showDistance` added to the feed |
+| 0.20.0 | **A race sent without a course is created rather than skipped.** It carries its number, time and order, and an operator links the line in Event Setup when it has been traced. No race action is `skipped` any more |
 
 Nothing has been removed or renamed since the first release of either endpoint.
 If that ever has to happen it will appear here first, and the old shape will go
