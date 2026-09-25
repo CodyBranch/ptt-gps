@@ -14,6 +14,27 @@ import { packetAgeS } from './RolesPanel';
  * A number nobody can tell is frozen is worse than no number, so a role whose
  * tracker has gone quiet says so instead of quietly showing a stale distance.
  */
+
+/**
+ * The vehicles an announcer talks about: the one in front of the leader and
+ * the one behind the last runner.
+ *
+ * Everything else on a roster - the timer's van, a media car, a spare moto -
+ * is operational traffic, and reading a list of it aloud is nobody's idea of
+ * commentary. Matched on the role's own key and label rather than a setting,
+ * because these names are what operators already use: our events carry `lead`
+ * / `trail` / `timer` on cross country and `mens_lead` / `womens_chase` on the
+ * road.
+ *
+ * If a roster names nothing recognisably, every role is shown - an announcer
+ * looking at an empty board is a worse failure than one looking at a long one.
+ */
+const FRONT_AND_BACK = /\b(lead(er)?|trail(er|ing)?|sweep|tail|broom|chase|chasing)\b/i;
+
+export function announcerRoles<T extends { key: string; label: string }>(roles: T[]): T[] {
+  const picked = roles.filter((r) => FRONT_AND_BACK.test(r.key.replace(/[_-]/g, ' ')) || FRONT_AND_BACK.test(r.label));
+  return picked.length > 0 ? picked : roles;
+}
 export function DistanceBoard({
   races,
   displayUnits,
@@ -23,6 +44,7 @@ export function DistanceBoard({
   simulated,
   selected,
   onSelect,
+  frontAndBackOnly = false,
 }: {
   races: RaceSnap[];
   displayUnits: Units;
@@ -34,6 +56,8 @@ export function DistanceBoard({
   selected?: MapSelection;
   /** Picking a row puts that vehicle under the spotlight on the map. */
   onSelect?: (raceId: string, imei: string) => void;
+  /** The announcer page: lead and trail vehicles only, not the whole roster. */
+  frontAndBackOnly?: boolean;
 }) {
   return (
     <div className="board">
@@ -54,7 +78,7 @@ export function DistanceBoard({
             </div>
 
             <div className="board-rows">
-              {race.roles.map((role) => {
+              {(frontAndBackOnly ? announcerRoles(race.roles) : race.roles).map((role) => {
                 const active = role.activeImei ? byImei.get(role.activeImei) : undefined;
                 const age = packetAgeS(role.activeImei ?? '', lastSeen, active);
                 const stale = age !== undefined && age > intervalS * 6;

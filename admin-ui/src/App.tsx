@@ -559,6 +559,7 @@ export default function App() {
               intervalS={intervalS}
               simulated={snapshotSimulated}
               selected={selected}
+              frontAndBackOnly
               onSelect={(raceId, imei) =>
                 setSelected((cur) => (cur?.imei === imei && cur.raceId === raceId ? undefined : { raceId, imei }))
               }
@@ -572,6 +573,7 @@ export default function App() {
             labelOverrides={viewerLabels}
             decimals={decimals}
             decoders={decoders}
+            announcer
           />
         </div>
       );
@@ -605,6 +607,24 @@ export default function App() {
       </div>
     );
   };
+
+  /**
+   * The announcer page is the whole screen and nothing else.
+   *
+   * Someone reading distances into a microphone has no use for a sidebar, an
+   * event list, an account menu or a race picker - it follows the live race on
+   * its own - and every pixel those take is a pixel off the figure they are
+   * trying to read from arm's length. So this page skips the shell entirely
+   * rather than hiding its parts one at a time.
+   */
+  if (viewer && board) {
+    return (
+      <div className="app announcer">
+        <ErrorBoundary where={`announcer:${eventId ?? ''}`}>{eventRaceView()}</ErrorBoundary>
+        {confirm && <ConfirmDialog req={confirm} onClose={() => setConfirm(undefined)} />}
+      </div>
+    );
+  }
 
   return (
     <div className="app">

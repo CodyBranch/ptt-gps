@@ -474,14 +474,16 @@ export const MANUAL: { title: string; subtitle: string; sections: Section[] } = 
         { t: 'shot', src: 'viewer-distances.png', caption: 'The distances board: one big figure per role.' },
         {
           t: 'p',
-          text: 'For an announcer with a phone, a spotter, or a screen at the finish. One large figure per role with a bar behind it, readable across a room. It lists only races that are running, and with a single live race it simply shows it.',
+          text: 'For an announcer with a phone, a spotter, or a screen at the finish. It shows the **lead and trail vehicles** of whichever race is running - one large figure each, with a bar behind it, readable across a room - on satellite imagery, and it uses the whole screen: no sidebar, no menus, nothing to press by accident.',
         },
         {
           t: 'bullets',
             items: [
+            '**It follows the meet on its own.** When a race finishes and the next one starts, the page moves to it - nobody has to touch anything between races.',
+            '**Lead and trail only.** A timer van or a media car is on the roster but is not what anyone is commentating on, so the board and the map both leave it out. Roles are recognised by their names - anything called lead, trail, sweep, tail, broom or chase. If a roster names none of them, every role is shown rather than none.',
             'A role whose tracker has gone quiet says so rather than showing a number that has stopped moving.',
             'Tapping a row puts that vehicle under the map\'s spotlight.',
-            'The **Full / Distances** switch flips between the two, and the address bar follows — so either can be bookmarked or passed on.',
+            'On the full viewer, the **Full / Distances** switch flips between the two. The distances page has no chrome to put it in - open `/watch` to go back.',
             'Decimal places for each page are set per event in Setup.',
           ],
         },

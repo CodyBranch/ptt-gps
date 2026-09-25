@@ -1307,6 +1307,41 @@ button.mini.on { border-color: var(--warn); color: var(--warn); }
 .board-row[title] { cursor: pointer; }
 /* the board sits where the race panel does, so it gets that column's width */
 .board-aside .board { padding: 12px 14px 20px; }
+
+/* ---------------------------------------------------------------- announcer
+   The whole screen, no shell. Someone reading these into a microphone is
+   looking from arm's length or across a room, so the figure gets the space
+   the sidebar and the race picker used to take. */
+.app.announcer { display: block; }
+.app.announcer .main { height: 100%; }
+.app.announcer .board-aside {
+  /* Wider than the operator's panel and centred on the number rather than
+     the labels: at a metre away the figure is the whole point. */
+  width: 42vw; min-width: 360px; max-width: 760px;
+}
+.app.announcer .board { max-width: none; padding: 20px 24px; }
+.app.announcer .board-race-head h2 { font-size: 30px; }
+.app.announcer .board-course { font-size: 17px; }
+.app.announcer .board-role { font-size: 21px; }
+.app.announcer .board-vehicle { font-size: 15px; }
+.app.announcer .board-value { font-size: clamp(56px, 7.5vw, 104px); }
+.app.announcer .board-unit { font-size: 26px; }
+.app.announcer .board-row { padding: 16px 18px; }
+.app.announcer .board-bar { height: 10px; }
+.app.announcer .board-none { font-size: 22px; }
+.app.announcer .board-warn { font-size: 14px; }
+
+@media (max-width: 900px) {
+  /* Phone: the numbers first, the map under them. The operator's pages put the
+     map on top because that is what they are reading; here the figure is, and
+     it should be under the thumb rather than scrolled to. */
+  .app.announcer .main { flex-direction: column; }
+  .app.announcer .board-aside {
+    order: 0; width: 100%; max-width: none; min-width: 0; flex: none;
+    border-right: none; border-bottom: 1px solid var(--border); overflow: visible;
+  }
+  .app.announcer .map-wrap { order: 1; flex: 1; min-height: 34vh; height: auto; }
+}
 .board-row.uncovered { border-left-color: var(--border); opacity: 0.6; }
 
 .board-labels { display: flex; align-items: baseline; gap: 8px; }

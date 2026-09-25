@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api, toDisplay, unitAbbr } from '../api';
 import { MARKER_COLORS } from '../colors';
 import type { DecoderPub, RaceSnap, TrackerPub, Units } from '../types';
+import { announcerRoles } from './DistanceBoard';
 
 export interface CourseMarker {
   at: number;
@@ -498,6 +499,7 @@ export function MapView({
   labelOverrides,
   decimals = 2,
   decoders,
+  announcer = false,
 }: {
   races: RaceSnap[];
   selected?: MapSelection;
@@ -512,13 +514,22 @@ export function MapView({
   decimals?: number;
   /** RaceResult timing boxes, drawn alongside the vehicles when asked for. */
   decoders?: DecoderPub[];
+  /**
+   * The announcer board's map: satellite from the start, and no trails
+   * control. Satellite because the question there is "where on the course is
+   * the lead car", and a park reads as trees and paths rather than a blank
+   * green shape. No trails control because turning them on makes every path
+   * look like the course line, which is the one mistake this map must not
+   * invite from someone talking into a microphone.
+   */
+  announcer?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map>(null);
   const markersRef = useRef(new Map<string, mapboxgl.Marker>());
   const coursesRef = useRef(new Map<string, { line: GeoJSON.Feature; markers: CourseMarker[] }>());
   const loadedKeyRef = useRef<string>(null);
-  const [styleKey, setStyleKey] = useState<StyleKey>('streets');
+  const [styleKey, setStyleKey] = useState<StyleKey>(announcer ? 'satellite' : 'streets');
   // With a full field of motos the name+distance labels overlap into an
   // unreadable pile; the colours alone are enough to tell them apart.
   const [showLabels, setShowLabels] = useState(true);
@@ -627,7 +638,7 @@ export function MapView({
   useEffect(() => {
     const map = new mapboxgl.Map({
       container: containerRef.current!,
-      style: STYLES.streets,
+      style: announcer ? STYLES.satellite : STYLES.streets,
       center: [-71.5, 42.23],
       zoom: 11,
     });
@@ -710,7 +721,14 @@ export function MapView({
     // one marker). Prefer the selected race's copy, else the first with a fix.
     const byImei = new Map<string, { t: TrackerPub; units: Units }>();
     for (const race of races) {
+      // The announcer's map carries the same two vehicles the board does. A
+      // timer's van parked at the finish is a dot to explain away, live, to
+      // somebody who has just asked what it is.
+      const shown = announcer
+        ? new Set(announcerRoles(race.roles).map((r) => r.activeImei).filter((i): i is string => !!i))
+        : undefined;
       for (const t of race.trackers) {
+        if (shown && !shown.has(t.imei)) continue;
         const existing = byImei.get(t.imei);
         const preferThis = selected?.imei === t.imei && selected.raceId === race.raceId;
         if (!existing || preferThis) byImei.set(t.imei, { t, units: race.units });
@@ -793,7 +811,7 @@ export function MapView({
       properties: {},
       geometry: { type: 'LineString', coordinates: sel?.slice && sel.slice.length > 1 ? sel.slice : [] },
     });
-  }, [races, selected, displayUnits, colors, showLabels, labelOverrides, decimals, zoom]);
+  }, [races, selected, displayUnits, colors, showLabels, labelOverrides, decimals, zoom, announcer]);
 
   // timing boxes, as their own marker set so they never disturb the vehicles
   useEffect(() => {
@@ -842,17 +860,19 @@ export function MapView({
         >
           Labels
         </button>
-        <button
-          className={showTrails ? 'on' : ''}
-          title={
-            showTrails
-              ? 'Hide the basemap paths and tracks, which look like course lines'
-              : 'Show the basemap paths and tracks'
-          }
-          onClick={() => setShowTrails((v) => !v)}
-        >
-          Trails
-        </button>
+        {!announcer && (
+          <button
+            className={showTrails ? 'on' : ''}
+            title={
+              showTrails
+                ? 'Hide the basemap paths and tracks, which look like course lines'
+                : 'Show the basemap paths and tracks'
+            }
+            onClick={() => setShowTrails((v) => !v)}
+          >
+            Trails
+          </button>
+        )}
         {decoders && decoders.length > 0 && (
           <button
             className={showDecoders ? 'on' : ''}

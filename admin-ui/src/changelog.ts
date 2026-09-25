@@ -22,6 +22,17 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '0.20.0',
+    date: '2026-09-25',
+    summary: 'The announcer page is only what an announcer reads.',
+    changed: [
+      '`/watch/distances` shows the **lead and trail vehicles** and nothing else. A timer\'s van and a media car are on the roster but are not what anybody is commentating on, and the map leaves them out too — two figures and two dots, which is what gets said into a microphone.',
+      '**It follows the meet on its own.** A race finishes, the next one starts, and the page moves to it. Nobody reaches for a phone between races.',
+      '**Satellite from the moment it opens**, because "where on the course is the lead car" is answered by trees and paths rather than a blank green shape. The trails control is not offered here at all: turning it on makes every park path look like the course line, which is the one mistake this page must not invite.',
+      'It uses the whole screen. The sidebar, the event list, the account menu and the race picker are gone, and the figures grew into the space — they are read from arm\'s length, or across a room.',
+    ],
+  },
+  {
     version: '0.19.0',
     date: '2026-09-23',
     summary: 'Vehicle routers are switched on from the console.',
