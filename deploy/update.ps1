@@ -152,7 +152,13 @@ try {
   foreach ($line in $dirty) {
     # Porcelain format is 'XY path', with forward slashes, quoted if unusual.
     $file = $line.Substring(3).Trim('"')
-    if ($file -like 'events/*') { $dataChanges += $line } else { $codeChanges += $line }
+    # A lockfile npm rewrote is not a local change anybody made, and the
+    # console does not count one either - the two gates disagreeing is how a
+    # deploy gets offered and then refused. Workspace lockfiles as well as the
+    # root one, which the restore above does not reach.
+    if ($file -like 'events/*') { $dataChanges += $line }
+    elseif ($file -eq 'package-lock.json' -or $file -like '*/package-lock.json') { $dataChanges += $line }
+    else { $codeChanges += $line }
   }
 
   if ($codeChanges) {

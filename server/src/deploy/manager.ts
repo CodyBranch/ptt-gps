@@ -348,10 +348,17 @@ export class DeployManager {
     // A one-line wrapper sidesteps it. The task runs a file path with no
     // arguments of its own, and the quoting lives in a .cmd where it behaves
     // the way quoting normally does.
+    // Everything the script prints goes to Task Scheduler, which discards
+    // it. The status file carries the stages and a failure message, and
+    // that is all anyone has ever had to work from when a deploy did not
+    // take - no git output, no npm output, nothing from the build. Keep
+    // the whole run beside it.
+    const logFile = path.join(this.dataDir, 'deploy-last-run.log');
     const runner = path.join(this.dataDir, 'run-deploy.cmd');
     const command =
       `powershell.exe -ExecutionPolicy Bypass -NonInteractive -File "${script}"` +
-      ` -Yes${opts.force ? ' -Force' : ''} -StatusFile "${this.statusFile}"`;
+      ` -Yes${opts.force ? ' -Force' : ''} -StatusFile "${this.statusFile}"` +
+      ` > "${logFile}" 2>&1`;
     fs.writeFileSync(runner, ['@echo off', command, ''].join('\r\n'));
 
     // /f replaces a task left behind by a previous deploy; SYSTEM because the

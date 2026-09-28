@@ -22,6 +22,17 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '0.20.4',
+    date: '2026-09-28',
+    summary: 'A deploy leaves a record of what it actually did.',
+    added: [
+      'Everything a deploy prints is kept, in `deploy-last-run.log` beside the database. It went to Task Scheduler, which throws it away — so when a deploy did not take, the only evidence was the one-line failure in the status file, with nothing from git, npm or the build behind it.',
+    ],
+    fixed: [
+      'A lockfile npm rewrote no longer counts as a local code change in the deploy script. The console already ignored one, so the two could disagree: the page offered a deploy and the script then refused it. The script restores the root lockfile before it judges the tree, but a workspace one was still enough to stop it.',
+    ],
+  },
+  {
     version: '0.20.3',
     date: '2026-09-28',
     summary: 'A copied event is a new meet, not last year\'s.',
