@@ -22,6 +22,18 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '0.20.3',
+    date: '2026-09-28',
+    summary: 'A copied event is a new meet, not last year\'s.',
+    fixed: [
+      'An event created by copying another lands in the events list, not under **Completed events**. It was inheriting the source\'s dates — last year\'s, so already past — and its completed stamp if it had one, which filed a brand-new event as finished before anyone had opened it.',
+      'A copy no longer inherits the id of the system the source was synced from, on the event or on its races. That one had teeth: a meet pushed in from a meet manager is found again by that id, so a copy carrying it would have taken the next push and left the real meet untouched.',
+    ],
+    changed: [
+      'What a copy does carry is the work: the roster, the vehicles, the roles and their scoreboard slots, the Firebase outputs, the listener ports, the snap settings, and the races with their courses, programme numbers, running order and time of day. Only the things that say *which running of the meet this is* are left behind — including the day each race runs, on a meet that spans more than one.',
+    ],
+  },
+  {
     version: '0.20.2',
     date: '2026-09-28',
     summary: 'A completed event goes where completed events go.',

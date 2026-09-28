@@ -353,6 +353,41 @@ export function eventRosters(
  * (the copy-last-year workflow: everything carries over, you update meet ID,
  * name, and whatever changed).
  */
+/**
+ * Strip what belongs to the meet being copied rather than to its setup.
+ *
+ * Copying an event is how next year's meet is built from last year's: the
+ * roster, the vehicles, the roles, the scoreboard slots and the races are the
+ * work, and they carry over. What must not carry over is anything that says
+ * *which running of the meet this is*.
+ *
+ * Dates, because last year's are in the past and the new event would file
+ * itself under completed before anyone had opened it. `completedAt` for the
+ * same reason, only more so - a brand-new event marked finished the day it was
+ * made.
+ *
+ * And the external ids, which is the one with teeth. A meet pushed in from
+ * another system is found again by its `externalId`; copy that onto a new
+ * event and the next push matches the copy, merging next year's schedule into
+ * it and leaving the real meet alone. Same at race level. The copy is a new
+ * meet and has no external identity until something gives it one.
+ */
+function stripInstanceFields(json: Record<string, unknown>): void {
+  delete json.completedAt;
+  delete json.startDate;
+  delete json.endDate;
+  delete json.externalId;
+  delete json.externalSource;
+  if (Array.isArray(json.races)) {
+    for (const race of json.races as Array<Record<string, unknown>>) {
+      delete race.externalId;
+      // The day a race runs is this meet's, not the next one's. Its time of
+      // day is kept: a meet that went off at 09:30 last year usually will.
+      delete race.date;
+    }
+  }
+}
+
 export function createEvent(
   dir: string,
   opts: { id: string; name: string; meetId: number; copyFromFile?: string },
@@ -371,6 +406,7 @@ export function createEvent(
     base = { listeners: [{ name: 'queclink', port: 1000 }], firebase: [], trackers: [], roles: [], races: [] };
   }
   const json = { ...base, id: slug, name: opts.name, meetId: opts.meetId };
+  if (opts.copyFromFile) stripInstanceFields(json);
   parseEventConfig(json, dir); // validate before writing
   fs.writeFileSync(file, JSON.stringify(json, null, 2) + '\n');
   return `${slug}.json`;
