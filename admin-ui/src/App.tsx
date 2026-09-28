@@ -927,7 +927,6 @@ export default function App() {
           lastSeen={state.lastSeen}
           displayUnits={displayUnits}
           ask={ask}
-          onChanged={() => {}}
           onOpenSetup={(id) => openEvent(id, 'setup')}
           onOpenEvent={(id, tab) => openEvent(id, tab)}
           onManageCourses={() => setPage('courses')}

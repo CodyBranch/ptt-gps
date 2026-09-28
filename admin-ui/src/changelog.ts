@@ -22,6 +22,14 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '0.20.2',
+    date: '2026-09-28',
+    summary: 'A completed event goes where completed events go.',
+    fixed: [
+      'Completing an event files it under **Completed events** straight away. It was being completed and its engines stopped, correctly, on the server — but the page went on showing it in the active list, because an event is only filed once it is no longer running and nothing told the console it had stopped. Deactivating an event has always said so; completing one had not.',
+    ],
+  },
+  {
     version: '0.20.0',
     date: '2026-09-25',
     summary: 'The announcer page is only what an announcer reads.',

@@ -15,7 +15,6 @@ export function EventsView({
   lastSeen,
   displayUnits,
   ask,
-  onChanged,
   onOpenSetup,
   onOpenEvent,
   onManageCourses,
@@ -25,7 +24,6 @@ export function EventsView({
   lastSeen: Record<string, number>;
   displayUnits: Units;
   ask: (req: ConfirmRequest) => void;
-  onChanged: () => void;
   onOpenSetup: (eventId: string) => void;
   onOpenEvent: (eventId: string, tab?: string) => void;
   onManageCourses: () => void;
@@ -94,7 +92,6 @@ export function EventsView({
         try {
           await api.loadEvent(e.file);
           setMsg({ kind: 'ok', text: `"${e.name}" is running.` });
-          onChanged();
           reload();
         } catch (err) {
           setMsg({ kind: 'err', text: (err as Error).message });
@@ -112,7 +109,6 @@ export function EventsView({
         try {
           await api.unloadEvent(e.id);
           setMsg({ kind: 'ok', text: `"${e.name}" stopped.` });
-          onChanged();
           reload();
         } catch (err) {
           setMsg({ kind: 'err', text: (err as Error).message });
@@ -131,7 +127,6 @@ export function EventsView({
         try {
           await api.completeEvent(e.id, true);
           setMsg({ kind: 'ok', text: `"${e.name}" completed.` });
-          onChanged();
           reload();
         } catch (err) {
           setMsg({ kind: 'err', text: (err as Error).message });
@@ -143,7 +138,6 @@ export function EventsView({
     try {
       await api.completeEvent(e.id, false);
       setMsg({ kind: 'ok', text: `"${e.name}" reopened.` });
-      onChanged();
       reload();
     } catch (err) {
       setMsg({ kind: 'err', text: (err as Error).message });

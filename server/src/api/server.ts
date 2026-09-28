@@ -980,11 +980,18 @@ export function startApi(
       const eventId = req.params.eventId as string;
       const done = req.body?.completed !== false;
       const { manager } = configFor(eventId);
-      if (done && ctx.apps.has(eventId)) ctx.unloadEvent(eventId);
+      const wasLoaded = ctx.apps.has(eventId);
+      if (done && wasLoaded) ctx.unloadEvent(eventId);
       const raw = JSON.parse(JSON.stringify(manager.raw)) as Record<string, unknown>;
       if (done) raw.completedAt = new Date().toISOString().slice(0, 10);
       else delete raw.completedAt;
       manager.update(raw);
+      // Completing stops the engines, and every console has to hear that the
+      // same way it hears a plain deactivate - the Events page files an event
+      // under completed only once it is no longer running, so without this the
+      // card sits in the active list until something else happens to refresh
+      // it. /load and /unload have always done this; this route had not.
+      if (wasLoaded) broadcastSnapshot();
       return { completedAt: raw.completedAt ?? null };
     }),
   );
