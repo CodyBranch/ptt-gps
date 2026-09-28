@@ -42,6 +42,8 @@ interface EventFile {
   file: string;
   externalId?: string;
   startDate?: string;
+  endDate?: string;
+  meetId?: number;
 }
 
 /** Every event on disk, with the external id it was last synced from. */
@@ -57,6 +59,8 @@ function eventFiles(dir: string): EventFile[] {
         file: listed.file,
         externalId: manager.raw.externalId,
         startDate: manager.raw.startDate,
+        endDate: manager.raw.endDate,
+        meetId: manager.raw.meetId,
       });
     } catch {
       // An event that will not parse cannot be a sync target either.
@@ -65,8 +69,52 @@ function eventFiles(dir: string): EventFile[] {
   return out;
 }
 
+/** An event a sending system may sync into, as the picker shows it. */
+export interface SyncTarget {
+  id: string;
+  name: string;
+  meetId: number | null;
+  startDate: string | null;
+  endDate: string | null;
+  /** Set when it was made or last synced from another system. */
+  externalId: string | null;
+  /** Running here now: the live feed announces only these. */
+  loaded: boolean;
+}
+
+/**
+ * Every event on disk, newest first, for a sending system to pick which one
+ * its meet is.
+ *
+ * The live feed only announces the events that are loaded, so an event set
+ * up here ahead of time - trackers, vehicles and roles all assigned, the
+ * meet a week away - could not be chosen from the other end at all: the only
+ * way to send into it was to make a second one. This is the whole library.
+ */
+export function syncTargets(dir: string, loaded: Set<string>): SyncTarget[] {
+  return eventFiles(dir)
+    .map((e) => ({
+      id: e.id,
+      name: e.name,
+      meetId: typeof e.meetId === 'number' && e.meetId > 0 ? e.meetId : null,
+      startDate: e.startDate ?? null,
+      endDate: e.endDate ?? null,
+      externalId: e.externalId ?? null,
+      loaded: loaded.has(e.id),
+    }))
+    .sort((a, b) => (b.startDate ?? '').localeCompare(a.startDate ?? '') || a.name.localeCompare(b.name));
+}
+
 export function registerMeetSync(ex: express.Express, deps: SyncDeps): void {
   const { auth, eventsDir, apps, configFor, updateEvent, store, onApplied } = deps;
+
+  // The events a setup-write token may send into. Same token and permission
+  // as the sync itself: choosing a target is the first half of sending.
+  ex.get('/api/sync/events', (req, res) => {
+    const caller = syncCaller(req, res, auth, 'setup');
+    if (!caller) return;
+    res.json({ ok: true, events: syncTargets(eventsDir, new Set(apps.keys())) });
+  });
 
   ex.post(
     '/api/sync/meet',
