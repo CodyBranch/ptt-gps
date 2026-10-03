@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api';
-import { bestRotation, project, unproject, type Box } from '../board';
+import { bestRotation, project, unproject, withBoardDefaults, type Box } from '../board';
 import {
   BOARD_COLORS,
   BOARD_THEMES,
@@ -33,7 +33,7 @@ import { raceLabel } from '../format';
 const MAP_BOX: Box = { x: 40, y: 132, w: 1216, h: 856, pad: 72 };
 
 export function BoardControl({ ev, onMsg }: { ev: EventSnap; onMsg: (text: string, bad?: boolean) => void }) {
-  const [config, setConfig] = useState<BoardConfig>(ev.board ?? defaultBoardConfig());
+  const [config, setConfig] = useState<BoardConfig>(withBoardDefaults(ev.board));
   const [course, setCourse] = useState<CoursePayload | null>(null);
   const [now, setNow] = useState(Date.now());
   const previewRef = useRef<HTMLDivElement>(null);
@@ -42,7 +42,7 @@ export function BoardControl({ ev, onMsg }: { ev: EventSnap; onMsg: (text: strin
   // The board is shared state: another tab, or another operator, may have
   // moved it. Follow the snapshot rather than only our own edits.
   useEffect(() => {
-    if (ev.board) setConfig(ev.board);
+    if (ev.board) setConfig(withBoardDefaults(ev.board));
   }, [ev.board]);
 
   useEffect(() => {
@@ -403,6 +403,14 @@ export function BoardControl({ ev, onMsg }: { ev: EventSnap; onMsg: (text: strin
               onClick={() => patch({ layout: { ...config.layout, footer: !config.layout.footer } })}
             >
               Footer
+            </button>
+            <button
+              className={`mini ${config.layout.logo ? 'on' : ''}`}
+              disabled={!config.layout.footer}
+              title="The Primetime mark, bottom left"
+              onClick={() => patch({ layout: { ...config.layout, logo: !config.layout.logo } })}
+            >
+              Logo
             </button>
           </div>
           <div className="board-row">

@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import {
   atFraction,
   bestRotation,
+  isLight,
   boardGroups,
   cumulativeFractions,
   groupValue,
@@ -112,8 +113,7 @@ export function CourseBoard({
   const geom = useMemo(() => {
     if (coords.length < 2) return null;
     const fractions = cumulativeFractions(coords);
-    const fixed = config.rotate === 0 || config.rotate === 90 || config.rotate === 180 || config.rotate === 270;
-    const rotation = fixed ? (config.rotate as 0 | 90 | 180 | 270) : bestRotation(coords, MAP);
+    const rotation = config.rotate === 'auto' ? bestRotation(coords, MAP) : config.rotate;
     const p = project(coords, MAP, config.zoom, center, rotation);
     const screen = coords.map(([lon, lat]) => p.point(lon, lat) as [number, number]);
     return { fractions, projection: p, path: smoothPath(thin(screen)) };
@@ -353,7 +353,21 @@ export function CourseBoard({
       {/* ---------------------------------------------------------- footer */}
       {config.layout.footer && <g className="cb-footer">
         <rect x={0} y={BOARD_H - 56} width={BOARD_W} height={56} className="cb-footer-bg" />
-        <text x={40} y={BOARD_H - 19} className="cb-footer-text">
+        {config.layout.logo && (
+          /* Two copies of the mark, one drawn for dark grounds and one for
+             light. Picking by the footer's own colour rather than by the theme
+             name, because the colours are the operator's to set and a white
+             mark on a white footer is an empty corner on air. */
+          <image
+            href={isLight(theme.panel) ? '/img/PRIMETIME-Dark.png' : '/img/PRIMETIME.png'}
+            x={40}
+            y={BOARD_H - 46}
+            height={36}
+            width={36 * 6.34}
+            preserveAspectRatio="xMinYMid meet"
+          />
+        )}
+        <text x={config.layout.logo ? 40 + 36 * 6.34 + 28 : 40} y={BOARD_H - 19} className="cb-footer-text">
           {race && course
             ? `${toUnits(race.courseLength, race.units, config.units).toFixed(config.decimals)} ${unitLabel(config.units)} COURSE`
             : ''}

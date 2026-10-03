@@ -1,4 +1,4 @@
-import type { BoardConfig, PlacedMarker, RaceSnap, RoleState, TrackerPub, Units } from './types';
+import { defaultBoardConfig, type BoardConfig, type PlacedMarker, type RaceSnap, type RoleState, type TrackerPub, type Units } from './types';
 
 /**
  * The maths behind the course board.
@@ -310,4 +310,46 @@ export function visibleMarkers(markers: PlacedMarker[], config: BoardConfig): Pl
     // whatever the course happens to carry.
     return false;
   });
+}
+
+/**
+ * Is a colour light enough that white type disappears on it?
+ *
+ * The board carries two copies of the wordmark, one drawn for dark grounds and
+ * one for light, and picking the wrong one puts an invisible logo on air.
+ * Relative luminance, same weighting the eye uses.
+ */
+export function isLight(hex: string): boolean {
+  const m = /^#?([0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.exec(hex.trim());
+  if (!m) return false;
+  let h = m[1];
+  if (h.length <= 4) h = h.slice(0, 3).split('').map((c) => c + c).join('');
+  const r = parseInt(h.slice(0, 2), 16) / 255;
+  const g = parseInt(h.slice(2, 4), 16) / 255;
+  const b = parseInt(h.slice(4, 6), 16) / 255;
+  const lin = (v: number) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b) > 0.45;
+}
+
+/**
+ * Fill in anything a stored config predates.
+ *
+ * The server normalises what it is given, but a board already on a screen is
+ * reading a config that was saved before today's fields existed - and a
+ * missing boolean reads as off, which silently turns a new feature off for
+ * every board set up before it shipped. Twice now. Merged here instead, once,
+ * where every reader of a config goes through it.
+ */
+export function withBoardDefaults(config: BoardConfig | undefined): BoardConfig {
+  const d = defaultBoardConfig();
+  if (!config) return d;
+  return {
+    ...d,
+    ...config,
+    markers: { ...d.markers, ...(config.markers ?? {}) },
+    theme: { ...d.theme, ...(config.theme ?? {}) },
+    layout: { ...d.layout, ...(config.layout ?? {}) },
+    groups: config.groups ?? {},
+    order: config.order ?? [],
+  };
 }

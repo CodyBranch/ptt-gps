@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
-import { defaultBoardConfig, type CoursePayload, type EventSnap, type RaceSnap } from '../types';
+import { withBoardDefaults } from '../board';
+import type { CoursePayload, EventSnap, RaceSnap } from '../types';
 import { BOARD_H, BOARD_W, CourseBoard } from './CourseBoard';
 
 /**
@@ -33,7 +34,7 @@ export function BoardOutput({ ev }: { ev: EventSnap | null }) {
     return () => clearInterval(id);
   }, []);
 
-  const config = ev?.board ?? defaultBoardConfig();
+  const config = withBoardDefaults(ev?.board);
 
   const race: RaceSnap | null = useMemo(() => {
     if (!ev) return null;

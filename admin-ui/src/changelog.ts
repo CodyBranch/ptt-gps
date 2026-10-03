@@ -22,6 +22,17 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '0.23.1',
+    date: '2026-10-02',
+    summary: 'The Primetime mark on the board, and older board settings stop going missing.',
+    added: [
+      'The Primetime mark sits bottom left on the course board, with the course length beside it. There are light and dark copies of it and the board picks by the footer\'s own colour rather than by the theme\'s name — the colours are yours to set, and a white mark on a white footer is an empty corner on air. It can be switched off.',
+    ],
+    fixed: [
+      'A board set up before a new switch existed gets that switch\'s default rather than having it silently off. A missing setting read as "off", so the last two additions each arrived turned off on every board already configured — which is every board that matters, since those are the ones in use.',
+    ],
+  },
+  {
     version: '0.23.0',
     date: '2026-10-02',
     summary: 'GPX courses, and a board that turns a course to fit the screen.',

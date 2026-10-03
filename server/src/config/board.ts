@@ -63,6 +63,8 @@ export interface BoardLayout {
   panel: 'right' | 'left' | 'none';
   header: boolean;
   footer: boolean;
+  /** The Primetime mark in the footer. Light and dark copies, picked to suit. */
+  logo: boolean;
   /** Scales every figure and label together, for a screen further away. */
   typeScale: number;
 }
@@ -138,7 +140,9 @@ export const BOARD_THEMES: Record<string, BoardTheme> = {
 };
 
 export const defaultTheme = (): BoardTheme => ({ ...BOARD_THEMES.primetime });
-export const defaultLayout = (): BoardLayout => ({ panel: 'right', header: true, footer: true, typeScale: 1 });
+export const defaultLayout = (): BoardLayout => ({
+  panel: 'right', header: true, footer: true, logo: true, typeScale: 1,
+});
 
 /** Colours assigned to groups in order; chosen to read at a distance. */
 export const GROUP_COLORS = ['#e11d48', '#38bdf8', '#f59e0b', '#22c55e', '#a78bfa', '#f472b6'];
@@ -274,6 +278,7 @@ export function normaliseLayout(input: unknown): BoardLayout {
     panel: oneOf(l.panel, ['right', 'left', 'none'] as const, d.panel),
     header: bool(l.header, d.header),
     footer: bool(l.footer, d.footer),
+    logo: bool(l.logo, d.logo),
     typeScale: num(l.typeScale, d.typeScale, 0.6, 1.8),
   };
 }

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { defaultBoardConfig, type BoardConfig } from './types';
 import {
   atFraction,
   bestRotation,
@@ -10,6 +11,8 @@ import {
   toUnits,
   unitPosts,
   unproject,
+  withBoardDefaults,
+  isLight,
   type Box,
 } from './board';
 
@@ -213,5 +216,51 @@ describe('turning the course to fit the frame', () => {
       expect(backX).toBeCloseTo(px, 3);
       expect(backY).toBeCloseTo(py, 3);
     }
+  });
+});
+
+describe('a config saved before today', () => {
+  it('fills in fields that did not exist when it was stored', () => {
+    // Twice now a new switch has read as off on every board set up before it
+    // shipped, because a missing boolean is falsy.
+    const old = { units: 'kilometers', zoom: 2 } as unknown as BoardConfig;
+    const out = withBoardDefaults(old);
+    expect(out.units).toBe('kilometers');
+    expect(out.zoom).toBe(2);
+    expect(out.layout.logo).toBe(true);
+    expect(out.rotate).toBe('auto');
+    expect(out.theme.bg).toBe(defaultBoardConfig().theme.bg);
+  });
+
+  it('keeps a half-filled nested block rather than replacing it', () => {
+    const out = withBoardDefaults({ theme: { bg: '#000000' }, layout: { footer: false } } as unknown as BoardConfig);
+    expect(out.theme.bg).toBe('#000000');
+    expect(out.theme.text).toBe(defaultBoardConfig().theme.text);
+    expect(out.layout.footer).toBe(false);
+    expect(out.layout.logo).toBe(true);
+  });
+
+  it('gives a board with no config at all the defaults', () => {
+    expect(withBoardDefaults(undefined)).toEqual(defaultBoardConfig());
+  });
+});
+
+describe('picking the readable copy of the wordmark', () => {
+  it('knows a dark footer from a light one', () => {
+    expect(isLight('#0c1a2c')).toBe(false);
+    expect(isLight('#152b4d')).toBe(false);
+    expect(isLight('#ffffff')).toBe(true);
+    expect(isLight('#f1f5f9')).toBe(true);
+  });
+
+  it('weights green the way the eye does', () => {
+    // Pure blue is dark to look at; pure green is not, at the same value.
+    expect(isLight('#0000ff')).toBe(false);
+    expect(isLight('#00ff00')).toBe(true);
+  });
+
+  it('treats anything that is not a colour as dark, which is the common case', () => {
+    expect(isLight('rgb(255,255,255)')).toBe(false);
+    expect(isLight('')).toBe(false);
   });
 });

@@ -442,6 +442,7 @@ export interface BoardLayout {
   panel: 'right' | 'left' | 'none';
   header: boolean;
   footer: boolean;
+  logo: boolean;
   typeScale: number;
 }
 
@@ -514,5 +515,5 @@ export const defaultBoardConfig = (): BoardConfig => ({
   showDone: true,
   showClock: true,
   theme: { ...BOARD_THEMES.primetime },
-  layout: { panel: 'right', header: true, footer: true, typeScale: 1 },
+  layout: { panel: 'right', header: true, footer: true, logo: true, typeScale: 1 },
 });
