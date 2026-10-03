@@ -22,6 +22,13 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '0.23.4',
+    date: '2026-10-02',
+    fixed: [
+      'The covered part of the course stops where the leader is. It was drawn as a dash set to the leader’s fraction of the course, but a dash is measured along the drawn line — a thinned, smoothed copy that is longer than the course through the bends and shorter wherever points were dropped. The gold ran past the dot it belonged to by about 60 metres on a 3 mile course, which on air reads as the tracker lagging. Now the two sit on the same point.',
+    ],
+  },
+  {
     version: '0.23.3',
     date: '2026-10-02',
     changed: [

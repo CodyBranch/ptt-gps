@@ -170,30 +170,102 @@ export function unproject(p: Projection, coords: number[][], box: Box, px: numbe
  * canvas wherever the trace is sparse, and the faceting reads as the course
  * being wrong rather than the drawing being coarse.
  */
+/** The Catmull-Rom segment from `points[i]` to `points[i + 1]`, as a cubic. */
+function segment(points: [number, number][], i: number) {
+  const at = (k: number): [number, number] => points[Math.min(points.length - 1, Math.max(0, k))];
+  const p0 = at(i - 1), p1 = at(i), p2 = at(i + 1), p3 = at(i + 2);
+  return {
+    p1,
+    p2,
+    c1: [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6] as [number, number],
+    c2: [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6] as [number, number],
+  };
+}
+
 export function smoothPath(points: [number, number][]): string {
   if (points.length === 0) return '';
   if (points.length < 3) return `M ${points.map((p) => `${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(' L ')}`;
 
-  const at = (i: number): [number, number] => points[Math.min(points.length - 1, Math.max(0, i))];
   let d = `M ${points[0][0].toFixed(1)} ${points[0][1].toFixed(1)}`;
   for (let i = 0; i < points.length - 1; i++) {
-    const p0 = at(i - 1), p1 = at(i), p2 = at(i + 1), p3 = at(i + 2);
-    const c1: [number, number] = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6];
-    const c2: [number, number] = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
+    const { c1, c2, p2 } = segment(points, i);
     d += ` C ${c1[0].toFixed(1)} ${c1[1].toFixed(1)} ${c2[0].toFixed(1)} ${c2[1].toFixed(1)} ${p2[0].toFixed(1)} ${p2[1].toFixed(1)}`;
   }
   return d;
 }
 
+/**
+ * How far along the drawn curve each point sits, as a fraction of the whole.
+ *
+ * Which is not how far along the course it sits. The curve is a thinned,
+ * smoothed copy of the course: longer than it through the bends, shorter
+ * wherever points were dropped for sitting too close together. The covered
+ * part of the course is drawn as a dash over this curve and a dash is measured
+ * along the curve, so a dash set to the leader's fraction of the *course* ends
+ * somewhere the leader is not - on a 3 mile course it ran about 60 metres past
+ * the leader's own dot. This is the table that tells one from the other.
+ *
+ * Each segment is measured by sampling, which is what the renderer does too;
+ * only the ratios are used, so both agree to well under a pixel.
+ */
+export function curveFractions(points: [number, number][]): number[] {
+  if (points.length === 0) return [];
+  const out = [0];
+  let total = 0;
+  for (let i = 0; i < points.length - 1; i++) {
+    const { p1, c1, c2, p2 } = segment(points, i);
+    let prev = p1;
+    for (let s = 1; s <= 24; s++) {
+      const t = s / 24;
+      const u = 1 - t;
+      const q: [number, number] = [
+        u * u * u * p1[0] + 3 * u * u * t * c1[0] + 3 * u * t * t * c2[0] + t * t * t * p2[0],
+        u * u * u * p1[1] + 3 * u * u * t * c1[1] + 3 * u * t * t * c2[1] + t * t * t * p2[1],
+      ];
+      total += Math.hypot(q[0] - prev[0], q[1] - prev[1]);
+      prev = q;
+    }
+    out.push(total);
+  }
+  return total > 0 ? out.map((v) => v / total) : out.map(() => 0);
+}
+
+/**
+ * A fraction of the course, as a fraction of the drawn curve. See
+ * `curveFractions` for why the two are not the same number.
+ */
+export function drawnFraction(kept: number[], fractions: number[], curve: number[], f: number): number {
+  if (kept.length < 2 || curve.length < 2) return 0;
+  const want = Math.min(1, Math.max(0, f));
+  for (let j = 1; j < kept.length; j++) {
+    const a = fractions[kept[j - 1]] ?? 0;
+    const b = fractions[kept[j]] ?? 1;
+    if (b >= want) {
+      const span = b - a || 1;
+      const r = Math.min(1, Math.max(0, (want - a) / span));
+      return curve[j - 1] + (curve[j] - curve[j - 1]) * r;
+    }
+  }
+  return 1;
+}
+
 /** Thin out points closer together than `minPx`, always keeping the last. */
 export function thin(points: [number, number][], minPx = 5): [number, number][] {
-  if (points.length < 3) return points;
-  const out: [number, number][] = [points[0]];
+  return thinKeeping(points, minPx).map((i) => points[i]);
+}
+
+/**
+ * Which points `thin` keeps, for anything that has to get back to the course
+ * the thinned points came from - distances along it are held per source point.
+ */
+export function thinKeeping(points: [number, number][], minPx = 5): number[] {
+  if (points.length < 3) return points.map((_, i) => i);
+  const out: number[] = [0];
   for (let i = 1; i < points.length - 1; i++) {
-    const last = out[out.length - 1];
-    if (Math.hypot(points[i][0] - last[0], points[i][1] - last[1]) >= minPx) out.push(points[i]);
+    const last = points[out[out.length - 1]];
+    if (Math.hypot(points[i][0] - last[0], points[i][1] - last[1]) >= minPx) out.push(i);
   }
-  out.push(points[points.length - 1]);
+  out.push(points.length - 1);
   return out;
 }
 

@@ -7,6 +7,9 @@ import {
   metresBetween,
   project,
   smoothPath,
+  curveFractions,
+  drawnFraction,
+  thinKeeping,
   thin,
   toUnits,
   unitPosts,
@@ -262,5 +265,86 @@ describe('picking the readable copy of the wordmark', () => {
   it('treats anything that is not a colour as dark, which is the common case', () => {
     expect(isLight('rgb(255,255,255)')).toBe(false);
     expect(isLight('')).toBe(false);
+  });
+});
+
+describe('the drawn curve against the course', () => {
+  it('runs 0 to 1 and never backwards', () => {
+    const pts: [number, number][] = [[0, 0], [100, 40], [220, 20], [300, 120], [380, 60]];
+    const curve = curveFractions(pts);
+    expect(curve).toHaveLength(pts.length);
+    expect(curve[0]).toBe(0);
+    expect(curve[curve.length - 1]).toBeCloseTo(1, 10);
+    for (let i = 1; i < curve.length; i++) expect(curve[i]).toBeGreaterThan(curve[i - 1]);
+  });
+
+  it('measures a bend as longer than its chords', () => {
+    // A quarter circle. The smoothed curve bows outside the polyline through
+    // it, which is the whole reason a dash set by course distance overshot:
+    // the same fraction buys less of the curve than it buys of the course.
+    const quarter: [number, number][] = [];
+    for (let i = 0; i <= 8; i++) {
+      const a = (Math.PI / 2) * (i / 8);
+      quarter.push([Math.cos(a) * 200, Math.sin(a) * 200]);
+    }
+    const curve = curveFractions(quarter);
+    const flat = cumulativeFractions(quarter.map(([x, y]) => [x, y]));
+    // Halfway along the chords is not yet halfway along the curve.
+    expect(curve[4]).not.toBeCloseTo(flat[4], 4);
+  });
+
+  it('holds flat on a straight line, where the two agree', () => {
+    const line: [number, number][] = [[0, 0], [100, 0], [200, 0], [300, 0], [400, 0]];
+    const curve = curveFractions(line);
+    for (let i = 0; i < curve.length; i++) expect(curve[i]).toBeCloseTo(i / 4, 6);
+  });
+
+  it('is empty or single for too few points to draw', () => {
+    expect(curveFractions([])).toEqual([]);
+    expect(curveFractions([[5, 5]])).toEqual([0]);
+  });
+
+  it('gives the same number back when nothing was thinned and nothing bends', () => {
+    const line: [number, number][] = [[0, 0], [100, 0], [200, 0], [300, 0]];
+    const kept = thinKeeping(line);
+    const fractions = cumulativeFractions(line.map(([x, y]) => [x, y]));
+    const curve = curveFractions(kept.map((i) => line[i]));
+    for (const f of [0, 0.25, 0.5, 0.75, 1]) {
+      expect(drawnFraction(kept, fractions, curve, f)).toBeCloseTo(f, 4);
+    }
+  });
+
+  it('answers a fraction of the course with a smaller fraction of a bowed curve', () => {
+    const quarter: [number, number][] = [];
+    for (let i = 0; i <= 12; i++) {
+      const a = (Math.PI / 2) * (i / 12);
+      quarter.push([Math.cos(a) * 300, Math.sin(a) * 300]);
+    }
+    const kept = thinKeeping(quarter);
+    const fractions = cumulativeFractions(quarter.map(([x, y]) => [x, y]));
+    const curve = curveFractions(kept.map((i) => quarter[i]));
+    const got = drawnFraction(kept, fractions, curve, 0.5);
+    expect(got).toBeGreaterThan(0);
+    expect(got).toBeLessThan(1);
+    // Ends still pin exactly, whatever the middle does.
+    expect(drawnFraction(kept, fractions, curve, 0)).toBeCloseTo(0, 6);
+    expect(drawnFraction(kept, fractions, curve, 1)).toBeCloseTo(1, 6);
+  });
+
+  it('clamps a fraction off either end', () => {
+    const line: [number, number][] = [[0, 0], [100, 0], [200, 0], [300, 0]];
+    const kept = thinKeeping(line);
+    const fractions = cumulativeFractions(line.map(([x, y]) => [x, y]));
+    const curve = curveFractions(kept.map((i) => line[i]));
+    expect(drawnFraction(kept, fractions, curve, -3)).toBe(0);
+    expect(drawnFraction(kept, fractions, curve, 9)).toBe(1);
+  });
+
+  it('keeps the indices of the points it kept', () => {
+    const dense: [number, number][] = [[0, 0], [1, 0], [2, 0], [40, 0], [41, 0], [80, 0]];
+    const kept = thinKeeping(dense, 5);
+    expect(kept[0]).toBe(0);
+    expect(kept[kept.length - 1]).toBe(dense.length - 1);
+    expect(kept.map((i) => dense[i])).toEqual(thin(dense, 5));
   });
 });

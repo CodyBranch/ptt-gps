@@ -5,10 +5,12 @@ import {
   isLight,
   boardGroups,
   cumulativeFractions,
+  curveFractions,
+  drawnFraction,
   groupValue,
   project,
   smoothPath,
-  thin,
+  thinKeeping,
   toUnits,
   unitLabel,
   unitPosts,
@@ -119,7 +121,9 @@ export function CourseBoard({
     const rotation = config.rotate === 'auto' ? bestRotation(coords, MAP) : config.rotate;
     const p = project(coords, MAP, config.zoom, center, rotation);
     const screen = coords.map(([lon, lat]) => p.point(lon, lat) as [number, number]);
-    return { fractions, projection: p, path: smoothPath(thin(screen)) };
+    const kept = thinKeeping(screen);
+    const points = kept.map((i) => screen[i]);
+    return { fractions, projection: p, path: smoothPath(points), kept, curve: curveFractions(points) };
   }, [coords, config.zoom, center?.[0], center?.[1], config.rotate, MAP]);
   const clock = config.showClock ? elapsed(startedMs ? (now ?? Date.now()) - startedMs : null) : null;
 
@@ -241,12 +245,19 @@ export function CourseBoard({
           {/* The course: a wide soft glow, the line, then the part covered. */}
           <path d={geom.path} className="cb-course-glow" />
           <path d={geom.path} className="cb-course" />
+          {/* The covered part, as a dash over the same curve - a dash grows
+              between fixes where a second path would jump. Its length is the
+              leader's place on the *drawn* curve, which is not their fraction
+              of the course; see `curveFractions`. */}
           {config.showDone && lead?.fraction !== null && lead?.fraction !== undefined && (
             <path
               d={geom.path}
               className="cb-course-done"
               pathLength={1000}
-              style={{ strokeDasharray: `${(lead.fraction * 1000).toFixed(1)} 1000`, stroke: lead.color }}
+              style={{
+                strokeDasharray: `${(drawnFraction(geom.kept, geom.fractions, geom.curve, lead.fraction) * 1000).toFixed(1)} 1000`,
+                stroke: lead.color,
+              }}
             />
           )}
 
