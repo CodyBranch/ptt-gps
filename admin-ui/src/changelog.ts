@@ -22,6 +22,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '0.23.5',
+    date: '2026-10-02',
+    summary: 'Uploading a GPX course works from the console, which it had not since GPX arrived.',
+    fixed: [
+      'The **Upload course** button on a meet’s setup page offers GPX and GeoJSON, not only KML. The file picker was still filtering to `.kml`, so a GPX — which is what RaceResult and most watches export — could not be chosen at all. GPX has been readable since 0.23.0; there was simply no way in from this page.',
+      'A course upload answers with the name it actually saved. It always said `.kml`, whatever had been written, so a GPX came back as a path to a file that was not there — and the record of the upload was filed under that path too, which is why an uploaded GPX showed no date against it on the Courses page. The file itself was always written correctly.',
+    ],
+  },
+  {
     version: '0.23.4',
     date: '2026-10-02',
     fixed: [

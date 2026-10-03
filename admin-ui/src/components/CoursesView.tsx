@@ -45,7 +45,7 @@ export function CoursesView({
     try {
       const text = await f.text();
       const name = replaceFile ? replaceFile.replace(/^courses\//, '') : f.name;
-      const res = await api.uploadCourse(name.replace(/\.kml$/i, ''), text, !!replaceFile);
+      const res = await api.uploadCourse(name.replace(/\.(kml|gpx|geojson|json)$/i, ''), text, !!replaceFile);
       setMsg({
         kind: 'ok',
         text: `${res.replaced ? 'Replaced' : 'Added'} ${res.file} — ${res.lengthMi.toFixed(2)} mi, ${res.points} points`,

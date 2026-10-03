@@ -109,17 +109,19 @@ export function saveCourseIn(
   // Stored in the format it arrived in. Converting it would mean this is the
   // only copy that has been through a translation nobody asked for, and the
   // loader reads all three anyway.
-  const ext = detectFormat(kmlText, formatFromName(name)) === 'gpx' ? 'gpx'
-    : detectFormat(kmlText, formatFromName(name)) === 'geojson' ? 'geojson'
-    : 'kml';
+  const ext = detectFormat(kmlText, formatFromName(name));
   const target = path.join(coursesDir, `${safe}.${ext}`);
   const exists = fs.existsSync(target);
   if (exists && !opts.replace) {
-    throw new Error(`A course named ${safe}.kml already exists — rename this file, or replace it from the Courses page`);
+    throw new Error(`A course named ${safe}.${ext} already exists — rename this file, or replace it from the Courses page`);
   }
   fs.writeFileSync(target, kmlText);
   return {
-    file: `courses/${safe}.kml`,
+    // The name it was saved under. This used to say .kml whatever had been
+    // written, so a GPX upload answered with a path to a file that did not
+    // exist - and the row recording that it had arrived was filed under that
+    // path too, which is why an uploaded GPX never had a date against it.
+    file: `courses/${safe}.${ext}`,
     lengthMi: course.length,
     points: course.line.geometry.coordinates.length,
     replaced: exists,

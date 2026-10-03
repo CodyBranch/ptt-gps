@@ -83,7 +83,7 @@ export function EventSetup({
   const uploadCourse = async (file: File) => {
     try {
       const text = await file.text();
-      const res = await api.uploadCourse(file.name.replace(/\.kml$/i, ''), text);
+      const res = await api.uploadCourse(file.name.replace(/\.(kml|gpx|geojson|json)$/i, ''), text);
       setMsg({ kind: 'ok', text: `Course ${res.file}: ${res.lengthMi.toFixed(2)} mi, ${res.points} points` });
       setCourses(await api.courses());
     } catch (err) {
@@ -616,7 +616,7 @@ export function EventSetup({
           <input
             ref={fileRef}
             type="file"
-            accept=".kml"
+            accept=".kml,.gpx,.geojson,.json"
             style={{ display: 'none' }}
             onChange={(e) => {
               const f = e.target.files?.[0];
@@ -625,12 +625,12 @@ export function EventSetup({
             }}
           />
           <button className="mini" onClick={() => fileRef.current?.click()}>
-            ⬆ Upload KML course
+            ⬆ Upload course
           </button>
           <p className="hint">
-            Export from Google Earth as a single-path LineString. Length is measured on upload. Mile/km posts, aid
-            stations and other markers are set up per course on the Courses page — they carry across every event that
-            uses that course.
+            KML, GPX or GeoJSON — a single path. GPX is what RaceResult and most watches export; KML is what Google
+            Earth exports. Length is measured on upload. Mile/km posts, aid stations and other markers are set up per
+            course on the Courses page — they carry across every event that uses that course.
           </p>
         </section>
       </div>
