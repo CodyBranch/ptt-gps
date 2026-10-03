@@ -1782,6 +1782,8 @@ button.mini.deploy-go { padding: 7px 16px; font-size: 12.5px; margin-top: 4px; }
 .course-board .cb-map-bg { fill: var(--cb-map); stroke: var(--cb-course); stroke-width: 2; }
 .course-board .cb-course-glow { fill: none; stroke: var(--cb-glow); stroke-opacity: 0.14; stroke-width: 34; stroke-linecap: round; stroke-linejoin: round; }
 .course-board .cb-course { fill: none; stroke: var(--cb-course); stroke-width: 12; stroke-linecap: round; stroke-linejoin: round; }
+.course-board .cb-footer-credit { fill: var(--cb-dim); font-size: calc(15px * var(--cb-scale)); letter-spacing: 0.6px; }
+.course-board .cb-map-scrim { fill: var(--cb-map); pointer-events: none; }
 .course-board .cb-course-done {
   fill: none; stroke-width: 12; stroke-linecap: round; stroke-linejoin: round;
   /* GPS arrives every few seconds; the line grows between fixes instead of
@@ -1824,7 +1826,6 @@ button.mini.deploy-go { padding: 7px 16px; font-size: 12.5px; margin-top: 4px; }
 .course-board .cb-group-bg { fill: var(--cb-panel); }
 .course-board .cb-group.stale { opacity: 0.55; }
 .course-board .cb-group-label { fill: var(--cb-text); font-size: calc(30px * var(--cb-scale)); font-weight: 800; letter-spacing: 1px; }
-.course-board .cb-group-vehicle { fill: var(--cb-dim); font-size: calc(22px * var(--cb-scale)); font-weight: 600; }
 .course-board .cb-group-value {
   fill: var(--cb-text); font-size: calc(76px * var(--cb-scale)); font-weight: 800;
   font-variant-numeric: tabular-nums; letter-spacing: -1px;

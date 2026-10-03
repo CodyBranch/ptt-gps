@@ -444,3 +444,86 @@ export function panelFit(count: number, available: number): number {
   if (count <= 0) return 1;
   return Math.min(1, available / ((count - 1) * CARD_PITCH + CARD_H));
 }
+
+/** The Mapbox styles the board can put under a course. */
+export const IMAGERY_STYLES: Record<string, string> = {
+  satellite: 'mapbox/satellite-streets-v12',
+  streets: 'mapbox/streets-v12',
+  dark: 'mapbox/dark-v11',
+  outdoors: 'mapbox/outdoors-v12',
+};
+
+export interface MapView {
+  lon: number;
+  lat: number;
+  zoom: number;
+  bearing: number;
+}
+
+/**
+ * The same view as the board's own projection, said the way a map asks for it.
+ *
+ * These line up without reprojecting anything, because the board's projection
+ * *is* Web Mercator read off at the course's centre latitude: longitude
+ * squashed by cos(lat0) is exactly Mercator's local scale there. The two only
+ * drift as the course runs away from that latitude - about two pixels across
+ * the height of the map on a course spanning a quarter of a degree, which is a
+ * marathon. Nothing near that matters on a 5K.
+ *
+ * The centre is quantised, and the zoom with it. Panning the board otherwise
+ * asks for a new image every frame, and following the lead would ask for one
+ * every fix all race; a tenth of a thousandth of a degree is about 11 metres,
+ * which is far finer than anyone can see on a course drawn across a screen.
+ */
+export function mapView(coords: number[][], p: Projection, grid = 1e-4): MapView | null {
+  if (coords.length === 0) return null;
+  const lats = coords.map((c) => c[1]);
+  const lat0 = lats.reduce((a, b) => a + b, 0) / lats.length;
+  const k = Math.cos((lat0 * Math.PI) / 180) || 1;
+
+  // Undo the quarter turn to read the centre back out as a place.
+  const [cx, cy] = turn(p.center[0], p.center[1], ((360 - p.rotation) % 360) as Rotation);
+  const lon = cx / k;
+  const lat = -cy;
+
+  // Mapbox lays the world out over 512px at zoom 0, so a degree of longitude
+  // is 512 * 2^z / 360 pixels. The board's own is k * scale.
+  const zoom = Math.log2((k * p.scale * 360) / 512);
+  const snap = (v: number, step: number) => Math.round(v / step) * step;
+  return {
+    lon: snap(lon, grid),
+    lat: snap(lat, grid),
+    zoom: Math.min(22, Math.max(0, snap(zoom, 0.05))),
+    // Mapbox bearing is what sits at the top of the frame; the board turns the
+    // plane under it, which is the same thing the other way round.
+    bearing: (360 - p.rotation) % 360,
+  };
+}
+
+/**
+ * A still of that view from Mapbox.
+ *
+ * A still rather than a live map: the board is an SVG drawn at a fixed size
+ * with no interaction, and one image it can draw and forget beats a second
+ * rendering engine kept in step with the first. It also fails quietly - an
+ * image that will not load leaves the flat background, which is the board as
+ * it was, rather than a blank frame.
+ */
+export function staticMapUrl(
+  view: MapView,
+  style: string,
+  w: number,
+  h: number,
+  token: string,
+): string | null {
+  const path = IMAGERY_STYLES[style];
+  if (!path || !token) return null;
+  // The API caps a side at 1280; @2x doubles what comes back, not what is asked.
+  const cw = Math.min(1280, Math.round(w));
+  const ch = Math.min(1280, Math.round(h));
+  const at = `${view.lon.toFixed(5)},${view.lat.toFixed(5)},${view.zoom.toFixed(2)},${view.bearing}`;
+  return (
+    `https://api.mapbox.com/styles/v1/${path}/static/${at}/${cw}x${ch}@2x` +
+    `?access_token=${encodeURIComponent(token)}&attribution=false&logo=false`
+  );
+}

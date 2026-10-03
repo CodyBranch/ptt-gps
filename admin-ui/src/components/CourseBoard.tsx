@@ -5,6 +5,8 @@ import {
   isLight,
   boardGroups,
   cumulativeFractions,
+  mapView,
+  staticMapUrl,
   CARD_PITCH,
   panelFit,
   curveFractions,
@@ -33,6 +35,9 @@ import { BOARD_COLORS, type BoardConfig, type CoursePayload, type EventMeta, typ
  * It has no controls, deliberately. Everything it shows comes from the board
  * config on the server, which the control page writes - see BoardControl.
  */
+
+/** The same publishable token the console's maps use; see admin-ui/.env.example. */
+const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN ?? '';
 
 export const BOARD_W = 1920;
 export const BOARD_H = 1080;
@@ -195,6 +200,17 @@ export function CourseBoard({
    * proportions, and anchored to the panel's outer edge so what it gives up
    * falls into the gutter beside the map rather than off the side.
    */
+  /**
+   * The map under the course, if one is asked for and we have a token to ask
+   * with. Memoised on the URL, so the browser fetches once per view rather
+   * than once per clock tick.
+   */
+  const mapUrl = useMemo(() => {
+    if (config.imagery === 'none' || !geom) return null;
+    const view = mapView(coords, geom.projection);
+    return view ? staticMapUrl(view, config.imagery, MAP.w, MAP.h, MAPBOX_TOKEN) : null;
+  }, [config.imagery, geom, coords, MAP.w, MAP.h]);
+
   const fit = panelFit(groups.length, MAP.h);
 
   const title = config.title.trim() || race?.name || event.name;
@@ -257,6 +273,30 @@ export function CourseBoard({
 
       {geom ? (
         <g clipPath="url(#board-map-clip)">
+          {/* The map, when there is one. Under everything, knocked back by a
+              scrim so the course and its labels keep their contrast: satellite
+              imagery of a park is busy, and a thin line over it disappears. */}
+          {mapUrl && (
+            <>
+              <image
+                href={mapUrl}
+                x={MAP.x}
+                y={MAP.y}
+                width={MAP.w}
+                height={MAP.h}
+                preserveAspectRatio="xMidYMid slice"
+              />
+              <rect
+                x={MAP.x}
+                y={MAP.y}
+                width={MAP.w}
+                height={MAP.h}
+                className="cb-map-scrim"
+                style={{ opacity: config.imageryDim }}
+              />
+            </>
+          )}
+
           {/* The course: a wide soft glow, the line, then the part covered. */}
           <path d={geom.path} className="cb-course-glow" />
           <path d={geom.path} className="cb-course" />
@@ -349,12 +389,6 @@ export function CourseBoard({
               <text x={28} y={40} className="cb-group-label">
                 {g.label.toUpperCase()}
               </text>
-              {g.vehicle && (
-                <text x={PANEL_W - 24} y={40} className="cb-group-vehicle" textAnchor="end">
-                  {g.vehicle}
-                </text>
-              )}
-
               {g.showDistance ? (
                 <>
                   <text x={28} y={108} className="cb-group-value">
@@ -409,6 +443,12 @@ export function CourseBoard({
           {race && course
             ? `${toUnits(race.courseLength, race.units, config.units).toFixed(config.decimals)} ${unitLabel(config.units)} COURSE`
             : ''}
+          {/* Off by default: clutter on a graphic going to air. It is also the
+              credit owed for the imagery, so with it off that credit has to
+              appear somewhere else - see `credit` in the board config. */}
+          {mapUrl && config.layout.credit && (
+            <tspan className="cb-footer-credit">   © MAPBOX © OPENSTREETMAP</tspan>
+          )}
         </text>
         {/* The mark on the right stands in for the wordmark; both would be two
             brands fighting over one corner. */}

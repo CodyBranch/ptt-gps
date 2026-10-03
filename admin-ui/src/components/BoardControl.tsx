@@ -434,6 +434,57 @@ export function BoardControl({ ev, onMsg }: { ev: EventSnap; onMsg: (text: strin
         </section>
 
         <section>
+          <h4>Map</h4>
+          <div className="board-row">
+            {(
+              [
+                ['none', 'None'],
+                ['satellite', 'Satellite'],
+                ['streets', 'Streets'],
+                ['outdoors', 'Outdoors'],
+                ['dark', 'Dark'],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                className={`mini ${config.imagery === value ? 'on' : ''}`}
+                onClick={() => patch({ imagery: value })}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="board-row">
+            <span className="dim">Knock back</span>
+            <input
+              type="range"
+              min={0}
+              max={0.9}
+              step={0.05}
+              disabled={config.imagery === 'none'}
+              value={config.imageryDim}
+              onChange={(e) => patch({ imageryDim: Number(e.target.value) })}
+            />
+            <span className="mono">{Math.round(config.imageryDim * 100)}%</span>
+          </div>
+          <div className="board-row">
+            <button
+              className={`mini ${config.layout.credit ? 'on' : ''}`}
+              disabled={config.imagery === 'none' || !config.layout.footer}
+              title="Mapbox and OpenStreetMap are owed a credit for the imagery; with this off it has to appear somewhere else"
+              onClick={() => patch({ layout: { ...config.layout, credit: !config.layout.credit } })}
+            >
+              Map credit
+            </button>
+          </div>
+          <p className="hint">
+            The map is a still, fetched when the view changes rather than drawn live. Following the lead moves the view
+            all race, so each board on a map costs a request every few seconds — worth knowing if the venue is on a
+            phone. With no connection the map simply does not appear and the board carries on.
+          </p>
+        </section>
+
+        <section>
           <h4>View</h4>
           <div className="board-row">
             <span className="dim">Zoom</span>

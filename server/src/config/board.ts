@@ -69,6 +69,17 @@ export interface BoardLayout {
    * left it leads and the wordmark keeps the right.
    */
   logo: 'left' | 'right' | 'none';
+  /**
+   * The map's credit line in the footer.
+   *
+   * Off by default, because it is clutter on a graphic going to air. It is
+   * also the credit Mapbox and OpenStreetMap are owed for the imagery, and
+   * turning the map's own corner logo off is only allowed where that credit
+   * appears somewhere - so with this off it has to live somewhere else, on
+   * the broadcast or on the event page. That is a call for whoever is running
+   * the meet, which is why it is a switch rather than a decision taken here.
+   */
+  credit: boolean;
   /** Scales every figure and label together, for a screen further away. */
   typeScale: number;
 }
@@ -102,6 +113,17 @@ export interface BoardConfig {
   /** Centre, in course coordinates [lon, lat]. Null centres on the course. */
   center: [number, number] | null;
   /** Light the course behind the lead group. */
+  /**
+   * A map under the course, or a flat field.
+   *
+   * A traced line on an empty background says where the leaders are on the
+   * course and nothing about where the course is. On a board going out to a
+   * crowd who know the town, the lake, the park and the bridge do more work
+   * than any label would.
+   */
+  imagery: 'none' | 'satellite' | 'streets' | 'dark' | 'outdoors';
+  /** How far to knock the map back so the course and its labels still read. */
+  imageryDim: number;
   showDone: boolean;
   /** The clock, when a race is running. */
   showClock: boolean;
@@ -145,7 +167,7 @@ export const BOARD_THEMES: Record<string, BoardTheme> = {
 
 export const defaultTheme = (): BoardTheme => ({ ...BOARD_THEMES.primetime });
 export const defaultLayout = (): BoardLayout => ({
-  panel: 'right', header: true, footer: true, logo: 'right', typeScale: 1,
+  panel: 'right', header: true, footer: true, logo: 'right', credit: false, typeScale: 1,
 });
 
 /** Colours assigned to groups in order; chosen to read at a distance. */
@@ -169,6 +191,8 @@ export function defaultBoard(): BoardConfig {
     zoom: 1,
     rotate: 'auto',
     center: null,
+    imagery: 'none',
+    imageryDim: 0.45,
     showDone: true,
     showClock: true,
     theme: defaultTheme(),
@@ -260,6 +284,8 @@ export function normaliseBoard(input: unknown): BoardConfig {
     rotate:
       raw.rotate === 0 || raw.rotate === 90 || raw.rotate === 180 || raw.rotate === 270 ? raw.rotate : 'auto',
     center,
+    imagery: oneOf(raw.imagery, ['none', 'satellite', 'streets', 'dark', 'outdoors'] as const, d.imagery),
+    imageryDim: num(raw.imageryDim, d.imageryDim, 0, 0.9),
     showDone: bool(raw.showDone, d.showDone),
     showClock: bool(raw.showClock, d.showClock),
     theme: normaliseTheme(raw.theme),
@@ -300,6 +326,7 @@ export function normaliseLayout(input: unknown): BoardLayout {
     // Was a boolean before the mark could sit on either side; a board saved
     // then meant "on", which is now the right-hand corner.
     logo: l.logo === true ? 'right' : l.logo === false ? 'none' : oneOf(l.logo, ['left', 'right', 'none'] as const, d.logo),
+    credit: bool(l.credit, d.credit),
     typeScale: num(l.typeScale, d.typeScale, 0.6, 1.8),
   };
 }

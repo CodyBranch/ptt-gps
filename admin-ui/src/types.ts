@@ -443,6 +443,8 @@ export interface BoardLayout {
   header: boolean;
   footer: boolean;
   logo: 'left' | 'right' | 'none';
+  /** The map's credit line in the footer. See server/src/config/board.ts. */
+  credit: boolean;
   typeScale: number;
 }
 
@@ -489,6 +491,10 @@ export interface BoardConfig {
   zoom: number;
   rotate: 'auto' | 0 | 90 | 180 | 270;
   center: [number, number] | null;
+  /** A map under the course, or a flat field. See server/src/config/board.ts. */
+  imagery: 'none' | 'satellite' | 'streets' | 'dark' | 'outdoors';
+  /** How far to knock the map back so the course and its labels still read. */
+  imageryDim: number;
   showDone: boolean;
   showClock: boolean;
   theme: BoardTheme;
@@ -512,8 +518,10 @@ export const defaultBoardConfig = (): BoardConfig => ({
   zoom: 1,
   rotate: 'auto',
   center: null,
+  imagery: 'none',
+  imageryDim: 0.45,
   showDone: true,
   showClock: true,
   theme: { ...BOARD_THEMES.primetime },
-  layout: { panel: 'right', header: true, footer: true, logo: 'right', typeScale: 1 },
+  layout: { panel: 'right', header: true, footer: true, logo: 'right', credit: false, typeScale: 1 },
 });

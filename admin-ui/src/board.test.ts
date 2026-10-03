@@ -7,6 +7,8 @@ import {
   metresBetween,
   project,
   smoothPath,
+  mapView,
+  staticMapUrl,
   panelFit,
   CARD_H,
   CARD_PITCH,
@@ -387,5 +389,92 @@ describe('fitting the groups down the panel', () => {
 
   it('has more room to give when the header and footer are off', () => {
     expect(panelFit(7, 1080 - 40 - 40)).toBeGreaterThan(panelFit(7, AVAILABLE));
+  });
+});
+
+describe('asking a map for the board’s own view', () => {
+  const BOX = { x: 40, y: 132, w: 1208, h: 856, pad: 72 };
+  // A lakefront out-and-back, which is the shape that makes this worth doing.
+  const COURSE = [
+    [-87.89903, 43.03662],
+    [-87.89975, 43.03462],
+    [-87.89766, 43.02031],
+    [-87.89508, 43.01442],
+    [-87.89903, 43.03662],
+  ];
+
+  it('puts the board’s centre where the map’s centre is', () => {
+    const p = project(COURSE, BOX);
+    const v = mapView(COURSE, p)!;
+    const [x, y] = p.point(v.lon, v.lat);
+    // Within half the quantisation grid - a ten-thousandth of a degree, about
+    // 11 metres, which is what stops a pan asking for a new image every frame.
+    const slack = (1e-4 * p.scale) / 2 + 1e-6;
+    expect(Math.abs(x - (BOX.x + BOX.w / 2))).toBeLessThanOrEqual(slack);
+    expect(Math.abs(y - (BOX.y + BOX.h / 2))).toBeLessThanOrEqual(slack);
+  });
+
+  it('asks for the zoom the board is actually drawn at', () => {
+    const p = project(COURSE, BOX);
+    const v = mapView(COURSE, p)!;
+    const lat0 = COURSE.reduce((a, c) => a + c[1], 0) / COURSE.length;
+    const k = Math.cos((lat0 * Math.PI) / 180);
+    // Mapbox: 512px covers 360 degrees at zoom 0. The zoom is snapped to a
+    // twentieth of a step so panning does not refetch, which is worth up to
+    // 1.8% of scale - a couple of pixels across the map, and no more.
+    const mapboxPxPerDegLon = (512 * 2 ** v.zoom) / 360;
+    expect(mapboxPxPerDegLon / (k * p.scale)).toBeGreaterThan(2 ** -0.025);
+    expect(mapboxPxPerDegLon / (k * p.scale)).toBeLessThan(2 ** 0.025);
+  });
+
+  it('zooms in by one whole step when the board doubles its zoom', () => {
+    const a = mapView(COURSE, project(COURSE, BOX, 1))!;
+    const b = mapView(COURSE, project(COURSE, BOX, 2))!;
+    expect(b.zoom - a.zoom).toBeCloseTo(1, 1);
+  });
+
+  it('turns the map the other way to the plane, which comes to the same thing', () => {
+    // The board turns the ground under a fixed frame; a map turns the frame.
+    expect(mapView(COURSE, project(COURSE, BOX, 1, null, 0))!.bearing).toBe(0);
+    expect(mapView(COURSE, project(COURSE, BOX, 1, null, 90))!.bearing).toBe(270);
+    expect(mapView(COURSE, project(COURSE, BOX, 1, null, 180))!.bearing).toBe(180);
+    expect(mapView(COURSE, project(COURSE, BOX, 1, null, 270))!.bearing).toBe(90);
+  });
+
+  it('quantises, so panning does not ask for a new image every frame', () => {
+    const a = mapView(COURSE, project(COURSE, BOX, 1, [-87.897, 43.025]))!;
+    const b = mapView(COURSE, project(COURSE, BOX, 1, [-87.89701, 43.025001]))!;
+    expect(b).toEqual(a);
+  });
+
+  it('has nothing to say about a course with no points', () => {
+    expect(mapView([], project(COURSE, BOX))).toBeNull();
+  });
+
+  describe('the URL', () => {
+    const view = { lon: -87.897, lat: 43.0255, zoom: 14.25, bearing: 270 };
+
+    it('carries the place, the zoom and the bearing', () => {
+      const url = staticMapUrl(view, 'satellite', 1208, 856, 'pk.test')!;
+      expect(url).toContain('/mapbox/satellite-streets-v12/static/');
+      expect(url).toContain('-87.89700,43.02550,14.25,270');
+      expect(url).toContain('/1208x856@2x');
+    });
+
+    it('keeps each side inside the 1280 the API allows', () => {
+      expect(staticMapUrl(view, 'satellite', 4000, 3000, 'pk.test')).toContain('/1280x1280@2x');
+    });
+
+    it('turns the map’s own credit off, which the footer then has to carry', () => {
+      const url = staticMapUrl(view, 'streets', 1208, 856, 'pk.test')!;
+      expect(url).toContain('attribution=false');
+      expect(url).toContain('logo=false');
+    });
+
+    it('asks for nothing without a token, or for a style it does not know', () => {
+      expect(staticMapUrl(view, 'satellite', 1208, 856, '')).toBeNull();
+      expect(staticMapUrl(view, 'none', 1208, 856, 'pk.test')).toBeNull();
+      expect(staticMapUrl(view, 'nonsense', 1208, 856, 'pk.test')).toBeNull();
+    });
   });
 });

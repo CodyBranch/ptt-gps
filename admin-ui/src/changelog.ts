@@ -22,6 +22,18 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '0.24.0',
+    date: '2026-10-02',
+    summary: 'A map under the course, and less on the board that was not earning its place.',
+    added: [
+      'The course board can put a **map** under the course — satellite, streets, outdoors or dark — with a slider to knock it back so the line and its labels still read. A traced line on an empty field says where the leaders are on the course and nothing about where the course is; to a crowd who know the town, the lake and the bridge do more work than any label. It lines up without reprojecting anything, because the board’s own projection is Web Mercator read off at the course’s centre latitude.',
+    ],
+    changed: [
+      'The vehicle’s name has come off the group cards. The card already carries the group’s label, which is the thing being shown; which vehicle is covering it is an operator’s question and the race page answers it.',
+      'The map’s credit line in the footer is off unless switched on. Mapbox and OpenStreetMap are owed that credit for the imagery, and suppressing the map’s own corner logo is only allowed where it appears somewhere — so with this off it needs to live on the broadcast or the event page instead. That is a call for whoever is running the meet.',
+    ],
+  },
+  {
     version: '0.23.7',
     date: '2026-10-02',
     fixed: [
