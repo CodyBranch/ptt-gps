@@ -495,6 +495,78 @@ export const MANUAL: { title: string; subtitle: string; sections: Section[] } = 
       ],
     },
 
+    // --------------------------------------------------------- course board
+    {
+      id: 'course-board',
+      title: 'The course board',
+      blocks: [
+        {
+          t: 'p',
+          text:
+            "A 1920x1080 graphic for a screen, a projector or a capture card: the course, where each group is on it, " +
+            "and how far each has run. It is built for a race with several groups to follow at once - a marathon " +
+            "tracking its men's, women's and wheelchair leaders - and it shows them together on one map.",
+        },
+        { t: 'h3', text: 'Two pages' },
+        {
+          t: 'bullets',
+          items: [
+            "The **board** at `/board` is the output. It has no controls on it at all, because anything drawn over a " +
+              "broadcast graphic is in shot. Open it full screen on the machine that feeds the screen and leave it; " +
+              "it needs nobody at its keyboard.",
+            "The **Board** tab on an event is where it is driven from, and that can be a different machine in a " +
+              "different room. The monitor at the top of that page is the same graphic the board is drawing, at the " +
+              "same moment - not a mock-up of it.",
+          ],
+        },
+        {
+          t: 'note',
+          text:
+            "Every change is live the instant you make it. There is no take step: hiding a number or following a " +
+            "different group is something you do because of what is happening in the race, and a rehearsal step in " +
+            "between is time the moment has already taken.",
+        },
+        { t: 'h3', text: 'Groups' },
+        {
+          t: 'p',
+          text:
+            "Each role in the race is a group. Per group you choose whether it is **on board** at all, whether its " +
+            "**distance** shows, whether it is **on map**, and its colour - and which one is the **lead**, whose " +
+            "progress lights the course behind it and whom the map follows.",
+        },
+        {
+          t: 'bullets',
+          items: [
+            "Turning a group's distance off leaves its name, its colour and its bar. That is how you show a group is " +
+              "being tracked without putting a number on air - before a chip is confirmed, or when a vehicle has " +
+              "drifted and the figure is not one you want quoted.",
+            "Labels step out of each other's way when groups bunch, each tied back to its own dot, so three leaders " +
+              "on the same start line still read.",
+            "The arrows order the panel. It is the order people read, so put the group being talked about at the top.",
+          ],
+        },
+        { t: 'h3', text: 'The map' },
+        {
+          t: 'bullets',
+          items: [
+            "**Drag the preview** to move the board. Zoom with the slider, **Fit course** to put the whole thing back " +
+              "in frame.",
+            "**Follow lead** keeps the lead group centred as it runs, which is the only way a zoomed-in board stays " +
+              "useful for two hours without somebody panning it by hand.",
+            "Start, finish, timing points and course marks each switch on and off. **Posts** draws whole miles or " +
+              "whole kilometres regardless of the units the race is measured in.",
+          ],
+        },
+        {
+          t: 'p',
+          text:
+            "Distances read in miles or kilometres whatever the race is set to, as **covered**, **to go**, or a " +
+            "**percentage**, to as many decimals as you want. None of it changes what is published or recorded - the " +
+            "board is a way of showing the race, not of running it.",
+        },
+      ],
+    },
+
     // ---------------------------------------------------------- diagnostics
     {
       id: 'diagnostics',

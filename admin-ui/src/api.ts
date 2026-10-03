@@ -1,4 +1,4 @@
-import type { Units } from './types';
+import type { CoursePayload, Units } from './types';
 
 async function post(url: string, body?: unknown): Promise<void> {
   const res = await fetch(url, {
@@ -81,7 +81,7 @@ export const api = {
   releaseWindow: (eventId: string, raceId: string, imei: string) =>
     send(`/api/events/${eventId}/races/${raceId}/trackers/${imei}/window`, 'DELETE'),
 
-  course: (eventId: string, raceId: string): Promise<{ line: GeoJSON.Feature; length: number; units: string }> =>
+  course: (eventId: string, raceId: string): Promise<CoursePayload> =>
     getJson(`/api/events/${eventId}/races/${raceId}/course`),
 
   setPublishing: (eventId: string, enabled: boolean) => post(`/api/events/${eventId}/publishing`, { enabled }),
@@ -218,6 +218,9 @@ export const api = {
     send(`/api/feed-tokens/${id}`, 'PATCH', { canWriteSetup }),
   setFeedTokenRunRaces: (id: number, canRunRaces: boolean) =>
     send(`/api/feed-tokens/${id}`, 'PATCH', { canRunRaces }),
+
+  board: (eventId: string) => getJson(`/api/events/${eventId}/board`),
+  setBoard: (eventId: string, board: unknown) => send(`/api/events/${eventId}/board`, 'PUT', board),
 
   listeners: () => getJson('/api/listeners'),
   setNmeaPort: (port: number) => send('/api/listeners/nmea', 'POST', { port }),

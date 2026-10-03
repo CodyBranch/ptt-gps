@@ -80,6 +80,8 @@ export interface RaceSnap {
   units: 'miles' | 'kilometers';
   courseLength: number;
   sessionId: number | null;
+  /** When the race went off, for a clock. Null until it starts. */
+  startedMs?: number | null;
   roles: RoleState[];
   /** The meet's vehicles, so coverage can be reassigned from the race view. */
   vehicles: Vehicle[];
@@ -103,6 +105,8 @@ export interface EventSnap {
   publishEnabled: boolean;
   /** showDistance held off in Firebase, while distances keep publishing. */
   distanceHidden?: boolean;
+  /** What the course board is showing, set from the control page. */
+  board?: BoardConfig;
   races: RaceSnap[];
 }
 
@@ -389,3 +393,69 @@ export interface FeedConnection {
   /** The meet it is watching, or null if it has not chosen one. */
   eventId: string | null;
 }
+
+/** A marker the server has placed on the course line. */
+export interface PlacedMarker {
+  /** Distance along the course, in the course's own units. */
+  at: number;
+  label: string;
+  kind: 'start' | 'finish' | 'unit' | 'custom' | 'timing';
+  units?: Units;
+  lat: number;
+  lon: number;
+}
+
+export interface CoursePayload {
+  line: { type: string; geometry: { type: string; coordinates: number[][] }; properties?: unknown };
+  length: number;
+  units: Units;
+  markers: PlacedMarker[];
+}
+
+/** One role as the course board draws it. Mirrors server/src/config/board.ts. */
+export interface BoardGroup {
+  shown: boolean;
+  distance: boolean;
+  marker: boolean;
+  color: string;
+}
+
+export type BoardValueMode = 'covered' | 'remaining' | 'percent';
+
+export interface BoardConfig {
+  raceId: string | null;
+  title: string;
+  units: Units;
+  decimals: number;
+  value: BoardValueMode;
+  posts: 'none' | 'miles' | 'kilometers' | 'both';
+  markers: { start: boolean; finish: boolean; timing: boolean; custom: boolean };
+  groups: Record<string, BoardGroup>;
+  order: string[];
+  lead: string | null;
+  follow: boolean;
+  zoom: number;
+  center: [number, number] | null;
+  showDone: boolean;
+  showClock: boolean;
+}
+
+export const BOARD_COLORS = ['#e11d48', '#38bdf8', '#f59e0b', '#22c55e', '#a78bfa', '#f472b6'];
+
+export const defaultBoardConfig = (): BoardConfig => ({
+  raceId: null,
+  title: '',
+  units: 'miles',
+  decimals: 2,
+  value: 'covered',
+  posts: 'none',
+  markers: { start: true, finish: true, timing: true, custom: true },
+  groups: {},
+  order: [],
+  lead: null,
+  follow: false,
+  zoom: 1,
+  center: null,
+  showDone: true,
+  showClock: true,
+});

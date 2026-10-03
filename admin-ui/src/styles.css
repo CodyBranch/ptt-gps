@@ -1746,3 +1746,126 @@ button.mini.deploy-go { padding: 7px 16px; font-size: 12.5px; margin-top: 4px; }
   .decoder-table tr:has(td[colspan]) { display: block; background: none; border: none; padding: 6px 2px; }
 
 }
+
+/* ======================================================================
+   Course board
+
+   A 1920x1080 broadcast graphic and the page that drives it. Everything
+   inside .course-board is sized in board pixels, never in rem or vw: the
+   whole canvas is scaled by one transform, so a figure that reads at 2 m
+   on a monitor reads the same on a projector.
+   ====================================================================== */
+
+.course-board { display: block; font-family: 'Barlow Condensed', 'Inter', system-ui, sans-serif; }
+.course-board .cb-bg { fill: #060d18; }
+.course-board .cb-header-bg { fill: #0c1a2c; }
+.course-board .cb-title { fill: #fff; font-size: 54px; font-weight: 800; letter-spacing: 0.5px; }
+.course-board .cb-subtitle { fill: #7e93b4; font-size: 22px; font-weight: 600; letter-spacing: 1.4px; text-transform: uppercase; }
+.course-board .cb-clock {
+  fill: #fff; font-size: 60px; font-weight: 800; font-variant-numeric: tabular-nums;
+}
+
+.course-board .cb-map-bg { fill: #0a1526; stroke: #16243d; stroke-width: 2; }
+.course-board .cb-course-glow { fill: none; stroke: #2563eb; stroke-opacity: 0.14; stroke-width: 34; stroke-linecap: round; stroke-linejoin: round; }
+.course-board .cb-course { fill: none; stroke: #2e4a6e; stroke-width: 12; stroke-linecap: round; stroke-linejoin: round; }
+.course-board .cb-course-done {
+  fill: none; stroke-width: 12; stroke-linecap: round; stroke-linejoin: round;
+  /* GPS arrives every few seconds; the line grows between fixes instead of
+     jumping, which is the difference between a live graphic and a slideshow. */
+  transition: stroke-dasharray 1.9s linear;
+}
+
+.course-board .cb-marker circle { fill: #0a1526; stroke: #fff; stroke-width: 4; }
+.course-board .cb-marker.start circle { fill: #16a34a; stroke: #fff; }
+.course-board .cb-marker.finish circle { fill: #fff; stroke: #0a1526; }
+.course-board .cb-marker.timing circle { fill: #0a1526; stroke: #38bdf8; }
+.course-board .cb-marker text {
+  fill: #fff; font-size: 24px; font-weight: 700; letter-spacing: 1px;
+  paint-order: stroke; stroke: #060d18; stroke-width: 6; stroke-linejoin: round;
+}
+.course-board .cb-post circle, .course-board .cb-post rect { fill: #64748b; }
+.course-board .cb-post.mile rect { fill: #eab308; }
+.course-board .cb-post text {
+  fill: #cbd5e1; font-size: 20px; font-weight: 700;
+  paint-order: stroke; stroke: #060d18; stroke-width: 5; stroke-linejoin: round;
+}
+
+.course-board .cb-vehicle { transition: transform 1.9s linear; }
+.course-board .cb-vehicle-dot { stroke: #fff; stroke-width: 4; }
+.course-board .cb-vehicle-pulse {
+  opacity: 0.5; animation: cb-pulse 1.8s ease-out infinite;
+  transform-box: fill-box; transform-origin: center;
+}
+.course-board .cb-vehicle.stale { opacity: 0.4; }
+.course-board .cb-vehicle-tie { stroke: rgba(255, 255, 255, 0.45); stroke-width: 2; }
+.course-board .cb-vehicle-label {
+  fill: #fff; font-size: 24px; font-weight: 800; letter-spacing: 1px;
+  paint-order: stroke; stroke: #060d18; stroke-width: 6; stroke-linejoin: round;
+}
+@keyframes cb-pulse {
+  from { transform: scale(1); opacity: 0.5; }
+  to { transform: scale(2.6); opacity: 0; }
+}
+
+.course-board .cb-group-bg { fill: #0c1a2c; }
+.course-board .cb-group.stale { opacity: 0.55; }
+.course-board .cb-group-label { fill: #fff; font-size: 30px; font-weight: 800; letter-spacing: 1px; }
+.course-board .cb-group-vehicle { fill: #7e93b4; font-size: 22px; font-weight: 600; }
+.course-board .cb-group-value {
+  fill: #fff; font-size: 76px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -1px;
+}
+.course-board .cb-group-unit { fill: #7e93b4; font-size: 30px; font-weight: 700; }
+.course-board .cb-group-hidden { fill: #7e93b4; font-size: 30px; font-weight: 700; letter-spacing: 3px; }
+.course-board .cb-group-bar-bg { fill: #16243d; }
+.course-board .cb-empty, .course-board .cb-empty-panel { fill: #52647f; font-size: 30px; font-weight: 600; }
+
+.course-board .cb-footer-bg { fill: #0c1a2c; }
+.course-board .cb-footer-text { fill: #7e93b4; font-size: 22px; font-weight: 700; letter-spacing: 2px; }
+.course-board .cb-footer-brand { fill: #e11d48; font-size: 24px; font-weight: 800; letter-spacing: 3px; }
+
+/* --- the output page: the whole screen and nothing else ---------------- */
+.board-output {
+  position: fixed; inset: 0; background: #000; overflow: hidden;
+  /* Nothing here is for a person at this keyboard. */
+  cursor: none; user-select: none;
+}
+.board-output-canvas { position: absolute; left: 50%; top: 50%; transform-origin: center; }
+.board-output-wait {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  color: #52647f; font-size: 28px; font-weight: 600;
+}
+
+/* --- the control page -------------------------------------------------- */
+.board-control { display: flex; gap: 18px; padding: 16px; min-height: 0; overflow: auto; }
+.board-preview-wrap { flex: 0 0 auto; display: flex; flex-direction: column; gap: 10px; }
+.board-frame { overflow: hidden; border-radius: 10px; border: 1px solid var(--border); background: #000; }
+.board-preview.draggable { cursor: grab; }
+.board-preview.draggable:active { cursor: grabbing; }
+.board-preview-bar { display: flex; align-items: center; gap: 10px; font-size: 12px; }
+
+.board-controls {
+  flex: 1; min-width: 320px; display: flex; flex-direction: column; gap: 14px;
+  max-height: calc(100vh - 160px); overflow-y: auto; padding-right: 4px;
+}
+.board-controls section {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px;
+}
+.board-controls h4 { margin: 0 0 8px; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; color: var(--dim); }
+.board-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.board-field { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; font-size: 12px; color: var(--dim); }
+.board-group { border-top: 1px solid var(--border); padding-top: 10px; margin-top: 10px; }
+.board-group:first-of-type { border-top: none; padding-top: 0; margin-top: 0; }
+.board-group.off { opacity: 0.5; }
+.board-group-head { display: flex; align-items: center; gap: 8px; }
+.board-group-name { font-weight: 700; font-size: 14px; }
+.board-swatch { width: 14px; height: 14px; border-radius: 4px; flex: none; }
+.board-colors { gap: 5px; }
+.board-color { width: 20px; height: 20px; border-radius: 5px; border: 2px solid transparent; cursor: pointer; padding: 0; }
+.board-color.on { border-color: #fff; }
+
+@media (max-width: 1500px) {
+  /* The preview stops being a monitor and becomes a thumbnail; the controls
+     are what you need at this width. */
+  .board-control { flex-direction: column; }
+  .board-controls { max-height: none; }
+}

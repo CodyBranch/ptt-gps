@@ -591,6 +591,30 @@ export function startApi(
     }),
   );
 
+  /**
+   * What the course board shows. Read by the board itself, written by the
+   * control page - which is usually on a different machine, which is the whole
+   * reason this lives on the server rather than in the board's own URL.
+   */
+  ex.get('/api/events/:eventId/board', (req, res) => {
+    try {
+      res.json({ ok: true, board: eventApp(req).board });
+    } catch (err) {
+      res.status(404).json({ ok: false, error: (err as Error).message });
+    }
+  });
+
+  ex.put(
+    '/api/events/:eventId/board',
+    act((req) => {
+      const board = eventApp(req).setBoard(req.body, (req as OpRequest).operator);
+      // The board has no controls of its own and nothing polls: a change is
+      // only on air once it has been pushed.
+      broadcastSnapshot();
+      return board;
+    }),
+  );
+
   ex.post(
     '/api/events/:eventId/distance-visibility',
     act((req) => {

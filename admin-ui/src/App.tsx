@@ -6,6 +6,8 @@ import { EventSetup } from './components/EventSetup';
 import { ChangelogView } from './components/ChangelogView';
 import { CoursesView } from './components/CoursesView';
 import { DecodersView } from './components/DecodersView';
+import { BoardControl } from './components/BoardControl';
+import { BoardOutput } from './components/BoardOutput';
 import { DistanceBoard } from './components/DistanceBoard';
 import { EventsView } from './components/EventsView';
 import { FleetView } from './components/FleetView';
@@ -95,7 +97,9 @@ function reducer(state: State, action: Action): State {
  * the full picture — map, vehicles, trackers. /watch/distances is just the
  * headline number per role, for an announcer who needs to read it, not work it.
  */
-const VIEWER_PATHS = ['/watch', '/watch/distances'];
+const VIEWER_PATHS = ['/watch', '/watch/distances', '/board'];
+/** The course board's output page: the whole screen, driven from elsewhere. */
+const COURSE_BOARD_URL = window.location.pathname === '/board';
 const VIEWER_URL =
   VIEWER_PATHS.includes(window.location.pathname) || new URLSearchParams(window.location.search).has('viewer');
 const BOARD_URL =
@@ -484,6 +488,9 @@ export default function App() {
   const eventRaceView = () => {
     // Setup works for any event, running or not: next weekend's meet gets built
     // during the week, and activating it just to edit would start its engines.
+    if (eventTab === 'board' && admin && !viewer && ev) {
+      return <BoardControl ev={ev} onMsg={(text, bad) => (bad ? oops('Board')(new Error(text)) : undefined)} />;
+    }
     if (eventTab === 'setup' && admin && !viewer && eventId) {
       return (
         <EventSetup
@@ -617,6 +624,17 @@ export default function App() {
    * trying to read from arm's length. So this page skips the shell entirely
    * rather than hiding its parts one at a time.
    */
+  if (COURSE_BOARD_URL) {
+    const wanted = new URLSearchParams(window.location.search).get('event');
+    const loaded = state.snapshot?.events ?? [];
+    const onBoard = wanted ? loaded.find((e) => e.event.id === wanted) : loaded[0];
+    return (
+      <ErrorBoundary where="board">
+        <BoardOutput ev={onBoard ?? null} />
+      </ErrorBoundary>
+    );
+  }
+
   if (viewer && board) {
     return (
       <div className="app announcer">
@@ -836,8 +854,18 @@ export default function App() {
                 {STATUS_DOT[r.status]} {raceLabel(r)}
               </option>
             ))}
+            {admin && !viewer && <option value="board">🖵 Board</option>}
             {admin && !viewer && <option value="setup">⚙ Setup</option>}
           </select>
+          {admin && !viewer && (
+            <button
+              className={`subnav-setup ${eventTab === 'board' ? 'active' : ''}`}
+              title="Drive the course board"
+              onClick={() => setEventTab('board')}
+            >
+              🖵<span className="btn-word"> Board</span>
+            </button>
+          )}
           {admin && !viewer && (
             <button
               className={`subnav-setup ${eventTab === 'setup' ? 'active' : ''}`}

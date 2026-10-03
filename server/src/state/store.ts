@@ -471,6 +471,14 @@ export class Store {
     return out;
   }
 
+  /** When a session went off, for anything showing a race clock. */
+  sessionStartedAt(sessionId: number): number | null {
+    const row = this.db.prepare(`SELECT started_at_ms FROM sessions WHERE id = ?`).get(sessionId) as
+      | { started_at_ms: number }
+      | undefined;
+    return row?.started_at_ms ?? null;
+  }
+
   endSession(sessionId: number, endedAtMs = Date.now()): void {
     this.db.prepare(`UPDATE sessions SET ended_at_ms = ? WHERE id = ?`).run(endedAtMs, sessionId);
   }

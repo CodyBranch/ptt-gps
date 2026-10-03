@@ -1,3 +1,4 @@
+import { defaultBoard, normaliseBoard, type BoardConfig } from './config/board.js';
 import type { EventConfig } from './config/schema.js';
 import { convertUnits, inRunningOrder, resolveRace } from './config/schema.js';
 import { RaceEngine, type EngineHooks, type RaceStatus, type TrackerState } from './engine/race-engine.js';
@@ -75,6 +76,14 @@ export class App {
    * took down.
    */
   distanceHidden = false;
+
+  /**
+   * What the course board is showing, set from a control page that is usually
+   * not on the same machine. Held here and pushed with the snapshot so a board
+   * that reloads - or one opened an hour into a meet - comes up exactly as the
+   * operator left it rather than at defaults.
+   */
+  board: BoardConfig = defaultBoard();
   private out: AppEvents;
   /** Per-IMEI comms health from the shared gate (gaps/rejections). */
   private healthFn: (imei: string) => unknown;
@@ -121,6 +130,11 @@ export class App {
     }
 
     this.distanceHidden = store.getSetting(`distance-hidden:${cfg.id}`) === '1';
+    try {
+      this.board = normaliseBoard(JSON.parse(store.getSetting(`board:${cfg.id}`) ?? 'null'));
+    } catch {
+      this.board = defaultBoard();
+    }
 
     // Automatic selection is an operator decision taken during a race; a
     // restart mid-race must not quietly put every role back on its primary.
@@ -387,6 +401,22 @@ export class App {
   }
 
   /** Hide or show the distance on the scoreboard and clock, without stopping publishing. */
+  /**
+   * Replace what the board is showing.
+   *
+   * Whole-config rather than per-field: the control page holds the only copy
+   * anyone is editing, and a field-at-a-time API would let two operators on
+   * two tabs each overwrite half of the other's work with no way to tell.
+   */
+  setBoard(next: unknown, by?: string): BoardConfig {
+    this.board = normaliseBoard(next);
+    this.store.setSetting(`board:${this.cfg.id}`, JSON.stringify(this.board));
+    for (const sessionId of this.sessions.values()) {
+      this.store.addSessionEvent(sessionId, 'board', { by });
+    }
+    return this.board;
+  }
+
   setDistanceHidden(hidden: boolean, by?: string): void {
     if (hidden === this.distanceHidden) return;
     this.distanceHidden = hidden;
@@ -541,6 +571,11 @@ export class App {
       units: engine.race.units,
       courseLength: engine.course.length,
       sessionId: this.sessions.get(raceId) ?? null,
+      /** The gun, so a board can run a clock without asking separately. */
+      startedMs: (() => {
+        const id = this.sessions.get(raceId);
+        return id === undefined ? null : this.store.sessionStartedAt(id);
+      })(),
       roles: engine.roles,
       vehicles: engine.vehicles,
       trackers: [...engine.trackers.values()].map((s) => ({
@@ -565,6 +600,7 @@ export class App {
       },
       publishEnabled: this.publishEnabled,
       distanceHidden: this.distanceHidden,
+      board: this.board,
       races: inRunningOrder(this.cfg.races).map((r) => this.raceSnapshot(r.id)),
     };
   }

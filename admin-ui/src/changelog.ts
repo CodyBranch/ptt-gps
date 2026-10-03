@@ -22,6 +22,22 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '0.21.0',
+    date: '2026-10-02',
+    summary: 'A course board for a screen, and a control page to drive it.',
+    added: [
+      'A **course board** at `/board`: a 1920×1080 graphic showing the course, where each group is on it, and how far each has run. Built for a race with several groups to follow at once — a marathon tracking its men\'s, women\'s and wheelchair leaders shows all three on one map, each with its own colour, figure and progress bar.',
+      'A **Board** tab on an event to drive it, with a monitor at the top that is the same graphic the board is drawing rather than a mock-up of it. The two can be on different machines in different rooms, which is the point: the board itself has no controls on it, because anything drawn over a broadcast graphic is in shot.',
+      'Per group: whether it is on the board at all, whether its distance shows, whether it is on the map, its colour, and the order they are read in. Turning a group\'s distance off leaves its name and its bar — which is how you show a group is being tracked without putting a number on air.',
+      'Distances in miles or kilometres whatever the race is set to, as covered, to go, or a percentage, to as many decimals as you want. Start, finish, timing points and course marks each switch on and off, and mile or kilometre posts can be drawn regardless of the units the race is measured in.',
+      'Drag the preview to move the board, zoom, or **follow the lead** — which keeps the lead group centred as it runs, the only way a zoomed-in board stays useful for two hours without somebody panning it by hand.',
+      'The race clock on the board, and a race that follows the meet: leave it on "the running race" and it moves to whichever race is live.',
+    ],
+    changed: [
+      'Nothing on the board changes what is published, recorded or sent anywhere. It is a way of showing a race, not of running one.',
+    ],
+  },
+  {
     version: '0.20.4',
     date: '2026-09-28',
     summary: 'A deploy leaves a record of what it actually did.',
