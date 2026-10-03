@@ -22,6 +22,18 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '0.23.2',
+    date: '2026-10-02',
+    summary: 'The mark can take either corner of the board, and a bad write can no longer blank a board on air.',
+    changed: [
+      'The Primetime mark can sit bottom **left** or bottom **right**, and it now defaults to the right. On the right it stands in for the wordmark rather than sitting beside it — two brands in one corner is neither of them. On the left it leads and the wordmark keeps the right. Boards set up before this read as right, which is where the mark was.',
+    ],
+    fixed: [
+      'Saving the board rejects a body that is not a board instead of accepting it and resetting the board to defaults. Every field was optional, so a request in the wrong shape filled in defaults for all of them — title, colours, groups, the lot — and answered ok, which meant a board could go blank mid-race and nothing would say why.',
+      'A vehicle label near the edge of the map is pulled inside a little sooner. The width it was guessed at was a fifth under what the labels actually measure, so the longest ones could still cross the edge they were meant to stop at.',
+    ],
+  },
+  {
     version: '0.23.1',
     date: '2026-10-02',
     summary: 'The Primetime mark on the board, and older board settings stop going missing.',

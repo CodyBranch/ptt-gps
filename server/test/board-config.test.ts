@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BOARD_THEMES, defaultBoard, normaliseBoard } from '../src/config/board.js';
+import { BOARD_THEMES, defaultBoard, isBoardLike, normaliseBoard } from '../src/config/board.js';
 
 /**
  * What the board will accept as its configuration.
@@ -88,6 +88,23 @@ describe('groups', () => {
     expect(normaliseBoard({ center: [-84.3, 30.4] }).center).toEqual([-84.3, 30.4]);
     for (const bad of [[1], ['a', 'b'], 'middle', [1, 2, 3]]) {
       expect(normaliseBoard({ center: bad }).center).toBeNull();
+    }
+  });
+});
+
+describe('isBoardLike', () => {
+  it('accepts a whole board and a part of one', () => {
+    expect(isBoardLike(defaultBoard())).toBe(true);
+    expect(isBoardLike({ zoom: 3 })).toBe(true);
+    expect(isBoardLike({ layout: { logo: 'left' } })).toBe(true);
+  });
+
+  it('rejects a body that owns none of the board fields', () => {
+    // The shape that found this: a config posted inside an envelope. It used
+    // to normalise to a clean default and wipe the board that was on air.
+    expect(isBoardLike({ board: defaultBoard() })).toBe(false);
+    for (const bad of [null, undefined, 'board', 7, [], [defaultBoard()], {}]) {
+      expect(isBoardLike(bad)).toBe(false);
     }
   });
 });

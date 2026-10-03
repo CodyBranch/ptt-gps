@@ -1,4 +1,4 @@
-import { defaultBoard, normaliseBoard, type BoardConfig } from './config/board.js';
+import { defaultBoard, isBoardLike, normaliseBoard, type BoardConfig } from './config/board.js';
 import type { EventConfig } from './config/schema.js';
 import { convertUnits, inRunningOrder, resolveRace } from './config/schema.js';
 import { RaceEngine, type EngineHooks, type RaceStatus, type TrackerState } from './engine/race-engine.js';
@@ -409,6 +409,7 @@ export class App {
    * two tabs each overwrite half of the other's work with no way to tell.
    */
   setBoard(next: unknown, by?: string): BoardConfig {
+    if (!isBoardLike(next)) throw new Error('Not a board configuration');
     this.board = normaliseBoard(next);
     this.store.setSetting(`board:${this.cfg.id}`, JSON.stringify(this.board));
     for (const sessionId of this.sessions.values()) {

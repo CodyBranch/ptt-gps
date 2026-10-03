@@ -35,6 +35,9 @@ export const BOARD_H = 1080;
 
 const PANEL_W = 592;
 const GUTTER = 40;
+/** The mark is 1586x250; 36px tall keeps it inside a 56px footer. */
+const LOGO_H = 36;
+const LOGO_W = LOGO_H * (1586 / 250);
 
 /**
  * Where the map and the panel sit, which the operator can change.
@@ -165,7 +168,9 @@ export function CourseBoard({
       // A label centred on a dot near the edge runs off the map and is clipped
       // mid-word, which reads as broken rather than as cramped. Pull it back
       // inside and anchor it to whichever edge it was about to cross.
-      const half = (g.label.length * 13 * scale) / 2 + 12;
+      // 16px a character, measured off the rendered labels at this weight and
+      // size. An undercount here is the whole failure it is there to prevent.
+      const half = (g.label.length * 16 * scale) / 2 + 12;
       const anchor: 'middle' | 'start' | 'end' =
         x - half < MAP.x ? 'start' : x + half > MAP.x + MAP.w ? 'end' : 'middle';
       const labelX = anchor === 'start' ? MAP.x + 12 - x : anchor === 'end' ? MAP.x + MAP.w - 12 - x : 0;
@@ -353,28 +358,32 @@ export function CourseBoard({
       {/* ---------------------------------------------------------- footer */}
       {config.layout.footer && <g className="cb-footer">
         <rect x={0} y={BOARD_H - 56} width={BOARD_W} height={56} className="cb-footer-bg" />
-        {config.layout.logo && (
+        {config.layout.logo !== 'none' && (
           /* Two copies of the mark, one drawn for dark grounds and one for
              light. Picking by the footer's own colour rather than by the theme
              name, because the colours are the operator's to set and a white
              mark on a white footer is an empty corner on air. */
           <image
             href={isLight(theme.panel) ? '/img/PRIMETIME-Dark.png' : '/img/PRIMETIME.png'}
-            x={40}
+            x={config.layout.logo === 'left' ? 40 : BOARD_W - 40 - LOGO_W}
             y={BOARD_H - 46}
-            height={36}
-            width={36 * 6.34}
-            preserveAspectRatio="xMinYMid meet"
+            height={LOGO_H}
+            width={LOGO_W}
+            preserveAspectRatio={config.layout.logo === 'left' ? 'xMinYMid meet' : 'xMaxYMid meet'}
           />
         )}
-        <text x={config.layout.logo ? 40 + 36 * 6.34 + 28 : 40} y={BOARD_H - 19} className="cb-footer-text">
+        <text x={config.layout.logo === 'left' ? 40 + LOGO_W + 28 : 40} y={BOARD_H - 19} className="cb-footer-text">
           {race && course
             ? `${toUnits(race.courseLength, race.units, config.units).toFixed(config.decimals)} ${unitLabel(config.units)} COURSE`
             : ''}
         </text>
-        <text x={BOARD_W - 40} y={BOARD_H - 19} className="cb-footer-brand" textAnchor="end">
-          {theme.brandText}
-        </text>
+        {/* The mark on the right stands in for the wordmark; both would be two
+            brands fighting over one corner. */}
+        {config.layout.logo !== 'right' && (
+          <text x={BOARD_W - 40} y={BOARD_H - 19} className="cb-footer-brand" textAnchor="end">
+            {theme.brandText}
+          </text>
+        )}
       </g>}
     </svg>
   );

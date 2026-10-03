@@ -404,14 +404,20 @@ export function BoardControl({ ev, onMsg }: { ev: EventSnap; onMsg: (text: strin
             >
               Footer
             </button>
-            <button
-              className={`mini ${config.layout.logo ? 'on' : ''}`}
-              disabled={!config.layout.footer}
-              title="The Primetime mark, bottom left"
-              onClick={() => patch({ layout: { ...config.layout, logo: !config.layout.logo } })}
-            >
-              Logo
-            </button>
+          </div>
+          <div className="board-row">
+            <span className="dim">Logo</span>
+            {(['left', 'right', 'none'] as const).map((where) => (
+              <button
+                key={where}
+                className={`mini ${config.layout.logo === where ? 'on' : ''}`}
+                disabled={!config.layout.footer}
+                title={where === 'right' ? 'Stands in for the wordmark' : undefined}
+                onClick={() => patch({ layout: { ...config.layout, logo: where } })}
+              >
+                {where === 'none' ? 'Off' : where[0].toUpperCase() + where.slice(1)}
+              </button>
+            ))}
           </div>
           <div className="board-row">
             <span className="dim">Type</span>

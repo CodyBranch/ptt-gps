@@ -63,8 +63,12 @@ export interface BoardLayout {
   panel: 'right' | 'left' | 'none';
   header: boolean;
   footer: boolean;
-  /** The Primetime mark in the footer. Light and dark copies, picked to suit. */
-  logo: boolean;
+  /**
+   * Where the Primetime mark sits in the footer. On the right it stands in
+   * for the wordmark, which is the corner a brand usually occupies; on the
+   * left it leads and the wordmark keeps the right.
+   */
+  logo: 'left' | 'right' | 'none';
   /** Scales every figure and label together, for a screen further away. */
   typeScale: number;
 }
@@ -141,7 +145,7 @@ export const BOARD_THEMES: Record<string, BoardTheme> = {
 
 export const defaultTheme = (): BoardTheme => ({ ...BOARD_THEMES.primetime });
 export const defaultLayout = (): BoardLayout => ({
-  panel: 'right', header: true, footer: true, logo: true, typeScale: 1,
+  panel: 'right', header: true, footer: true, logo: 'right', typeScale: 1,
 });
 
 /** Colours assigned to groups in order; chosen to read at a distance. */
@@ -197,6 +201,21 @@ const oneOf = <T extends string>(v: unknown, options: readonly T[], fallback: T)
  * render because a saved field is the wrong shape is a black rectangle on air.
  * Anything unrecognised falls back to the default for that field.
  */
+/**
+ * Does this look like a board at all?
+ *
+ * normaliseBoard fills in whatever is missing, which is what lets a board
+ * saved by an older version load without a migration step. On a write that
+ * same tolerance is a trap: a body in the wrong shape - a config wrapped in an
+ * envelope, a client posting something else entirely - normalises cleanly to
+ * the defaults and silently blanks whatever was on air, mid-race, with an ok
+ * in the reply. So a write has to carry at least one field a board owns.
+ */
+export function isBoardLike(input: unknown): boolean {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return false;
+  return Object.keys(defaultBoard()).some((key) => key in (input as Record<string, unknown>));
+}
+
 export function normaliseBoard(input: unknown): BoardConfig {
   const d = defaultBoard();
   if (!input || typeof input !== 'object') return d;
@@ -278,7 +297,9 @@ export function normaliseLayout(input: unknown): BoardLayout {
     panel: oneOf(l.panel, ['right', 'left', 'none'] as const, d.panel),
     header: bool(l.header, d.header),
     footer: bool(l.footer, d.footer),
-    logo: bool(l.logo, d.logo),
+    // Was a boolean before the mark could sit on either side; a board saved
+    // then meant "on", which is now the right-hand corner.
+    logo: l.logo === true ? 'right' : l.logo === false ? 'none' : oneOf(l.logo, ['left', 'right', 'none'] as const, d.logo),
     typeScale: num(l.typeScale, d.typeScale, 0.6, 1.8),
   };
 }

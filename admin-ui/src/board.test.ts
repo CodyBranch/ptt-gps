@@ -227,7 +227,7 @@ describe('a config saved before today', () => {
     const out = withBoardDefaults(old);
     expect(out.units).toBe('kilometers');
     expect(out.zoom).toBe(2);
-    expect(out.layout.logo).toBe(true);
+    expect(out.layout.logo).toBe('right');
     expect(out.rotate).toBe('auto');
     expect(out.theme.bg).toBe(defaultBoardConfig().theme.bg);
   });
@@ -237,7 +237,7 @@ describe('a config saved before today', () => {
     expect(out.theme.bg).toBe('#000000');
     expect(out.theme.text).toBe(defaultBoardConfig().theme.text);
     expect(out.layout.footer).toBe(false);
-    expect(out.layout.logo).toBe(true);
+    expect(out.layout.logo).toBe('right');
   });
 
   it('gives a board with no config at all the defaults', () => {
