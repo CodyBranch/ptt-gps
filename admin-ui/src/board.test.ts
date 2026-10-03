@@ -7,6 +7,9 @@ import {
   metresBetween,
   project,
   smoothPath,
+  panelFit,
+  CARD_H,
+  CARD_PITCH,
   curveFractions,
   drawnFraction,
   thinKeeping,
@@ -346,5 +349,43 @@ describe('the drawn curve against the course', () => {
     expect(kept[0]).toBe(0);
     expect(kept[kept.length - 1]).toBe(dense.length - 1);
     expect(kept.map((i) => dense[i])).toEqual(thin(dense, 5));
+  });
+});
+
+describe('fitting the groups down the panel', () => {
+  // A 1080 board with a header and a footer.
+  const AVAILABLE = 1080 - 132 - 92;
+
+  it('leaves the panel alone while the groups fit', () => {
+    for (const n of [1, 2, 3, 4, 5]) expect(panelFit(n, AVAILABLE)).toBe(1);
+  });
+
+  it('gives way at six, which is where a card used to cross the footer', () => {
+    expect(panelFit(6, AVAILABLE)).toBeLessThan(1);
+  });
+
+  it('shrinks just enough, never more', () => {
+    for (const n of [6, 7, 8, 12]) {
+      const fit = panelFit(n, AVAILABLE);
+      const used = ((n - 1) * CARD_PITCH + CARD_H) * fit;
+      expect(used).toBeCloseTo(AVAILABLE, 6);
+    }
+  });
+
+  it('keeps every card inside the space it was given', () => {
+    for (const n of [1, 5, 6, 7, 20]) {
+      const fit = panelFit(n, AVAILABLE);
+      const lastBottom = ((n - 1) * CARD_PITCH + CARD_H) * fit;
+      expect(lastBottom).toBeLessThanOrEqual(AVAILABLE + 1e-9);
+    }
+  });
+
+  it('answers 1 for no groups rather than dividing by nothing', () => {
+    expect(panelFit(0, AVAILABLE)).toBe(1);
+    expect(panelFit(-1, AVAILABLE)).toBe(1);
+  });
+
+  it('has more room to give when the header and footer are off', () => {
+    expect(panelFit(7, 1080 - 40 - 40)).toBeGreaterThan(panelFit(7, AVAILABLE));
   });
 });

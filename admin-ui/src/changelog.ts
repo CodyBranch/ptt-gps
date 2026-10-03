@@ -22,6 +22,13 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '0.23.7',
+    date: '2026-10-02',
+    fixed: [
+      'The board carries as many lead groups as a meet has, instead of five. The sixth group’s card crossed into the footer and a seventh sat off the bottom of the frame, with nothing on screen to say a group was missing — a meet running masters, wheelchair and relay leads alongside the usual two has seven. The panel now shrinks to fit, evenly, so the type keeps its proportions, and anchored to its outer edge so what it gives up falls into the gutter beside the map.',
+    ],
+  },
+  {
     version: '0.23.6',
     date: '2026-10-02',
     fixed: [

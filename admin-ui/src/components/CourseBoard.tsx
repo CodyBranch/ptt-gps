@@ -5,6 +5,8 @@ import {
   isLight,
   boardGroups,
   cumulativeFractions,
+  CARD_PITCH,
+  panelFit,
   curveFractions,
   drawnFraction,
   groupValue,
@@ -182,6 +184,19 @@ export function CourseBoard({
     }
     return out;
   }, [geom, groups, MAP, scale]);
+  /**
+   * Shrink the panel when there are more groups than fit down the side.
+   *
+   * Six was one too many: the sixth card crossed into the footer and a seventh
+   * was off the bottom of the frame entirely, with nothing on screen to say a
+   * group was missing. How many groups a board carries is the operator's call
+   * - a meet with masters, wheelchair and relay leads on top of the usual two
+   * has them - so the panel gives way instead. Uniform, so the type keeps its
+   * proportions, and anchored to the panel's outer edge so what it gives up
+   * falls into the gutter beside the map rather than off the side.
+   */
+  const fit = panelFit(groups.length, MAP.h);
+
   const title = config.title.trim() || race?.name || event.name;
 
   return (
@@ -319,11 +334,16 @@ export function CourseBoard({
             No groups shown
           </text>
         )}
-        {panelX === null ? null : groups.map((g, i) => {
-          const y = MAP.y + i * 152;
+        {panelX === null ? null : (
+        <g transform={`translate(${panelX + (config.layout.panel === 'left' ? 0 : PANEL_W)} ${MAP.y}) scale(${fit})`}>
+        {groups.map((g, i) => {
           const v = race ? groupValue(g, race, config) : { text: '—', unit: '' };
           return (
-            <g key={g.key} transform={`translate(${panelX} ${y})`} className={`cb-group ${g.stale ? 'stale' : ''}`}>
+            <g
+              key={g.key}
+              transform={`translate(${config.layout.panel === 'left' ? 0 : -PANEL_W} ${i * CARD_PITCH})`}
+              className={`cb-group ${g.stale ? 'stale' : ''}`}
+            >
               <rect x={0} y={0} width={PANEL_W} height={132} rx={12} className="cb-group-bg" />
               <rect x={0} y={0} width={8} height={132} rx={4} style={{ fill: g.color }} />
               <text x={28} y={40} className="cb-group-label">
@@ -364,6 +384,8 @@ export function CourseBoard({
             </g>
           );
         })}
+        </g>
+        )}
       </g>
 
       {/* ---------------------------------------------------------- footer */}

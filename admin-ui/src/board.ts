@@ -425,3 +425,22 @@ export function withBoardDefaults(config: BoardConfig | undefined): BoardConfig 
     order: config.order ?? [],
   };
 }
+
+/** A panel card and the gap under it, which the fit below is measured in. */
+export const CARD_H = 132;
+export const CARD_PITCH = 152;
+
+/**
+ * How much the panel has to shrink for `count` groups to fit `available` px.
+ *
+ * 1 when they already fit, which is five groups down a 1080 board with a
+ * header and a footer. Six was one too many: the sixth card crossed into the
+ * footer and a seventh sat off the bottom of the frame, with nothing on screen
+ * to say a group was missing. How many groups a board carries is the
+ * operator's call - a meet with masters, wheelchair and relay leads on top of
+ * the usual two has seven - so the panel gives way rather than the frame.
+ */
+export function panelFit(count: number, available: number): number {
+  if (count <= 0) return 1;
+  return Math.min(1, available / ((count - 1) * CARD_PITCH + CARD_H));
+}
