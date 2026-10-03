@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   atFraction,
+  bestRotation,
   cumulativeFractions,
   metresBetween,
   project,
@@ -163,5 +164,54 @@ describe('distance posts', () => {
 
   it('gives a short course no posts at all', () => {
     expect(unitPosts(0.8, 'kilometers', 'miles')).toEqual([]);
+  });
+});
+
+describe('turning the course to fit the frame', () => {
+  /** A lakefront out-and-back: 2.5 km north to south, 400 m across. */
+  const outAndBack: number[][] = [
+    [-87.89903, 43.03662],
+    [-87.90028, 43.03114],
+    [-87.89508, 43.01442],
+    [-87.89714, 43.0194],
+    [-87.89903, 43.03662],
+  ];
+
+  it('turns a tall course a quarter so it runs across a wide frame', () => {
+    expect(bestRotation(outAndBack, BOX)).toBe(90);
+  });
+
+  it('leaves a course that already fits the right way up', () => {
+    // The square loop needs no help, and north up is worth keeping.
+    expect(bestRotation(loop, BOX)).toBe(0);
+  });
+
+  it('turning fills more of the frame than not turning', () => {
+    const upright = project(outAndBack, BOX, 1, null, 0);
+    const turned = project(outAndBack, BOX, 1, null, 90);
+    expect(turned.scale).toBeGreaterThan(upright.scale * 1.1);
+  });
+
+  it('keeps every point inside the box once turned', () => {
+    const p = project(outAndBack, BOX, 1, null, 90);
+    for (const [lon, lat] of outAndBack) {
+      const [x, y] = p.point(lon, lat);
+      expect(x).toBeGreaterThanOrEqual(BOX.x);
+      expect(x).toBeLessThanOrEqual(BOX.x + BOX.w);
+      expect(y).toBeGreaterThanOrEqual(BOX.y);
+      expect(y).toBeLessThanOrEqual(BOX.y + BOX.h);
+    }
+  });
+
+  it('a drag still lands where it was dropped, at any rotation', () => {
+    for (const deg of [0, 90, 180, 270] as const) {
+      const p = project(outAndBack, BOX, 2, [-87.897, 43.025], deg);
+      const px = BOX.x + BOX.w / 2 + 90;
+      const py = BOX.y + BOX.h / 2 - 50;
+      const [lon, lat] = unproject(p, outAndBack, BOX, px, py);
+      const [backX, backY] = p.point(lon, lat);
+      expect(backX).toBeCloseTo(px, 3);
+      expect(backY).toBeCloseTo(py, 3);
+    }
   });
 });

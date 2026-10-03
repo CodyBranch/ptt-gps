@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import {
   atFraction,
+  bestRotation,
   boardGroups,
   cumulativeFractions,
   groupValue,
@@ -111,10 +112,12 @@ export function CourseBoard({
   const geom = useMemo(() => {
     if (coords.length < 2) return null;
     const fractions = cumulativeFractions(coords);
-    const p = project(coords, MAP, config.zoom, center);
+    const fixed = config.rotate === 0 || config.rotate === 90 || config.rotate === 180 || config.rotate === 270;
+    const rotation = fixed ? (config.rotate as 0 | 90 | 180 | 270) : bestRotation(coords, MAP);
+    const p = project(coords, MAP, config.zoom, center, rotation);
     const screen = coords.map(([lon, lat]) => p.point(lon, lat) as [number, number]);
     return { fractions, projection: p, path: smoothPath(thin(screen)) };
-  }, [coords, config.zoom, center?.[0], center?.[1]]);
+  }, [coords, config.zoom, center?.[0], center?.[1], config.rotate, MAP]);
   const clock = config.showClock ? elapsed(startedMs ? (now ?? Date.now()) - startedMs : null) : null;
 
   const posts = useMemo(() => {

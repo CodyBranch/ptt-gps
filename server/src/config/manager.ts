@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { parseCourse } from '../engine/course.js';
+import { detectFormat, formatFromName, parseCourse } from '../engine/course.js';
 import { parseEventConfig } from './load.js';
 import type { EventConfig } from './schema.js';
 
@@ -73,10 +73,10 @@ export function listCoursesIn(eventsDir: string): Array<{ file: string; points: 
   fs.mkdirSync(coursesDir, { recursive: true });
   const out = [];
   for (const f of fs.readdirSync(coursesDir)) {
-    if (!/\.(kml|geojson|json)$/i.test(f)) continue;
+    if (!/\.(kml|gpx|geojson|json)$/i.test(f)) continue;
     try {
       const text = fs.readFileSync(path.join(coursesDir, f), 'utf8');
-      const mi = parseCourse(text, f.toLowerCase().endsWith('.kml'), 'miles');
+      const mi = parseCourse(text, formatFromName(f), 'miles');
       out.push({
         file: `courses/${f}`,
         points: mi.line.geometry.coordinates.length,
@@ -101,12 +101,18 @@ export function saveCourseIn(
   kmlText: string,
   opts: { replace?: boolean } = {},
 ): { file: string; lengthMi: number; points: number; replaced: boolean } {
-  const safe = name.toLowerCase().replace(/\.kml$/, '').replace(/[^a-z0-9-_]+/g, '-');
+  const safe = name.toLowerCase().replace(/\.(kml|gpx|geojson|json)$/, '').replace(/[^a-z0-9-_]+/g, '-');
   if (!safe) throw new Error('Invalid course name');
-  const course = parseCourse(kmlText, true, 'miles'); // throws when there is no LineString
+  const course = parseCourse(kmlText, formatFromName(name), 'miles'); // throws when there is no LineString
   const coursesDir = path.join(eventsDir, 'courses');
   fs.mkdirSync(coursesDir, { recursive: true });
-  const target = path.join(coursesDir, `${safe}.kml`);
+  // Stored in the format it arrived in. Converting it would mean this is the
+  // only copy that has been through a translation nobody asked for, and the
+  // loader reads all three anyway.
+  const ext = detectFormat(kmlText, formatFromName(name)) === 'gpx' ? 'gpx'
+    : detectFormat(kmlText, formatFromName(name)) === 'geojson' ? 'geojson'
+    : 'kml';
+  const target = path.join(coursesDir, `${safe}.${ext}`);
   const exists = fs.existsSync(target);
   if (exists && !opts.replace) {
     throw new Error(`A course named ${safe}.kml already exists — rename this file, or replace it from the Courses page`);
@@ -451,10 +457,10 @@ export class ConfigManager {
     fs.mkdirSync(this.coursesDir, { recursive: true });
     const out = [];
     for (const f of fs.readdirSync(this.coursesDir)) {
-      if (!/\.(kml|geojson|json)$/i.test(f)) continue;
+      if (!/\.(kml|gpx|geojson|json)$/i.test(f)) continue;
       try {
         const text = fs.readFileSync(path.join(this.coursesDir, f), 'utf8');
-        const mi = parseCourse(text, f.toLowerCase().endsWith('.kml'), 'miles');
+        const mi = parseCourse(text, formatFromName(f), 'miles');
         out.push({
           file: `courses/${f}`,
           points: mi.line.geometry.coordinates.length,
@@ -472,7 +478,7 @@ export class ConfigManager {
   saveCourse(name: string, kmlText: string): { file: string; lengthMi: number; points: number } {
     const safe = name.toLowerCase().replace(/\.kml$/, '').replace(/[^a-z0-9-_]+/g, '-');
     if (!safe) throw new Error('Invalid course name');
-    const course = parseCourse(kmlText, true, 'miles'); // throws when there is no LineString
+    const course = parseCourse(kmlText, undefined, 'miles'); // throws when there is no LineString
     fs.mkdirSync(this.coursesDir, { recursive: true });
     const file = path.join(this.coursesDir, `${safe}.kml`);
     fs.writeFileSync(file, kmlText);

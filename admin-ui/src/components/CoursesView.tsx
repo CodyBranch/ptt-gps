@@ -76,7 +76,7 @@ export function CoursesView({
       <input
         ref={fileRef}
         type="file"
-        accept=".kml"
+        accept=".kml,.gpx,.geojson,.json"
         style={{ display: 'none' }}
         onChange={(e) => {
           const f = e.target.files?.[0];
@@ -87,7 +87,7 @@ export function CoursesView({
       <input
         ref={replaceRef}
         type="file"
-        accept=".kml"
+        accept=".kml,.gpx,.geojson,.json"
         style={{ display: 'none' }}
         onChange={(e) => {
           const f = e.target.files?.[0];

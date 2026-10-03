@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import { DOMParser } from '@xmldom/xmldom';
-import { kml } from '@tmcw/togeojson';
+import { gpx, kml } from '@tmcw/togeojson';
 import * as turf from '@turf/turf';
 import type { Feature, LineString } from 'geojson';
 
@@ -19,25 +19,54 @@ export interface Course {
  */
 export function loadCourse(filePath: string, units: 'miles' | 'kilometers'): Course {
   const text = fs.readFileSync(filePath, 'utf8');
-  return parseCourse(text, filePath.toLowerCase().endsWith('.kml'), units);
+  return parseCourse(text, formatFromName(filePath), units);
 }
 
-/** Parse course content directly (KML uploads from the setup UI). */
-export function parseCourse(text: string, isKml: boolean, units: 'miles' | 'kilometers'): Course {
-  let line: Feature<LineString> | undefined;
+/** The format a filename suggests, used only when the content is ambiguous. */
+export function formatFromName(file: string): CourseFormat | undefined {
+  const f = file.toLowerCase();
+  if (f.endsWith('.kml')) return 'kml';
+  if (f.endsWith('.gpx')) return 'gpx';
+  if (f.endsWith('.json') || f.endsWith('.geojson')) return 'geojson';
+  return undefined;
+}
 
-  if (isKml) {
-    const doc = new DOMParser().parseFromString(text, 'text/xml');
-    const fc = kml(doc as unknown as Parameters<typeof kml>[0]);
-    line = extractLine(fc.features as Feature[]);
-  } else {
+/**
+ * What a course file is, read from the file rather than from its name.
+ *
+ * Courses arrive from whatever drew them: Google Earth writes KML, a watch or
+ * RaceResult writes GPX, our own tools write GeoJSON. An extension is a guess
+ * - files get renamed, and a sync sends content with no filename at all - so
+ * the content decides and the name is only the tie-breaker.
+ */
+export type CourseFormat = 'kml' | 'gpx' | 'geojson';
+
+export function detectFormat(text: string, hint?: CourseFormat): CourseFormat {
+  const head = text.slice(0, 2048).trimStart();
+  if (head.startsWith('{') || head.startsWith('[')) return 'geojson';
+  if (/<gpx[\s>]/i.test(head)) return 'gpx';
+  if (/<kml[\s>]/i.test(head)) return 'kml';
+  return hint ?? 'geojson';
+}
+
+/** Every feature a course file holds, whatever it was written by. */
+function featuresOf(text: string, format: CourseFormat): Feature[] {
+  if (format === 'geojson') {
     const gj = JSON.parse(text);
-    const features: Feature[] =
-      gj.type === 'FeatureCollection' ? gj.features
+    return gj.type === 'FeatureCollection' ? gj.features
       : gj.type === 'Feature' ? [gj]
       : [{ type: 'Feature', properties: {}, geometry: gj }];
-    line = extractLine(features);
   }
+  const doc = new DOMParser().parseFromString(text, 'text/xml');
+  const fc = format === 'gpx'
+    ? gpx(doc as unknown as Parameters<typeof gpx>[0])
+    : kml(doc as unknown as Parameters<typeof kml>[0]);
+  return fc.features as Feature[];
+}
+
+/** Parse course content directly (an upload, or a course pushed in by sync). */
+export function parseCourse(text: string, hint: CourseFormat | undefined, units: 'miles' | 'kilometers'): Course {
+  const line = extractLine(featuresOf(text, detectFormat(text, hint)));
 
   if (!line) throw new Error('No LineString found in course file');
   // Strip altitude — 2D coordinates keep every turf operation consistent.
@@ -123,19 +152,10 @@ export function locateOnCourse(course: Course, lat: number, lon: number): { at: 
  * course from somewhere other than a person at this console should say when
  * it finds more than one.
  */
-export function countPaths(text: string, isKml: boolean): number {
+export function countPaths(text: string, hint?: CourseFormat): number {
   let features: Feature[];
   try {
-    if (isKml) {
-      const doc = new DOMParser().parseFromString(text, 'text/xml');
-      features = kml(doc as unknown as Parameters<typeof kml>[0]).features as Feature[];
-    } else {
-      const gj = JSON.parse(text);
-      features =
-        gj.type === 'FeatureCollection' ? gj.features
-        : gj.type === 'Feature' ? [gj]
-        : [{ type: 'Feature', properties: {}, geometry: gj }];
-    }
+    features = featuresOf(text, detectFormat(text, hint));
   } catch {
     return 0;
   }

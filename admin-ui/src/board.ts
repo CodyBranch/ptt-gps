@@ -57,6 +57,7 @@ export interface Projection {
   /** The projected centre currently in the middle of the box. */
   center: [number, number];
   scale: number;
+  rotation: Rotation;
 }
 
 export interface Box {
@@ -75,12 +76,53 @@ export interface Box {
  * quarters of a degree of latitude, which is the difference between a running
  * track and an oval.
  */
-export function project(coords: number[][], box: Box, zoom = 1, center: [number, number] | null = null): Projection {
+export type Rotation = 0 | 90 | 180 | 270;
+
+/** Turn the projected plane a quarter at a time. Shape is preserved. */
+const turn = (x: number, y: number, deg: Rotation): [number, number] =>
+  deg === 90 ? [-y, x] : deg === 180 ? [-x, -y] : deg === 270 ? [y, -x] : [x, y];
+
+/**
+ * Which way round the course fits the box best.
+ *
+ * An out-and-back along a lakefront is two and a half kilometres north to
+ * south and four hundred metres across, and drawn north-up on a 16:9 screen it
+ * is a sliver using a tenth of the frame. Turning it a quarter is what anyone
+ * drawing this by hand would do, and it costs nothing but north being sideways
+ * - which the operator can override either way.
+ */
+export function bestRotation(coords: number[][], box: Box): Rotation {
+  if (coords.length < 2) return 0;
+  const lats = coords.map((c) => c[1]);
+  const lat0 = lats.reduce((a, b) => a + b, 0) / lats.length;
+  const k = Math.cos((lat0 * Math.PI) / 180) || 1;
+  const fitFor = (deg: Rotation): number => {
+    const pts = coords.map((c) => turn(c[0] * k, -c[1], deg));
+    const xs = pts.map((p) => p[0]);
+    const ys = pts.map((p) => p[1]);
+    const spanX = Math.max(...xs) - Math.min(...xs) || 1e-9;
+    const spanY = Math.max(...ys) - Math.min(...ys) || 1e-9;
+    return Math.min((box.w - 2 * box.pad) / spanX, (box.h - 2 * box.pad) / spanY);
+  };
+  // The gain has to be worth putting north on its side for. A near-square park
+  // loop picks up about 15% from turning, which is not; a lakefront
+  // out-and-back picks up half as much again, which is.
+  return fitFor(90) > fitFor(0) * 1.25 ? 90 : 0;
+}
+
+export function project(
+  coords: number[][],
+  box: Box,
+  zoom = 1,
+  center: [number, number] | null = null,
+  rotation: Rotation = 0,
+): Projection {
   const lats = coords.map((c) => c[1]);
   const lat0 = lats.length ? lats.reduce((a, b) => a + b, 0) / lats.length : 0;
   const k = Math.cos((lat0 * Math.PI) / 180) || 1;
-  const xs = coords.map((c) => c[0] * k);
-  const ys = coords.map((c) => -c[1]);
+  const turned = coords.map((c) => turn(c[0] * k, -c[1], rotation));
+  const xs = turned.map((p) => p[0]);
+  const ys = turned.map((p) => p[1]);
 
   const minX = Math.min(...xs), maxX = Math.max(...xs);
   const minY = Math.min(...ys), maxY = Math.max(...ys);
@@ -91,7 +133,7 @@ export function project(coords: number[][], box: Box, zoom = 1, center: [number,
   const scale = fit * Math.max(1, zoom);
 
   const focus: [number, number] = center
-    ? [center[0] * k, -center[1]]
+    ? turn(center[0] * k, -center[1], rotation)
     : [(minX + maxX) / 2, (minY + maxY) / 2];
 
   const cx = box.x + box.w / 2;
@@ -99,7 +141,11 @@ export function project(coords: number[][], box: Box, zoom = 1, center: [number,
   return {
     scale,
     center: focus,
-    point: (lon, lat) => [cx + (lon * k - focus[0]) * scale, cy + (-lat - focus[1]) * scale],
+    rotation,
+    point: (lon, lat) => {
+      const [tx, ty] = turn(lon * k, -lat, rotation);
+      return [cx + (tx - focus[0]) * scale, cy + (ty - focus[1]) * scale];
+    },
   };
 }
 
@@ -110,8 +156,10 @@ export function unproject(p: Projection, coords: number[][], box: Box, px: numbe
   const k = Math.cos((lat0 * Math.PI) / 180) || 1;
   const cx = box.x + box.w / 2;
   const cy = box.y + box.h / 2;
-  const x = (px - cx) / p.scale + p.center[0];
-  const y = (py - cy) / p.scale + p.center[1];
+  const tx = (px - cx) / p.scale + p.center[0];
+  const ty = (py - cy) / p.scale + p.center[1];
+  // Undo the quarter turn before undoing the projection.
+  const [x, y] = turn(tx, ty, ((360 - p.rotation) % 360) as Rotation);
   return [x / k, -y];
 }
 

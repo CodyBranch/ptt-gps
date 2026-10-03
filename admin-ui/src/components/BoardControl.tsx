@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api';
-import { project, unproject, type Box } from '../board';
+import { bestRotation, project, unproject, type Box } from '../board';
 import {
   BOARD_COLORS,
   BOARD_THEMES,
@@ -120,7 +120,8 @@ export function BoardControl({ ev, onMsg }: { ev: EventSnap; onMsg: (text: strin
     const box = previewRef.current?.getBoundingClientRect();
     if (!d || !box) return;
     const scale = box.width / BOARD_W;
-    const p = project(coords, MAP_BOX, config.zoom, d.center);
+    const rotation = config.rotate === 'auto' ? bestRotation(coords, MAP_BOX) : config.rotate;
+    const p = project(coords, MAP_BOX, config.zoom, d.center, rotation);
     // A drag moves the course under the window, so the centre moves the other
     // way by the same amount, in board pixels rather than screen pixels.
     const cx = MAP_BOX.x + MAP_BOX.w / 2 - (e.clientX - d.x) / scale;
@@ -431,6 +432,21 @@ export function BoardControl({ ev, onMsg }: { ev: EventSnap; onMsg: (text: strin
               onChange={(e) => patch({ zoom: Number(e.target.value) })}
             />
             <span className="mono">{config.zoom.toFixed(1)}×</span>
+          </div>
+          <div className="board-row">
+            <span className="dim">Turn</span>
+            {([['auto', 'Auto'], [0, 'N up'], [90, '90°'], [180, '180°'], [270, '270°']] as const).map(
+              ([value, label]) => (
+                <button
+                  key={String(value)}
+                  className={`mini ${config.rotate === value ? 'on' : ''}`}
+                  title={value === 'auto' ? 'Turn the course to fill the frame' : undefined}
+                  onClick={() => patch({ rotate: value })}
+                >
+                  {label}
+                </button>
+              ),
+            )}
           </div>
           <div className="board-row">
             <button className="mini" onClick={() => patch({ zoom: 1, center: null })}>

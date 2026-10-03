@@ -22,6 +22,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '0.23.0',
+    date: '2026-10-02',
+    summary: 'GPX courses, and a board that turns a course to fit the screen.',
+    added: [
+      'Courses can be **GPX**, which is what RaceResult and most watches export. KML and GeoJSON still work, and the format is now read from the file rather than from its name — so a course renamed along the way, or one pushed in by a meet manager with no filename at all, still loads. A course is stored in whatever format it arrived in rather than being converted.',
+      'The board can **turn a course a quarter** to fill the frame, automatically or by hand. A lakefront out-and-back drawn north-up on a 16:9 screen is a vertical sliver using a tenth of the picture; turned, it runs the width of it. Near-square courses are left north-up, because the gain there is not worth putting north on its side.',
+    ],
+  },
+  {
     version: '0.22.0',
     date: '2026-10-02',
     summary: 'The course board takes a meet\'s own colours.',

@@ -486,6 +486,7 @@ export interface BoardConfig {
   lead: string | null;
   follow: boolean;
   zoom: number;
+  rotate: 'auto' | 0 | 90 | 180 | 270;
   center: [number, number] | null;
   showDone: boolean;
   showClock: boolean;
@@ -508,6 +509,7 @@ export const defaultBoardConfig = (): BoardConfig => ({
   lead: null,
   follow: false,
   zoom: 1,
+  rotate: 'auto',
   center: null,
   showDone: true,
   showClock: true,

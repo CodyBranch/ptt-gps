@@ -3,7 +3,7 @@ import path from 'node:path';
 import type { AuthService } from './auth.js';
 import { createEvent, listEvents, readCourseIn, saveCourseIn, ConfigManager, listCoursesIn } from '../config/manager.js';
 import { EventSchema } from '../config/schema.js';
-import { countPaths, parseCourse } from '../engine/course.js';
+import { countPaths, formatFromName, parseCourse } from '../engine/course.js';
 import { planMeetSync, slugify, type SyncRequest } from '../sync/meet.js';
 import type { App } from '../app.js';
 import type { Store } from '../state/store.js';
@@ -265,7 +265,7 @@ export function registerMeetSync(ex: express.Express, deps: SyncDeps): void {
 
       let parsed;
       try {
-        parsed = parseCourse(incoming.kml, true, 'miles');
+        parsed = parseCourse(incoming.kml, undefined, 'miles');
       } catch (err) {
         courseWarnings.push(
           `Course "${incoming.name ?? incoming.key}" could not be read: ${err instanceof Error ? err.message : String(err)}`,
@@ -275,7 +275,7 @@ export function registerMeetSync(ex: express.Express, deps: SyncDeps): void {
       // A route exported in pieces parses fine and measures short: only the
       // first path is used. A person uploading one at the console can see the
       // length on screen and notice; a machine cannot, so say it here.
-      const paths = countPaths(incoming.kml, true);
+      const paths = countPaths(incoming.kml);
       if (paths > 1) {
         courseWarnings.push(
           `Course "${incoming.name ?? incoming.key}" contains ${paths} separate paths and only the first was used ` +
@@ -288,7 +288,7 @@ export function registerMeetSync(ex: express.Express, deps: SyncDeps): void {
       const match = library.find((c) => {
         if (c.points !== parsed.line.geometry.coordinates.length) return false;
         try {
-          const existing = parseCourse(readCourseIn(eventsDir, c.file), c.file.toLowerCase().endsWith('.kml'), 'miles');
+          const existing = parseCourse(readCourseIn(eventsDir, c.file), formatFromName(c.file), 'miles');
           return fingerprint(existing.line.geometry.coordinates as number[][]) === wanted;
         } catch {
           return false;

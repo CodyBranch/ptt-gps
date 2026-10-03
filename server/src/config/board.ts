@@ -88,6 +88,11 @@ export interface BoardConfig {
   follow: boolean;
   /** 1 fits the whole course; above that zooms in. */
   zoom: number;
+  /**
+   * Turn the course a quarter at a time to fit the frame, or 'auto' to let it
+   * choose. An out-and-back drawn north-up on a 16:9 screen is a sliver.
+   */
+  rotate: 'auto' | 0 | 90 | 180 | 270;
   /** Centre, in course coordinates [lon, lat]. Null centres on the course. */
   center: [number, number] | null;
   /** Light the course behind the lead group. */
@@ -154,6 +159,7 @@ export function defaultBoard(): BoardConfig {
     lead: null,
     follow: false,
     zoom: 1,
+    rotate: 'auto',
     center: null,
     showDone: true,
     showClock: true,
@@ -228,6 +234,8 @@ export function normaliseBoard(input: unknown): BoardConfig {
     lead: typeof raw.lead === 'string' && raw.lead ? raw.lead : null,
     follow: bool(raw.follow, d.follow),
     zoom: num(raw.zoom, d.zoom, 1, 12),
+    rotate:
+      raw.rotate === 0 || raw.rotate === 90 || raw.rotate === 180 || raw.rotate === 270 ? raw.rotate : 'auto',
     center,
     showDone: bool(raw.showDone, d.showDone),
     showClock: bool(raw.showClock, d.showClock),

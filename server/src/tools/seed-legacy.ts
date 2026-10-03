@@ -185,7 +185,7 @@ async function main(): Promise<void> {
 
     let lengthMi = 0;
     try {
-      lengthMi = parseCourse(text, false, 'miles').length;
+      lengthMi = parseCourse(text, undefined, 'miles').length;
     } catch (err) {
       console.warn(`  ! ${c._id}: unusable geometry (${(err as Error).message}) — skipped`);
       empty++;
