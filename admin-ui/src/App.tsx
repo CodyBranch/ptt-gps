@@ -100,6 +100,29 @@ function reducer(state: State, action: Action): State {
 const VIEWER_PATHS = ['/watch', '/watch/distances', '/board'];
 /** The course board's output page: the whole screen, driven from elsewhere. */
 const COURSE_BOARD_URL = window.location.pathname === '/board';
+/**
+ * A board signs itself in with the key in its own URL.
+ *
+ * Nobody is at the keyboard of the machine driving a board, so it cannot be
+ * asked to log in - and a session quietly expiring mid-race would take the
+ * graphic off air. The key buys an event-scoped viewer session, which is the
+ * weakest the server issues, and the page buys another whenever it needs one.
+ */
+const BOARD_KEY = COURSE_BOARD_URL ? new URLSearchParams(window.location.search).get('k') : null;
+async function boardSignIn(): Promise<boolean> {
+  const event = new URLSearchParams(window.location.search).get('event');
+  if (!BOARD_KEY || !event) return false;
+  try {
+    const r = await fetch('/api/board-session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event, key: BOARD_KEY }),
+    });
+    return r.ok;
+  } catch {
+    return false;
+  }
+}
 const VIEWER_URL =
   VIEWER_PATHS.includes(window.location.pathname) || new URLSearchParams(window.location.search).has('viewer');
 const BOARD_URL =
@@ -290,8 +313,11 @@ export default function App() {
   }, [accountMenu]);
 
   useEffect(() => {
-    fetch('/api/me')
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
+    const me = () => fetch('/api/me').then((r) => (r.ok ? r.json() : Promise.reject()));
+    // A board with a key has a second go at it rather than showing a sign-in
+    // screen to an empty room.
+    me()
+      .catch(async () => ((await boardSignIn()) ? me() : Promise.reject()))
       .then((j) =>
         setAuth({
           username: j.username ?? 'operator',
@@ -308,7 +334,10 @@ export default function App() {
     setSocket(socket);
     socket.on('connect', () => dispatch({ type: 'connected', connected: true }));
     socket.on('connect_error', (err) => {
-      if (/not authenticated/i.test(err.message)) setAuth('out');
+      if (!/not authenticated/i.test(err.message)) return;
+      // A board's session has a life; the key it was opened with does not.
+      if (BOARD_KEY) void boardSignIn().then((ok) => (ok ? socket.connect() : setAuth('out')));
+      else setAuth('out');
     });
     socket.on('disconnect', () => dispatch({ type: 'connected', connected: false }));
     socket.on('snapshot', (snapshot: Snapshot) => dispatch({ type: 'snapshot', snapshot }));

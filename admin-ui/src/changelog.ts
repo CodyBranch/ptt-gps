@@ -22,6 +22,17 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '0.25.0',
+    date: '2026-10-03',
+    summary: 'A board opens itself. Nobody has to sign in the machine driving the screen.',
+    added: [
+      'The board link carries its own key, so the output machine opens the board and keeps it up with nobody at its keyboard — and if its session runs out mid-race it quietly gets another instead of dropping to a sign-in screen in front of a crowd. **Copy board link** on the control page includes the key; **New key** issues a fresh one and stops every link already handed out.',
+    ],
+    changed: [
+      'The key buys an event-scoped viewer session — that one event’s snapshot and its course, read only. It cannot change the board, read the fleet or the event config, see another event, or touch a race. The board page is not simply open: the state snapshot carries the whole roster, every tracker with its IMEI and battery, and that is not something to leave on a guessable address. Five wrong keys from one address locks it out for thirty seconds.',
+    ],
+  },
+  {
     version: '0.24.0',
     date: '2026-10-02',
     summary: 'A map under the course, and less on the board that was not earning its place.',

@@ -312,6 +312,21 @@ export function startApi(
     res.json({ ok: true, username: 'viewer', role: 'viewer', eventScope: result.eventScope ?? null });
   });
 
+  /**
+   * A board opening itself. Unauthenticated by design - see `boardKey` - and
+   * registered here, before the session middleware, for the same reason the
+   * login routes are.
+   */
+  ex.post('/api/board-session', (req, res) => {
+    const { event, key } = req.body ?? {};
+    const ip = (req.socket.remoteAddress ?? '?').replace('::ffff:', '');
+    const token =
+      typeof event === 'string' && typeof key === 'string' ? auth.loginBoard(event, key, ip) : null;
+    if (!token) return void res.status(401).json({ ok: false, error: 'invalid board key' });
+    res.setHeader('Set-Cookie', auth.cookie(token));
+    res.json({ ok: true, role: 'viewer', eventScope: event });
+  });
+
   ex.get('/api/viewer-enabled', (_req, res) => {
     res.json({ enabled: auth.anyViewerPinEnabled() });
   });
@@ -603,6 +618,16 @@ export function startApi(
       res.status(404).json({ ok: false, error: (err as Error).message });
     }
   });
+
+  ex.get('/api/events/:eventId/board-key', auth.adminOnly, (req, res) => {
+    res.json({ ok: true, key: auth.boardKey(req.params.eventId as string) });
+  });
+
+  ex.post(
+    '/api/events/:eventId/board-key/rotate',
+    auth.adminOnly,
+    act((req) => ({ key: auth.rotateBoardKey(req.params.eventId as string) })),
+  );
 
   ex.put(
     '/api/events/:eventId/board',

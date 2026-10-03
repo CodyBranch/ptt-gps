@@ -124,3 +124,69 @@ describe('AuthService', () => {
     expect(auth.tokenFromRequest({ headers: { cookie: `other=1; ${header}` } })).toBe(token);
   });
 });
+
+describe('a board opening itself', () => {
+  let dir: string;
+  let store: Store;
+  let auth: AuthService;
+
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ptt-board-'));
+    store = new Store(path.join(dir, 'test.db'));
+    auth = new AuthService(store);
+  });
+
+  afterEach(() => {
+    store.close?.();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('keeps the same key once issued', () => {
+    const key = auth.boardKey('lakefront');
+    expect(key.length).toBeGreaterThan(20);
+    expect(auth.boardKey('lakefront')).toBe(key);
+  });
+
+  it('gives each event its own', () => {
+    expect(auth.boardKey('lakefront')).not.toBe(auth.boardKey('gans-creek'));
+  });
+
+  it('trades a key for a session scoped to that event and nothing else', () => {
+    const key = auth.boardKey('lakefront');
+    const token = auth.loginBoard('lakefront', key, '10.0.0.9');
+    expect(token).toBeTruthy();
+    const who = auth.check(token!);
+    expect(who).toEqual({ username: 'viewer', role: 'viewer', eventScope: 'lakefront' });
+  });
+
+  it('refuses the wrong key, an unknown event, and another event’s key', () => {
+    const key = auth.boardKey('lakefront');
+    auth.boardKey('gans-creek');
+    expect(auth.loginBoard('lakefront', 'nope', '10.0.0.1')).toBeNull();
+    expect(auth.loginBoard('never-heard-of-it', key, '10.0.0.2')).toBeNull();
+    expect(auth.loginBoard('gans-creek', key, '10.0.0.3')).toBeNull();
+  });
+
+  it('locks an address out after five tries, so the key cannot be asked for', () => {
+    const key = auth.boardKey('lakefront');
+    for (let i = 0; i < 5; i++) expect(auth.loginBoard('lakefront', `guess-${i}`, '10.0.0.4')).toBeNull();
+    // Right key, wrong moment.
+    expect(auth.loginBoard('lakefront', key, '10.0.0.4')).toBeNull();
+    // Someone else is unaffected.
+    expect(auth.loginBoard('lakefront', key, '10.0.0.5')).toBeTruthy();
+  });
+
+  it('stops every link already handed out when the key is rotated', () => {
+    const old = auth.boardKey('lakefront');
+    const fresh = auth.rotateBoardKey('lakefront');
+    expect(fresh).not.toBe(old);
+    expect(auth.loginBoard('lakefront', old, '10.0.0.6')).toBeNull();
+    expect(auth.loginBoard('lakefront', fresh, '10.0.0.7')).toBeTruthy();
+  });
+
+  it('refuses a key of the wrong length without comparing it', () => {
+    auth.boardKey('lakefront');
+    expect(auth.loginBoard('lakefront', '', '10.0.0.8')).toBeNull();
+    expect(auth.loginBoard('lakefront', 'x'.repeat(200), '10.0.0.8')).toBeNull();
+  });
+});

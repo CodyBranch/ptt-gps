@@ -134,7 +134,27 @@ export function BoardControl({ ev, onMsg }: { ev: EventSnap; onMsg: (text: strin
     void push(config);
   };
 
-  const boardUrl = `${window.location.origin}/board?event=${encodeURIComponent(ev.event.id)}`;
+  /**
+   * The link carries the board's key, which is what lets the output machine
+   * open the board with nobody signing it in. So it is a secret: it is handed
+   * over by the Copy button rather than printed on screen, and it can be
+   * rotated if a link gets somewhere it should not have.
+   */
+  const [boardKey, setBoardKey] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    api
+      .boardKey(ev.event.id)
+      .then((k) => live && setBoardKey(k))
+      .catch(() => live && setBoardKey(null));
+    return () => {
+      live = false;
+    };
+  }, [ev.event.id]);
+
+  const boardUrl =
+    `${window.location.origin}/board?event=${encodeURIComponent(ev.event.id)}` +
+    (boardKey ? `&k=${encodeURIComponent(boardKey)}` : '');
 
   return (
     <div className="board-control">
@@ -173,6 +193,22 @@ export function BoardControl({ ev, onMsg }: { ev: EventSnap; onMsg: (text: strin
           <a className="mini linklike" href={boardUrl} target="_blank" rel="noreferrer">
             Open board ↗
           </a>
+          <button
+            className="mini"
+            title="Issue a new key. Every board link already handed out stops working."
+            onClick={() => {
+              if (!window.confirm('New key? Any board link already handed out will stop working.')) return;
+              void api
+                .rotateBoardKey(ev.event.id)
+                .then((k) => {
+                  setBoardKey(k);
+                  onMsg('New board key. Re-copy the link onto the output machine.');
+                })
+                .catch((err: Error) => onMsg(err.message, true));
+            }}
+          >
+            New key
+          </button>
         </div>
       </div>
 

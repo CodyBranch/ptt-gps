@@ -221,6 +221,10 @@ export const api = {
 
   board: (eventId: string) => getJson(`/api/events/${eventId}/board`),
   setBoard: (eventId: string, board: unknown) => send(`/api/events/${eventId}/board`, 'PUT', board),
+  boardKey: (eventId: string) =>
+    (getJson(`/api/events/${eventId}/board-key`) as Promise<{ key: string }>).then((r) => r.key),
+  rotateBoardKey: (eventId: string) =>
+    (send(`/api/events/${eventId}/board-key/rotate`, 'POST') as Promise<{ key: string }>).then((r) => r.key),
 
   listeners: () => getJson('/api/listeners'),
   setNmeaPort: (port: number) => send('/api/listeners/nmea', 'POST', { port }),

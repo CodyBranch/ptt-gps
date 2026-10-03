@@ -153,6 +153,69 @@ export class AuthService {
    * Machine token for external data feeds (e.g. the NYC split-time distance
    * source). Compared in constant time; managed by admins in Setup.
    */
+  /**
+   * The key that lets a course board open itself.
+   *
+   * The board hangs on a wall or feeds a capture card; there is nobody at its
+   * keyboard to sign it in, and a session that expires mid-race takes the
+   * graphic off air. So the key rides in the board's own URL and the page
+   * trades it for a session whenever it needs one.
+   *
+   * It is not "no access control": the key mints an event-scoped viewer, the
+   * weakest session there is - that one event's snapshot and its course, read
+   * only, and nothing else on the server. Without one the board would need the
+   * state snapshot open to anyone who guessed the hostname, and that snapshot
+   * carries the roster: every tracker, its IMEI and its battery.
+   *
+   * Stored as it is rather than hashed, because the operator has to be able to
+   * read it back to build the link.
+   */
+  boardKey(eventId: string): string {
+    const existing = this.store.getSetting(this.boardKeyKey(eventId));
+    if (existing) return existing;
+    const key = crypto.randomBytes(18).toString('base64url');
+    this.store.setSetting(this.boardKeyKey(eventId), key);
+    return key;
+  }
+
+  /** A new key; every board link already handed out stops working. */
+  rotateBoardKey(eventId: string): string {
+    const key = crypto.randomBytes(18).toString('base64url');
+    this.store.setSetting(this.boardKeyKey(eventId), key);
+    return key;
+  }
+
+  /**
+   * Trade a board key for an event-scoped viewer session. Rate-limited per IP
+   * the same way a PIN is, so the key cannot be found by asking repeatedly.
+   */
+  loginBoard(eventId: string, key: string, ip: string): string | null {
+    const a = this.attempts.get(ip);
+    if (a && a.lockedUntil > Date.now()) return null;
+    const stored = this.store.getSetting(this.boardKeyKey(eventId));
+    const ok =
+      !!stored &&
+      key.length === stored.length &&
+      crypto.timingSafeEqual(Buffer.from(key), Buffer.from(stored));
+    if (!ok) {
+      const next: Attempts = { fails: (a?.fails ?? 0) + 1, lockedUntil: 0 };
+      if (next.fails >= 5) {
+        next.lockedUntil = Date.now() + 30_000;
+        next.fails = 0;
+      }
+      this.attempts.set(ip, next);
+      return null;
+    }
+    this.attempts.delete(ip);
+    const token = crypto.randomBytes(32).toString('hex');
+    this.store.insertToken(sha256(token), `viewer:${eventId}`, Date.now() + TOKEN_TTL_MS, 'viewer');
+    return token;
+  }
+
+  private boardKeyKey(eventId: string): string {
+    return `board-key:${eventId}`;
+  }
+
   ingestTokenValid(token: string): boolean {
     const stored = this.store.getSetting('ingest-token');
     if (!stored || token.length !== stored.length) return false;
