@@ -22,6 +22,13 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '0.23.3',
+    date: '2026-10-02',
+    changed: [
+      'The board header is the race title and the clock, nothing else. The meet name and the race status ran underneath in small caps — on a screen standing in front of a crowd who are at that meet, watching that race, neither was telling anyone anything.',
+    ],
+  },
+  {
     version: '0.23.2',
     date: '2026-10-02',
     summary: 'The mark can take either corner of the board, and a bad write can no longer blank a board on air.',

@@ -1774,10 +1774,6 @@ button.mini.deploy-go { padding: 7px 16px; font-size: 12.5px; margin-top: 4px; }
 .course-board .cb-bg { fill: var(--cb-bg); }
 .course-board .cb-header-bg, .course-board .cb-footer-bg { fill: var(--cb-panel); }
 .course-board .cb-title { fill: var(--cb-text); font-size: calc(54px * var(--cb-scale)); font-weight: 800; letter-spacing: 0.5px; }
-.course-board .cb-subtitle {
-  fill: var(--cb-dim); font-size: calc(22px * var(--cb-scale)); font-weight: 600;
-  letter-spacing: 1.4px; text-transform: uppercase;
-}
 .course-board .cb-clock {
   fill: var(--cb-text); font-size: calc(60px * var(--cb-scale)); font-weight: 800;
   font-variant-numeric: tabular-nums;

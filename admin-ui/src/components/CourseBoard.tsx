@@ -219,12 +219,12 @@ export function CourseBoard({
       {/* ---------------------------------------------------------- header */}
       {config.layout.header && <g className="cb-header">
         <rect x={0} y={0} width={BOARD_W} height={104} className="cb-header-bg" />
-        <text x={40} y={68} className="cb-title">
+        {/* The title alone, sitting on the clock's own line. The meet name and
+            the race's status used to run under it, and both were noise on a
+            screen that is already in front of a crowd at that meet watching
+            that race happen. */}
+        <text x={40} y={72} className="cb-title">
           {title.toUpperCase()}
-        </text>
-        <text x={40} y={94} className="cb-subtitle">
-          {event.name}
-          {race?.status ? ` · ${race.status.toUpperCase()}` : ''}
         </text>
         {clock && (
           <text x={BOARD_W - 40} y={72} className="cb-clock" textAnchor="end">
