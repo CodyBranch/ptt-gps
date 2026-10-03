@@ -1756,18 +1756,36 @@ button.mini.deploy-go { padding: 7px 16px; font-size: 12.5px; margin-top: 4px; }
    on a monitor reads the same on a projector.
    ====================================================================== */
 
-.course-board { display: block; font-family: 'Barlow Condensed', 'Inter', system-ui, sans-serif; }
-.course-board .cb-bg { fill: #060d18; }
-.course-board .cb-header-bg { fill: #0c1a2c; }
-.course-board .cb-title { fill: #fff; font-size: 54px; font-weight: 800; letter-spacing: 0.5px; }
-.course-board .cb-subtitle { fill: #7e93b4; font-size: 22px; font-weight: 600; letter-spacing: 1.4px; text-transform: uppercase; }
+.course-board {
+  display: block;
+  font-family: 'Barlow Condensed', 'Inter', system-ui, sans-serif;
+  /* Fallbacks matter: an older saved config has no theme, and a board that
+     renders in the dark scheme is better than one that renders invisible. */
+  --cb-bg: #060d18; --cb-panel: #0c1a2c; --cb-text: #fff; --cb-dim: #7e93b4;
+  --cb-course: #2e4a6e; --cb-glow: #2563eb; --cb-start: #16a34a; --cb-finish: #fff;
+  --cb-timing: #38bdf8; --cb-post: #64748b; --cb-mile: #eab308; --cb-brand: #e11d48;
+  --cb-scale: 1;
+  /* The map's own surface, derived from the panel rather than the background.
+     Everything drawn on the map is outlined in this, because an outline in the
+     background colour punches holes through the lettering the moment the
+     background is a key colour - which is exactly when the board is on air. */
+  --cb-map: color-mix(in srgb, var(--cb-panel) 88%, #000);
+}
+.course-board .cb-bg { fill: var(--cb-bg); }
+.course-board .cb-header-bg, .course-board .cb-footer-bg { fill: var(--cb-panel); }
+.course-board .cb-title { fill: var(--cb-text); font-size: calc(54px * var(--cb-scale)); font-weight: 800; letter-spacing: 0.5px; }
+.course-board .cb-subtitle {
+  fill: var(--cb-dim); font-size: calc(22px * var(--cb-scale)); font-weight: 600;
+  letter-spacing: 1.4px; text-transform: uppercase;
+}
 .course-board .cb-clock {
-  fill: #fff; font-size: 60px; font-weight: 800; font-variant-numeric: tabular-nums;
+  fill: var(--cb-text); font-size: calc(60px * var(--cb-scale)); font-weight: 800;
+  font-variant-numeric: tabular-nums;
 }
 
-.course-board .cb-map-bg { fill: #0a1526; stroke: #16243d; stroke-width: 2; }
-.course-board .cb-course-glow { fill: none; stroke: #2563eb; stroke-opacity: 0.14; stroke-width: 34; stroke-linecap: round; stroke-linejoin: round; }
-.course-board .cb-course { fill: none; stroke: #2e4a6e; stroke-width: 12; stroke-linecap: round; stroke-linejoin: round; }
+.course-board .cb-map-bg { fill: var(--cb-map); stroke: var(--cb-course); stroke-width: 2; }
+.course-board .cb-course-glow { fill: none; stroke: var(--cb-glow); stroke-opacity: 0.14; stroke-width: 34; stroke-linecap: round; stroke-linejoin: round; }
+.course-board .cb-course { fill: none; stroke: var(--cb-course); stroke-width: 12; stroke-linecap: round; stroke-linejoin: round; }
 .course-board .cb-course-done {
   fill: none; stroke-width: 12; stroke-linecap: round; stroke-linejoin: round;
   /* GPS arrives every few seconds; the line grows between fixes instead of
@@ -1775,53 +1793,53 @@ button.mini.deploy-go { padding: 7px 16px; font-size: 12.5px; margin-top: 4px; }
   transition: stroke-dasharray 1.9s linear;
 }
 
-.course-board .cb-marker circle { fill: #0a1526; stroke: #fff; stroke-width: 4; }
-.course-board .cb-marker.start circle { fill: #16a34a; stroke: #fff; }
-.course-board .cb-marker.finish circle { fill: #fff; stroke: #0a1526; }
-.course-board .cb-marker.timing circle { fill: #0a1526; stroke: #38bdf8; }
+.course-board .cb-marker circle { fill: var(--cb-bg); stroke: var(--cb-text); stroke-width: 4; }
+.course-board .cb-marker.start circle { fill: var(--cb-start); stroke: var(--cb-text); }
+.course-board .cb-marker.finish circle { fill: var(--cb-finish); stroke: var(--cb-bg); }
+.course-board .cb-marker.timing circle { fill: var(--cb-bg); stroke: var(--cb-timing); }
 .course-board .cb-marker text {
-  fill: #fff; font-size: 24px; font-weight: 700; letter-spacing: 1px;
-  paint-order: stroke; stroke: #060d18; stroke-width: 6; stroke-linejoin: round;
+  fill: var(--cb-text); font-size: calc(24px * var(--cb-scale)); font-weight: 700; letter-spacing: 1px;
+  paint-order: stroke; stroke: var(--cb-map); stroke-width: 6; stroke-linejoin: round;
 }
-.course-board .cb-post circle, .course-board .cb-post rect { fill: #64748b; }
-.course-board .cb-post.mile rect { fill: #eab308; }
+.course-board .cb-post circle, .course-board .cb-post rect { fill: var(--cb-post); }
+.course-board .cb-post.mile rect { fill: var(--cb-mile); }
 .course-board .cb-post text {
-  fill: #cbd5e1; font-size: 20px; font-weight: 700;
-  paint-order: stroke; stroke: #060d18; stroke-width: 5; stroke-linejoin: round;
+  fill: var(--cb-dim); font-size: calc(20px * var(--cb-scale)); font-weight: 700;
+  paint-order: stroke; stroke: var(--cb-map); stroke-width: 5; stroke-linejoin: round;
 }
 
 .course-board .cb-vehicle { transition: transform 1.9s linear; }
-.course-board .cb-vehicle-dot { stroke: #fff; stroke-width: 4; }
+.course-board .cb-vehicle-dot { stroke: var(--cb-text); stroke-width: 4; }
 .course-board .cb-vehicle-pulse {
   opacity: 0.5; animation: cb-pulse 1.8s ease-out infinite;
   transform-box: fill-box; transform-origin: center;
 }
 .course-board .cb-vehicle.stale { opacity: 0.4; }
-.course-board .cb-vehicle-tie { stroke: rgba(255, 255, 255, 0.45); stroke-width: 2; }
+.course-board .cb-vehicle-tie { stroke: color-mix(in srgb, var(--cb-text) 45%, transparent); stroke-width: 2; }
 .course-board .cb-vehicle-label {
-  fill: #fff; font-size: 24px; font-weight: 800; letter-spacing: 1px;
-  paint-order: stroke; stroke: #060d18; stroke-width: 6; stroke-linejoin: round;
+  fill: var(--cb-text); font-size: calc(24px * var(--cb-scale)); font-weight: 800; letter-spacing: 1px;
+  paint-order: stroke; stroke: var(--cb-map); stroke-width: 6; stroke-linejoin: round;
 }
 @keyframes cb-pulse {
   from { transform: scale(1); opacity: 0.5; }
   to { transform: scale(2.6); opacity: 0; }
 }
 
-.course-board .cb-group-bg { fill: #0c1a2c; }
+.course-board .cb-group-bg { fill: var(--cb-panel); }
 .course-board .cb-group.stale { opacity: 0.55; }
-.course-board .cb-group-label { fill: #fff; font-size: 30px; font-weight: 800; letter-spacing: 1px; }
-.course-board .cb-group-vehicle { fill: #7e93b4; font-size: 22px; font-weight: 600; }
+.course-board .cb-group-label { fill: var(--cb-text); font-size: calc(30px * var(--cb-scale)); font-weight: 800; letter-spacing: 1px; }
+.course-board .cb-group-vehicle { fill: var(--cb-dim); font-size: calc(22px * var(--cb-scale)); font-weight: 600; }
 .course-board .cb-group-value {
-  fill: #fff; font-size: 76px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -1px;
+  fill: var(--cb-text); font-size: calc(76px * var(--cb-scale)); font-weight: 800;
+  font-variant-numeric: tabular-nums; letter-spacing: -1px;
 }
-.course-board .cb-group-unit { fill: #7e93b4; font-size: 30px; font-weight: 700; }
-.course-board .cb-group-hidden { fill: #7e93b4; font-size: 30px; font-weight: 700; letter-spacing: 3px; }
-.course-board .cb-group-bar-bg { fill: #16243d; }
-.course-board .cb-empty, .course-board .cb-empty-panel { fill: #52647f; font-size: 30px; font-weight: 600; }
+.course-board .cb-group-unit { fill: var(--cb-dim); font-size: calc(30px * var(--cb-scale)); font-weight: 700; }
+.course-board .cb-group-hidden { fill: var(--cb-dim); font-size: calc(30px * var(--cb-scale)); font-weight: 700; letter-spacing: 3px; }
+.course-board .cb-group-bar-bg { fill: color-mix(in srgb, var(--cb-text) 12%, transparent); }
+.course-board .cb-empty, .course-board .cb-empty-panel { fill: var(--cb-dim); font-size: calc(30px * var(--cb-scale)); font-weight: 600; }
 
-.course-board .cb-footer-bg { fill: #0c1a2c; }
-.course-board .cb-footer-text { fill: #7e93b4; font-size: 22px; font-weight: 700; letter-spacing: 2px; }
-.course-board .cb-footer-brand { fill: #e11d48; font-size: 24px; font-weight: 800; letter-spacing: 3px; }
+.course-board .cb-footer-text { fill: var(--cb-dim); font-size: calc(22px * var(--cb-scale)); font-weight: 700; letter-spacing: 2px; }
+.course-board .cb-footer-brand { fill: var(--cb-brand); font-size: calc(24px * var(--cb-scale)); font-weight: 800; letter-spacing: 3px; }
 
 /* --- the output page: the whole screen and nothing else ---------------- */
 .board-output {
@@ -1868,4 +1886,11 @@ button.mini.deploy-go { padding: 7px 16px; font-size: 12.5px; margin-top: 4px; }
      are what you need at this width. */
   .board-control { flex-direction: column; }
   .board-controls { max-height: none; }
+}
+
+.board-swatches { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; margin-top: 8px; }
+.board-swatch-row { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--dim); }
+.board-swatch-row input[type='color'] {
+  width: 26px; height: 22px; padding: 0; border: 1px solid var(--border);
+  border-radius: 4px; background: none; cursor: pointer; flex: none;
 }

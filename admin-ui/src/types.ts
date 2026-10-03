@@ -422,6 +422,57 @@ export interface BoardGroup {
 
 export type BoardValueMode = 'covered' | 'remaining' | 'percent';
 
+export interface BoardTheme {
+  bg: string;
+  panel: string;
+  text: string;
+  dim: string;
+  course: string;
+  glow: string;
+  start: string;
+  finish: string;
+  timing: string;
+  post: string;
+  milePost: string;
+  brand: string;
+  brandText: string;
+}
+
+export interface BoardLayout {
+  panel: 'right' | 'left' | 'none';
+  header: boolean;
+  footer: boolean;
+  typeScale: number;
+}
+
+/** Mirrors BOARD_THEMES in server/src/config/board.ts. */
+export const BOARD_THEMES: Record<string, BoardTheme> = {
+  primetime: {
+    bg: '#060d18', panel: '#0c1a2c', text: '#ffffff', dim: '#7e93b4',
+    course: '#2e4a6e', glow: '#2563eb', start: '#16a34a', finish: '#ffffff',
+    timing: '#38bdf8', post: '#64748b', milePost: '#eab308',
+    brand: '#e11d48', brandText: 'PRIMETIME',
+  },
+  midnight: {
+    bg: '#000000', panel: '#101418', text: '#ffffff', dim: '#8b949e',
+    course: '#30363d', glow: '#58a6ff', start: '#2ea043', finish: '#ffffff',
+    timing: '#58a6ff', post: '#6e7681', milePost: '#d29922',
+    brand: '#f0f6fc', brandText: 'PRIMETIME',
+  },
+  daylight: {
+    bg: '#f1f5f9', panel: '#ffffff', text: '#0f172a', dim: '#64748b',
+    course: '#cbd5e1', glow: '#3b82f6', start: '#16a34a', finish: '#0f172a',
+    timing: '#2563eb', post: '#94a3b8', milePost: '#ca8a04',
+    brand: '#e11d48', brandText: 'PRIMETIME',
+  },
+  chroma: {
+    bg: '#00b140', panel: '#0c1a2c', text: '#ffffff', dim: '#b8c6da',
+    course: '#2e4a6e', glow: '#2563eb', start: '#ffffff', finish: '#ffffff',
+    timing: '#38bdf8', post: '#94a3b8', milePost: '#eab308',
+    brand: '#ffffff', brandText: 'PRIMETIME',
+  },
+};
+
 export interface BoardConfig {
   raceId: string | null;
   title: string;
@@ -438,6 +489,8 @@ export interface BoardConfig {
   center: [number, number] | null;
   showDone: boolean;
   showClock: boolean;
+  theme: BoardTheme;
+  layout: BoardLayout;
 }
 
 export const BOARD_COLORS = ['#e11d48', '#38bdf8', '#f59e0b', '#22c55e', '#a78bfa', '#f472b6'];
@@ -458,4 +511,6 @@ export const defaultBoardConfig = (): BoardConfig => ({
   center: null,
   showDone: true,
   showClock: true,
+  theme: { ...BOARD_THEMES.primetime },
+  layout: { panel: 'right', header: true, footer: true, typeScale: 1 },
 });

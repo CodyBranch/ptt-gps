@@ -22,6 +22,20 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '0.22.0',
+    date: '2026-10-02',
+    summary: 'The course board takes a meet\'s own colours.',
+    added: [
+      'Every colour on the board is settable per meet — background, panels, text, the course line and its halo, start, finish, timing points, mile and kilometre posts, and the wordmark, which can be renamed or emptied. A meet keeps its own scheme, so a board set up for one event does not have to be set up again for the next.',
+      'Four ready-made schemes to start from, including **Chroma** — a flat key colour behind the graphic so the board can be keyed over a camera feed, with the map and panels kept well off that hue so they do not key out with it.',
+      'Layout: the group panel on the left, the right, or gone entirely for a full-bleed course map; header and footer each on or off; and one type scale that sizes every figure and label together for a screen further away.',
+    ],
+    fixed: [
+      'Labels on the map are outlined in the map\'s own colour rather than the background. On a keyed board an outline in the key colour punches holes straight through the lettering, which is the one moment the board is actually on air.',
+      'A group label beside the edge of the map is pulled back inside and anchored to that edge, instead of being clipped mid-word.',
+    ],
+  },
+  {
     version: '0.21.0',
     date: '2026-10-02',
     summary: 'A course board for a screen, and a control page to drive it.',

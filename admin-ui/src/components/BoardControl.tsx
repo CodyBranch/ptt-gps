@@ -1,7 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api';
 import { project, unproject, type Box } from '../board';
-import { BOARD_COLORS, defaultBoardConfig, type BoardConfig, type CoursePayload, type EventSnap, type RaceSnap } from '../types';
+import {
+  BOARD_COLORS,
+  BOARD_THEMES,
+  defaultBoardConfig,
+  type BoardConfig,
+  type BoardTheme,
+  type CoursePayload,
+  type EventSnap,
+  type RaceSnap,
+} from '../types';
 import { BOARD_H, BOARD_W, BoardFrame, CourseBoard } from './CourseBoard';
 import { raceLabel } from '../format';
 
@@ -313,6 +322,100 @@ export function BoardControl({ ev, onMsg }: { ev: EventSnap; onMsg: (text: strin
             <input type="checkbox" checked={config.showDone} onChange={(e) => patch({ showDone: e.target.checked })} />
             Light the course behind the lead
           </label>
+        </section>
+
+        <section>
+          <h4>Colours</h4>
+          <div className="board-row">
+            {Object.entries(BOARD_THEMES).map(([name, t]) => (
+              <button
+                key={name}
+                className={`mini ${JSON.stringify(config.theme) === JSON.stringify(t) ? 'on' : ''}`}
+                title={name === 'chroma' ? 'Flat key colour behind the graphic, for keying over a camera' : undefined}
+                onClick={() => patch({ theme: { ...t } })}
+              >
+                {name[0].toUpperCase() + name.slice(1)}
+              </button>
+            ))}
+          </div>
+          <div className="board-swatches">
+            {(
+              [
+                ['bg', 'Background'],
+                ['panel', 'Panels'],
+                ['text', 'Text'],
+                ['dim', 'Secondary text'],
+                ['course', 'Course line'],
+                ['glow', 'Course halo'],
+                ['start', 'Start'],
+                ['finish', 'Finish'],
+                ['timing', 'Timing points'],
+                ['post', 'KM posts'],
+                ['milePost', 'Mile posts'],
+                ['brand', 'Wordmark'],
+              ] as Array<[keyof BoardTheme, string]>
+            ).map(([key, label]) => (
+              <label key={key} className="board-swatch-row" title={label}>
+                <input
+                  type="color"
+                  value={config.theme[key]}
+                  onChange={(e) => patch({ theme: { ...config.theme, [key]: e.target.value } })}
+                />
+                <span>{label}</span>
+              </label>
+            ))}
+          </div>
+          <label className="board-field">
+            Wordmark
+            <input
+              value={config.theme.brandText}
+              maxLength={24}
+              placeholder="PRIMETIME"
+              onChange={(e) => patch({ theme: { ...config.theme, brandText: e.target.value } })}
+            />
+          </label>
+        </section>
+
+        <section>
+          <h4>Layout</h4>
+          <div className="board-row">
+            <span className="dim">Panel</span>
+            {(['left', 'right', 'none'] as const).map((side) => (
+              <button
+                key={side}
+                className={`mini ${config.layout.panel === side ? 'on' : ''}`}
+                onClick={() => patch({ layout: { ...config.layout, panel: side } })}
+              >
+                {side === 'none' ? 'Map only' : side[0].toUpperCase() + side.slice(1)}
+              </button>
+            ))}
+          </div>
+          <div className="board-row">
+            <button
+              className={`mini ${config.layout.header ? 'on' : ''}`}
+              onClick={() => patch({ layout: { ...config.layout, header: !config.layout.header } })}
+            >
+              Header
+            </button>
+            <button
+              className={`mini ${config.layout.footer ? 'on' : ''}`}
+              onClick={() => patch({ layout: { ...config.layout, footer: !config.layout.footer } })}
+            >
+              Footer
+            </button>
+          </div>
+          <div className="board-row">
+            <span className="dim">Type</span>
+            <input
+              type="range"
+              min={0.6}
+              max={1.8}
+              step={0.05}
+              value={config.layout.typeScale}
+              onChange={(e) => patch({ layout: { ...config.layout, typeScale: Number(e.target.value) } })}
+            />
+            <span className="mono">{Math.round(config.layout.typeScale * 100)}%</span>
+          </div>
         </section>
 
         <section>
