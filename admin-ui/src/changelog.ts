@@ -22,6 +22,13 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '0.23.6',
+    date: '2026-10-02',
+    fixed: [
+      'A meet pushed in from another system wires its races to the course file that was written, rather than to the same name with `.kml` on the end. A sender pushing GPX — which is what RaceResult exports — had every race pointed at a file that was not on disk, and would have found that out on race morning. A name is also now taken as taken whichever format holds it, so a pushed course can no longer collide with one already stored under a different extension.',
+    ],
+  },
+  {
     version: '0.23.5',
     date: '2026-10-02',
     summary: 'Uploading a GPX course works from the console, which it had not since GPX arrived.',

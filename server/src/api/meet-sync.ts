@@ -3,7 +3,7 @@ import path from 'node:path';
 import type { AuthService } from './auth.js';
 import { createEvent, listEvents, readCourseIn, saveCourseIn, ConfigManager, listCoursesIn } from '../config/manager.js';
 import { EventSchema } from '../config/schema.js';
-import { countPaths, formatFromName, parseCourse } from '../engine/course.js';
+import { countPaths, detectFormat, formatFromName, parseCourse } from '../engine/course.js';
 import { planMeetSync, slugify, type SyncRequest } from '../sync/meet.js';
 import type { App } from '../app.js';
 import type { Store } from '../state/store.js';
@@ -302,12 +302,19 @@ export function registerMeetSync(ex: express.Express, deps: SyncDeps): void {
       }
 
       // A free name, so an existing course with the same name keeps its file.
+      // Free in any of the formats a course can be stored in: the sender picks
+      // that, not us, and a name taken by a .gpx is not free for a .kml.
       const base = slugify(incoming.name ?? incoming.key) || 'course';
+      const taken = (n: string) => ['kml', 'gpx', 'geojson'].some((e) => claimed.has(`courses/${n}.${e}`));
       let name = base;
-      for (let n = 2; claimed.has(`courses/${name}.kml`); n++) name = `${base}-${n}`;
-      const file = `courses/${name}.kml`;
+      for (let n = 2; taken(name); n++) name = `${base}-${n}`;
 
-      if (!dryRun) saveCourseIn(eventsDir, name, incoming.kml);
+      // The name the course was saved under, not a name assumed for it. This
+      // used to be `${name}.kml` whatever had been written, so a meet pushing
+      // GPX - which is what RaceResult exports - wired every one of its races
+      // to a file that was not on disk, and they reached race day with no
+      // course at all.
+      const file = dryRun ? `courses/${name}.${dryRunExt(incoming.kml, incoming.name)}` : saveCourseIn(eventsDir, name, incoming.kml).file;
       claimed.add(file);
       courseFiles.set(incoming.key, file);
       courseReports.push({ key: incoming.key, file, action: 'created' });
@@ -316,3 +323,13 @@ export function registerMeetSync(ex: express.Express, deps: SyncDeps): void {
     return { courseFiles, courseReports, courseWarnings };
   }
 }
+
+/**
+ * What a dry run would have called the course. A dry run writes nothing, so it
+ * cannot ask the save for the name it chose, and reporting a plausible name is
+ * the whole point of a dry run.
+ */
+function dryRunExt(text: string, name?: string): string {
+  return detectFormat(text, name ? formatFromName(name) : undefined);
+}
+
