@@ -555,9 +555,22 @@ export class App {
     return [...this.engines.values()].some((e) => e.status === 'armed' || e.status === 'live');
   }
 
+  /**
+   * One race, as everything outside sees it.
+   *
+   * A race with no course has no engine - that is deliberate, so a meet can be
+   * pushed in before its line has been walked. Every other caller here walks
+   * `engines`, so such a race is simply absent from them; `snapshot()` walks
+   * the config, so it is not, and this used to assert the engine with a `!`.
+   * It then read `engine.race` off undefined and took the process down - on
+   * every client connection and every feed push, so the service came up,
+   * crashed on the first browser to open the console, and came up again.
+   */
   raceSnapshot(raceId: string) {
-    const engine = this.engines.get(raceId)!;
+    const engine = this.engines.get(raceId);
+    if (!engine) return this.untrackedRaceSnapshot(raceId);
     return {
+      tracked: true as const,
       eventId: this.cfg.id,
       raceId,
       name: engine.race.name,
@@ -584,6 +597,39 @@ export class App {
         slice: engine.sliceFor(s.imei),
         health: this.healthFn(s.imei),
       })),
+    };
+  }
+
+  /**
+   * A race carried in the config with no line to run on yet.
+   *
+   * It stays in the snapshot rather than being filtered out of it: Event Setup
+   * is where a course gets linked, and Event Setup is drawn from here, so
+   * hiding the race would hide it from the one page that can make it a race.
+   * Everything the config knows, and nothing the engine would have known.
+   */
+  private untrackedRaceSnapshot(raceId: string) {
+    const race = this.cfg.races.find((r) => r.id === raceId);
+    return {
+      tracked: false as const,
+      eventId: this.cfg.id,
+      raceId,
+      name: race?.name ?? raceId,
+      externalId: race?.externalId ?? null,
+      eventNumber: race?.eventNumber ?? null,
+      scheduledStart: race?.scheduledStart ?? null,
+      date: race?.date ?? null,
+      order: race?.order ?? null,
+      // It cannot be armed or live without an engine to arm, so it is the only
+      // status it can truthfully have.
+      status: 'scheduled' as const,
+      units: race?.units ?? this.cfg.outputUnits,
+      courseLength: 0,
+      sessionId: null,
+      startedMs: null,
+      roles: [],
+      vehicles: [],
+      trackers: [],
     };
   }
 

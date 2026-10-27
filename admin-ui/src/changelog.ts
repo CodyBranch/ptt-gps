@@ -22,6 +22,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '0.26.0',
+    date: '2026-10-27',
+    summary: 'A race with no course no longer takes the server down with it.',
+    fixed: [
+      '**An event holding a race with no course crashed the server on every client connection.** A race can be carried without a course so a meet can be pushed in before its line is walked, and such a race gets no engine. Everything that walks the engines skipped it correctly; the whole-event snapshot walks the *config*, where it is still listed, and asserted the engine was there. So the first browser to open the console killed the process, the service restarted, and the next connection killed it again — a restart about every 28 seconds. The race now appears in the snapshot as untracked, which is what it is, and stays visible on Event Setup, which is the only page that can link it a course.',
+      'Remote access keeps trying. The tunnel got one attempt, taken while the service was starting — which on a box that reboots is often before its network is up — and nothing ever called it again, so a lost race left the public URL down until somebody noticed and toggled Setup. It now retries with a backoff out to five minutes, gives up only when remote access is switched off, and reports a dropped session instead of reading **online** for as long as the process lives whatever has happened underneath.',
+    ],
+  },
+  {
     version: '0.25.0',
     date: '2026-10-03',
     summary: 'A board opens itself. Nobody has to sign in the machine driving the screen.',

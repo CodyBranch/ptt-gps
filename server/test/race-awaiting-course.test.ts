@@ -122,6 +122,41 @@ describe('a race whose course has not been traced yet', () => {
     } as Parameters<App['onFix']>[0])).not.toThrow();
   });
 
+  it('THE WHOLE-EVENT SNAPSHOT STILL BUILDS — it walks the config, not the engines', () => {
+    // This is what put the box in a restart loop. Every other caller of
+    // raceSnapshot walks `engines`, so a race without one is simply absent;
+    // `snapshot()` walks `cfg.races`, which includes it, and asserted the
+    // engine with a `!`. Every client connection and every feed push builds
+    // this, so the first browser to open the console crashed the process, the
+    // service restarted, and the next one crashed it again.
+    const app = makeApp(makeConfig());
+    expect(() => app.snapshot()).not.toThrow();
+    const snap = app.snapshot();
+    expect(snap.races.map((r) => r.raceId)).toEqual(['womens-gold-6k', 'mens-gold-8k']);
+  });
+
+  it('  and the race with no line still says who it is', () => {
+    const snap = makeApp(makeConfig()).snapshot();
+    const awaiting = snap.races.find((r) => r.raceId === 'mens-gold-8k')!;
+    // It has to be in the snapshot and legible, because Event Setup is where
+    // its course gets linked - dropping it from the snapshot would hide the
+    // race from the only page that can fix it.
+    expect(awaiting.name).toBe("Men's Gold Invite 8k");
+    expect(awaiting.eventNumber).toBe(2);
+    expect(awaiting.tracked).toBe(false);
+    expect(awaiting.status).toBe('scheduled');
+    expect(awaiting.courseLength).toBe(0);
+    expect(awaiting.trackers).toEqual([]);
+    expect(awaiting.roles).toEqual([]);
+  });
+
+  it('  while the race beside it is tracked as normal', () => {
+    const snap = makeApp(makeConfig()).snapshot();
+    const ready = snap.races.find((r) => r.raceId === 'womens-gold-6k')!;
+    expect(ready.tracked).toBe(true);
+    expect(ready.courseLength).toBeGreaterThan(0);
+  });
+
   it('LINKING A COURSE BUILDS ITS ENGINE', () => {
     const app = makeApp(makeConfig());
     const next = makeConfig();

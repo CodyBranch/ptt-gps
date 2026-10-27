@@ -68,6 +68,13 @@ export interface RoleState {
 }
 
 export interface RaceSnap {
+  /**
+   * False for a race carried with no course yet: it has no engine behind it,
+   * so there is nothing to track and `roles`, `vehicles` and `trackers` are
+   * empty and `courseLength` is 0. It is still in the snapshot because Event
+   * Setup is where its course gets linked.
+   */
+  tracked: boolean;
   eventId: string;
   raceId: string;
   name: string;
