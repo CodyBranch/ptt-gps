@@ -194,6 +194,20 @@ export const EventSchema = z.object({
    */
   reportIntervalS: z.number().positive().default(10),
   /**
+   * Whether this event's outputs are live the moment it loads.
+   *
+   * The switch itself is persisted per event, so this only decides where it
+   * starts: once somebody flips it in the console, their decision is what
+   * survives a reload or a restart and this is not consulted again.
+   *
+   * It exists because the default — on — is wrong for the meets where it
+   * matters most. An event being built the morning of a race shares a
+   * scoreboard with whatever is already on air, and the cost of coming up
+   * publishing is a number appearing on a screen in front of a crowd. Left
+   * unset it behaves exactly as it always has.
+   */
+  publishOnLoad: z.boolean().optional(),
+  /**
    * When the meet was put away, ISO date. Events also file themselves once
    * their end date passes, but that needs an end date and a date that has
    * actually passed — this is the operator saying "this one is done".

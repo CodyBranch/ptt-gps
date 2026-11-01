@@ -1,0 +1,582 @@
+{
+  "id": "nyc-marathon-2026",
+  "name": "TCS New York City Marathon 2026",
+  "meetId": 9262,
+  "startDate": "2026-11-01",
+  "endDate": "2026-11-01",
+  "outputUnits": "miles",
+  "reportIntervalS": 10,
+  "publishOnLoad": false,
+  "listeners": [
+    {
+      "name": "queclink",
+      "port": 1000,
+      "protocol": "queclink"
+    },
+    {
+      "name": "franklin-mirror",
+      "port": 1001,
+      "protocol": "queclink"
+    }
+  ],
+  "firebase": [
+    {
+      "connection": "ptt-franklin",
+      "flavor": "ptt"
+    },
+    {
+      "connection": "franklin-f56f3",
+      "flavor": "krush"
+    }
+  ],
+  "trackers": [
+    {
+      "imei": "860931070050997",
+      "label": "Karmarush - 0997 - Bike 9",
+      "hasBattery": true
+    },
+    {
+      "imei": "860931070051268",
+      "label": "Karmarush - 1268 - Bike 10",
+      "hasBattery": true
+    },
+    {
+      "imei": "860931070051383",
+      "label": "Karmarush - 1383- Bike 1",
+      "hasBattery": true
+    },
+    {
+      "imei": "860931070051771",
+      "label": "Karmarush - 1771 - Bike 7",
+      "hasBattery": true
+    },
+    {
+      "imei": "860931070051789",
+      "label": "Karmarush - 1789 - Bike 5",
+      "hasBattery": true
+    },
+    {
+      "imei": "860931070051870",
+      "label": "Karmarush - 1870 - Bike 3",
+      "hasBattery": true
+    },
+    {
+      "imei": "860931070053066",
+      "label": "Karmarush - 3066 - Bike 6",
+      "hasBattery": true
+    },
+    {
+      "imei": "860931070053116",
+      "label": "Karmarush - 3116 - Bike 12",
+      "hasBattery": true
+    },
+    {
+      "imei": "860931070053918",
+      "label": "Karmarush - 3918 - Bike 8",
+      "hasBattery": true
+    },
+    {
+      "imei": "860931070054353",
+      "label": "Karmarush - 4353 - Bike 4",
+      "hasBattery": true
+    },
+    {
+      "imei": "860931070054817",
+      "label": "Karmarush - 4817 - Bike 11",
+      "hasBattery": true
+    },
+    {
+      "imei": "860931070055574",
+      "label": "Karmarush - 5574 - Bike 2",
+      "hasBattery": true
+    },
+    {
+      "imei": "015181000131111",
+      "label": "Karmarush 01 - Moto 2",
+      "hasBattery": true
+    },
+    {
+      "imei": "015181000128000",
+      "label": "Karmarush 03- Moto 1",
+      "hasBattery": true
+    },
+    {
+      "imei": "015181000121005",
+      "label": "Karmarush 06 - Moto 3",
+      "hasBattery": true
+    },
+    {
+      "imei": "860201060914796",
+      "label": "Karmarush 07 - Moto 2",
+      "hasBattery": true
+    },
+    {
+      "imei": "860201060898437",
+      "label": "Karmarush 09 - Moto 1",
+      "hasBattery": true
+    },
+    {
+      "imei": "860201060905844",
+      "label": "Karmarush 10 - Moto 3",
+      "hasBattery": true
+    },
+    {
+      "imei": "860201060919175",
+      "label": "Karmarush 12 - Moto 4",
+      "hasBattery": true
+    },
+    {
+      "imei": "860201060937540",
+      "label": "Karmarush 15 - Moto 5",
+      "hasBattery": true
+    },
+    {
+      "imei": "860201060893149",
+      "label": "Karmarush 16 - Moto 6",
+      "hasBattery": true
+    },
+    {
+      "imei": "860201060921965",
+      "label": "Karmarush 18 - Moto 7",
+      "hasBattery": true
+    },
+    {
+      "imei": "860201066773279",
+      "label": "Karmarush 21 - Moto 7",
+      "hasBattery": true
+    },
+    {
+      "imei": "860201066791156",
+      "label": "Karmarush 22 - Moto 4",
+      "hasBattery": true
+    },
+    {
+      "imei": "860201066736532",
+      "label": "Karmarush 25 - Moto 5",
+      "hasBattery": true
+    },
+    {
+      "imei": "860201066749444",
+      "label": "Karmarush 26 - Moto 6",
+      "hasBattery": true
+    },
+    {
+      "imei": "865134050946566",
+      "label": "Karmarush OBD 1 - Moto 1",
+      "hasBattery": false
+    },
+    {
+      "imei": "865134050945691",
+      "label": "Karmarush OBD 2 - Moto 3",
+      "hasBattery": false
+    },
+    {
+      "imei": "865134050945733",
+      "label": "Karmarush OBD 3 - Clock W",
+      "hasBattery": false
+    },
+    {
+      "imei": "865134050945832",
+      "label": "Karmarush OBD 4 - Clock M",
+      "hasBattery": false
+    },
+    {
+      "imei": "865134050946756",
+      "label": "Karmarush OBD 5 - Clock WCM",
+      "hasBattery": false
+    },
+    {
+      "imei": "865134050947127",
+      "label": "Karmarush OBD 6 - Clock WCW",
+      "hasBattery": false
+    },
+    {
+      "imei": "865134050947168",
+      "label": "Karmarush OBD 7 - Moto 5",
+      "hasBattery": false
+    }
+  ],
+  "vehicles": [
+    {
+      "key": "bike-1",
+      "label": "Bike 1",
+      "trackers": [
+        "860931070051383"
+      ]
+    },
+    {
+      "key": "bike-2",
+      "label": "Bike 2",
+      "trackers": [
+        "860931070055574"
+      ]
+    },
+    {
+      "key": "bike-3",
+      "label": "Bike 3",
+      "trackers": [
+        "860931070051870"
+      ]
+    },
+    {
+      "key": "bike-4",
+      "label": "Bike 4",
+      "trackers": [
+        "860931070054353"
+      ]
+    },
+    {
+      "key": "bike-5",
+      "label": "Bike 5",
+      "trackers": [
+        "860931070051789"
+      ]
+    },
+    {
+      "key": "bike-6",
+      "label": "Bike 6",
+      "trackers": [
+        "860931070053066"
+      ]
+    },
+    {
+      "key": "bike-7",
+      "label": "Bike 7",
+      "trackers": [
+        "860931070051771"
+      ]
+    },
+    {
+      "key": "bike-8",
+      "label": "Bike 8",
+      "trackers": [
+        "860931070053918"
+      ]
+    },
+    {
+      "key": "bike-9",
+      "label": "Bike 9",
+      "trackers": [
+        "860931070050997"
+      ]
+    },
+    {
+      "key": "bike-10",
+      "label": "Bike 10",
+      "trackers": [
+        "860931070051268"
+      ]
+    },
+    {
+      "key": "bike-11",
+      "label": "Bike 11",
+      "trackers": [
+        "860931070054817"
+      ]
+    },
+    {
+      "key": "bike-12",
+      "label": "Bike 12",
+      "trackers": [
+        "860931070053116"
+      ]
+    },
+    {
+      "key": "clock-m",
+      "label": "Clock M",
+      "trackers": [
+        "865134050945832"
+      ]
+    },
+    {
+      "key": "clock-w",
+      "label": "Clock W",
+      "trackers": [
+        "865134050945733"
+      ]
+    },
+    {
+      "key": "clock-wcm",
+      "label": "Clock WCM",
+      "trackers": [
+        "865134050946756"
+      ]
+    },
+    {
+      "key": "clock-wcw",
+      "label": "Clock WCW",
+      "trackers": [
+        "865134050947127"
+      ]
+    },
+    {
+      "key": "moto-1",
+      "label": "Moto 1",
+      "trackers": [
+        "865134050946566",
+        "860201060898437",
+        "015181000128000"
+      ]
+    },
+    {
+      "key": "moto-2",
+      "label": "Moto 2",
+      "trackers": [
+        "860201060914796",
+        "015181000131111"
+      ]
+    },
+    {
+      "key": "moto-3",
+      "label": "Moto 3",
+      "trackers": [
+        "865134050945691",
+        "860201060905844",
+        "015181000121005"
+      ]
+    },
+    {
+      "key": "moto-4",
+      "label": "Moto 4",
+      "trackers": [
+        "860201060919175",
+        "860201066791156"
+      ]
+    },
+    {
+      "key": "moto-5",
+      "label": "Moto 5",
+      "trackers": [
+        "865134050947168",
+        "860201060937540",
+        "860201066736532"
+      ]
+    },
+    {
+      "key": "moto-6",
+      "label": "Moto 6",
+      "trackers": [
+        "860201066749444",
+        "860201060893149"
+      ]
+    },
+    {
+      "key": "moto-7",
+      "label": "Moto 7",
+      "trackers": [
+        "860201060921965",
+        "860201066773279"
+      ]
+    }
+  ],
+  "roles": [],
+  "snapDefaults": {
+    "minInc": 0.2,
+    "maxInc": 1,
+    "initialMax": 0.5,
+    "maxOffCourse": 0.25,
+    "fwdTolerance": 0.02
+  },
+  "races": [
+    {
+      "id": "womens-wc",
+      "name": "Professional Wheelchair Women",
+      "order": 1,
+      "course": "courses/nyc-marathon-2026.kml",
+      "units": "miles",
+      "date": "2026-11-01",
+      "roles": [
+        {
+          "key": "wcw",
+          "label": "Women WC Lead",
+          "vehicle": "clock-wcw",
+          "cmd": 4,
+          "mapEvent": "womens_wheelchair",
+          "clockSlot": 3
+        },
+        {
+          "key": "wcwr",
+          "label": "Women WC Event Record",
+          "vehicle": "",
+          "cmd": 11
+        },
+        {
+          "key": "b11",
+          "label": "Bike 11 \u00c2\u00b7 Women WC",
+          "vehicle": "bike-11"
+        }
+      ]
+    },
+    {
+      "id": "mens-wc",
+      "name": "Professional Wheelchair Men",
+      "order": 2,
+      "course": "courses/nyc-marathon-2026.kml",
+      "units": "miles",
+      "date": "2026-11-01",
+      "roles": [
+        {
+          "key": "wcm",
+          "label": "Men WC Lead",
+          "vehicle": "clock-wcm",
+          "cmd": 5,
+          "mapEvent": "mens_wheelchair",
+          "clockSlot": 4
+        },
+        {
+          "key": "wcmr",
+          "label": "Men WC Event Record",
+          "vehicle": "",
+          "cmd": 12
+        },
+        {
+          "key": "b12",
+          "label": "Bike 12 \u00c2\u00b7 Men WC",
+          "vehicle": "bike-12"
+        }
+      ]
+    },
+    {
+      "id": "womens",
+      "name": "Professional Women",
+      "order": 3,
+      "course": "courses/nyc-marathon-2026.kml",
+      "units": "miles",
+      "date": "2026-11-01",
+      "roles": [
+        {
+          "key": "w1",
+          "label": "Women Lead",
+          "vehicle": "moto-1",
+          "cmd": 0,
+          "mapEvent": "elite_women",
+          "clockSlot": 1
+        },
+        {
+          "key": "w2",
+          "label": "Women Chase",
+          "vehicle": "moto-2",
+          "cmd": 1,
+          "mapEvent": "elite_women_chase"
+        },
+        {
+          "key": "wus",
+          "label": "Women USA",
+          "vehicle": "bike-7",
+          "cmd": 8,
+          "mapEvent": "usa_women"
+        },
+        {
+          "key": "wr",
+          "label": "Women Event Record",
+          "vehicle": "",
+          "cmd": 6
+        },
+        {
+          "key": "b4",
+          "label": "Bike 4 \u00c2\u00b7 Women Lead",
+          "vehicle": "bike-4"
+        },
+        {
+          "key": "b5",
+          "label": "Bike 5 \u00c2\u00b7 Women Top 5",
+          "vehicle": "bike-5"
+        },
+        {
+          "key": "b6",
+          "label": "Bike 6 \u00c2\u00b7 Women Backup",
+          "vehicle": "bike-6"
+        },
+        {
+          "key": "b7",
+          "label": "Bike 7 \u00c2\u00b7 USA Women",
+          "vehicle": ""
+        },
+        {
+          "key": "b9",
+          "label": "Bike 9 \u00c2\u00b7 Non-Binary",
+          "vehicle": "bike-9"
+        },
+        {
+          "key": "b10",
+          "label": "Bike 10 \u00c2\u00b7 Radio",
+          "vehicle": "bike-10"
+        }
+      ]
+    },
+    {
+      "id": "mens",
+      "name": "Professional Men",
+      "order": 4,
+      "course": "courses/nyc-marathon-2026.kml",
+      "units": "miles",
+      "date": "2026-11-01",
+      "roles": [
+        {
+          "key": "m1",
+          "label": "Men Lead",
+          "vehicle": "moto-3",
+          "cmd": 2,
+          "mapEvent": "elite_men",
+          "clockSlot": 2
+        },
+        {
+          "key": "m2",
+          "label": "Men Chase",
+          "vehicle": "moto-4",
+          "cmd": 3,
+          "mapEvent": "elite_men_chase"
+        },
+        {
+          "key": "mus",
+          "label": "Men USA",
+          "vehicle": "bike-8",
+          "cmd": 9,
+          "mapEvent": "usa_men"
+        },
+        {
+          "key": "mr",
+          "label": "Men Event Record",
+          "vehicle": "",
+          "cmd": 7
+        },
+        {
+          "key": "ev",
+          "label": "Everyday Person",
+          "vehicle": "",
+          "cmd": 10
+        },
+        {
+          "key": "b1",
+          "label": "Bike 1 \u00c2\u00b7 Men Lead",
+          "vehicle": "bike-1"
+        },
+        {
+          "key": "b2",
+          "label": "Bike 2 \u00c2\u00b7 Men Top 5",
+          "vehicle": "bike-2"
+        },
+        {
+          "key": "b3",
+          "label": "Bike 3 \u00c2\u00b7 Men Backup",
+          "vehicle": "bike-3"
+        },
+        {
+          "key": "b8",
+          "label": "Bike 8 \u00c2\u00b7 USA Men",
+          "vehicle": ""
+        },
+        {
+          "key": "b9",
+          "label": "Bike 9 \u00c2\u00b7 Non-Binary",
+          "vehicle": "bike-9"
+        },
+        {
+          "key": "b10",
+          "label": "Bike 10 \u00c2\u00b7 Radio",
+          "vehicle": "bike-10"
+        }
+      ]
+    }
+  ]
+}

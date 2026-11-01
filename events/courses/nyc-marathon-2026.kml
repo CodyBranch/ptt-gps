@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+<Document>
+  <name>TCS New York City Marathon</name>
+  <description>New York NY, United States</description>
+  <Style id="course"><LineStyle><color>ff0000ff</color><width>4</width></LineStyle></Style>
+  <Style id="timing"><IconStyle><color>ff00ffff</color><Icon><href>http://maps.google.com/mapfiles/kml/shapes/track.png</href></Icon></IconStyle></Style>
+  <Style id="water"><IconStyle><color>ffff0000</color><Icon><href>http://maps.google.com/mapfiles/kml/shapes/water.png</href></Icon></IconStyle></Style>
+  <Style id="marta"><IconStyle><Icon><href>http://maps.google.com/mapfiles/kml/shapes/subway.png</href></Icon></IconStyle></Style>
+  <Style id="marker"><IconStyle><Icon><href>http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png</href></Icon></IconStyle></Style>
+  <Style id="start"><IconStyle><color>ff00ff00</color><Icon><href>http://maps.google.com/mapfiles/kml/paddle/go.png</href></Icon></IconStyle></Style>
+  <Style id="finish"><IconStyle><color>ff0000ff</color><Icon><href>http://maps.google.com/mapfiles/kml/paddle/stop.png</href></Icon></IconStyle></Style>
+  <Placemark>
+    <name>Marathon Course</name>
+    <styleUrl>#course</styleUrl>
+    <LineString><tessellate>1</tessellate><coordinates>-74.061352,40.601871,0 -74.060903,40.601833,0 -74.0604,40.601806,0 -74.060146,40.601808,0 -74.059895,40.601821,0 -74.059622,40.601841,0 -74.059356,40.601877,0 -74.059028,40.601948,0 -74.058699,40.602039,0 -74.045452,40.606382,0 -74.038766,40.608493,0 -74.035445,40.609549,0 -74.033796,40.610079,0 -74.03215,40.610572,0 -74.031351,40.610858,0 -74.030569,40.611167,0 -74.030075,40.611464,0 -74.029625,40.611792,0 -74.028939,40.612536,0 -74.028297,40.613263,0 -74.027536,40.614015,0 -74.026872,40.614629,0 -74.0266,40.614865,0 -74.026415,40.615024,0 -74.026199,40.615295,0 -74.025847,40.616006,0 -74.026795,40.6166,0 -74.030079,40.618342,0 -74.022574,40.636757,0 -73.992695,40.665525,0 -73.983908,40.676091,0 -73.979161,40.683071,0 -73.97815,40.684865,0 -73.979222,40.686656,0 -73.97917,40.686701,0 -73.955224,40.689458,0 -73.955187,40.689491,0 -73.957419,40.700704,0 -73.957512,40.700854,0 -73.964369,40.707057,0 -73.964425,40.707191,0 -73.964437,40.707343,0 -73.964401,40.70752,0 -73.963794,40.710505,0 -73.961326,40.714445,0 -73.9612,40.714569,0 -73.951667,40.723437,0 -73.951532,40.723527,0 -73.950898,40.723786,0 -73.95089,40.723826,0 -73.953643,40.728803,0 -73.954195,40.730137,0 -73.954167,40.730175,0 -73.951715,40.730493,0 -73.951691,40.730531,0 -73.95197,40.731872,0 -73.952409,40.734393,0 -73.952659,40.73538,0 -73.952873,40.736641,0 -73.95304,40.737858,0 -73.953026,40.738042,0 -73.952955,40.738314,0 -73.951497,40.742821,0 -73.951383,40.74358,0 -73.951394,40.743628,0 -73.951429,40.743648,0 -73.953549,40.744122,0 -73.953575,40.744161,0 -73.95221,40.748252,0 -73.952028,40.748496,0 -73.951681,40.748851,0 -73.95161,40.748861,0 -73.947281,40.74813,0 -73.943946,40.747517,0 -73.94371,40.747528,0 -73.94335,40.747667,0 -73.943009,40.747999,0 -73.940632,40.75057,0 -73.940661,40.75064,0 -73.940736,40.750735,0 -73.940835,40.750853,0 -73.940996,40.75096,0 -73.94149,40.751221,0 -73.953705,40.756466,0 -73.959122,40.75885,0 -73.962815,40.76033,0 -73.96292,40.760344,0 -73.962995,40.760336,0 -73.963084,40.760281,0 -73.963104,40.760232,0 -73.9631,40.760162,0 -73.963043,40.760121,0 -73.96204,40.759733,0 -73.96199,40.759745,0 -73.935102,40.796434,0 -73.930703,40.802343,0 -73.930506,40.80257,0 -73.930295,40.80277,0 -73.929985,40.802959,0 -73.925986,40.805074,0 -73.925763,40.805239,0 -73.925503,40.805521,0 -73.924345,40.807131,0 -73.924368,40.80719,0 -73.924398,40.807215,0 -73.926379,40.808166,0 -73.92639,40.808205,0 -73.923887,40.811958,0 -73.923882,40.811983,0 -73.923907,40.812009,0 -73.924649,40.812319,0 -73.924695,40.812319,0 -73.927143,40.811112,0 -73.927935,40.811635,0 -73.930434,40.813338,0 -73.932094,40.814096,0 -73.932174,40.81413,0 -73.932284,40.814153,0 -73.934728,40.81428,0 -73.934817,40.814296,0 -73.936095,40.814722,0 -73.936157,40.814695,0 -73.942766,40.80585,0 -73.942803,40.805825,0 -73.942847,40.805832,0 -73.944149,40.806297,0 -73.944279,40.806339,0 -73.944306,40.806341,0 -73.944354,40.806328,0 -73.944402,40.806305,0 -73.944444,40.806257,0 -73.946033,40.804053,0 -73.946083,40.803992,0 -73.946088,40.803935,0 -73.946067,40.803896,0 -73.945993,40.803861,0 -73.945817,40.803775,0 -73.944774,40.803271,0 -73.944745,40.803213,0 -73.958548,40.784214,0 -73.958847,40.784166,0 -73.958923,40.784128,0 -73.960778,40.781768,0 -73.960908,40.781694,0 -73.961211,40.781595,0 -73.961576,40.781541,0 -73.962755,40.781596,0 -73.962951,40.781563,0 -73.963175,40.78149,0 -73.963552,40.781361,0 -73.963813,40.78124,0 -73.964104,40.780995,0 -73.965068,40.779659,0 -73.965216,40.779479,0 -73.966114,40.778614,0 -73.966244,40.778501,0 -73.966423,40.778296,0 -73.966809,40.77752,0 -73.967288,40.776268,0 -73.96738,40.77566,0 -73.967408,40.775598,0 -73.967523,40.775475,0 -73.968214,40.775035,0 -73.968418,40.774917,0 -73.968644,40.774704,0 -73.968895,40.774444,0 -73.969054,40.774181,0 -73.969089,40.774001,0 -73.969084,40.773671,0 -73.968897,40.773016,0 -73.96888,40.77287,0 -73.968969,40.772566,0 -73.969239,40.772063,0 -73.969383,40.771837,0 -73.969628,40.771607,0 -73.970366,40.771178,0 -73.970639,40.770996,0 -73.970793,40.770867,0 -73.971399,40.770078,0 -73.971556,40.769907,0 -73.972301,40.769502,0 -73.972494,40.76942,0 -73.972662,40.769307,0 -73.972809,40.769105,0 -73.972931,40.768871,0 -73.973066,40.768477,0 -73.973143,40.767715,0 -73.973086,40.767392,0 -73.97261,40.766201,0 -73.972642,40.76604,0 -73.972763,40.765779,0 -73.973598,40.764752,0 -73.973644,40.764726,0 -73.973713,40.764724,0 -73.98122,40.767886,0 -73.981247,40.767933,0 -73.981255,40.768002,0 -73.981278,40.768287,0 -73.980165,40.768846,0 -73.980081,40.768962,0 -73.979764,40.76945,0 -73.979583,40.769714,0 -73.979178,40.770145,0 -73.978638,40.77062,0 -73.978182,40.770975,0 -73.977238,40.771793,0 -73.977152,40.771897,0 -73.976932,40.772227,0 -73.976836,40.772406,0 -73.976768,40.772576,0</coordinates></LineString>
+  </Placemark>
+  <Placemark><name>Start</name><styleUrl>#start</styleUrl><Point><coordinates>-74.061352,40.601871,0</coordinates></Point></Placemark>
+  <Placemark><name>Finish</name><styleUrl>#finish</styleUrl><Point><coordinates>-73.976768,40.772576,0</coordinates></Point></Placemark>
+  <Folder><name>Marathon Timing Points</name>
+    <Placemark><name>3 Mile</name><description>4.8K/3mi</description><ExtendedData><Data name="distanceM"><value>4828.032</value></Data></ExtendedData><styleUrl>#timing</styleUrl><Point><coordinates>-74.026877,40.626198,0</coordinates></Point></Placemark>
+    <Placemark><name>5K</name><description>5K/3.1mi</description><ExtendedData><Data name="distanceM"><value>5000.000</value></Data></ExtendedData><styleUrl>#timing</styleUrl><Point><coordinates>-74.026273,40.627681,0</coordinates></Point></Placemark>
+    <Placemark><name>4 Mile</name><description>6.4K/4mi</description><ExtendedData><Data name="distanceM"><value>6437.376</value></Data></ExtendedData><styleUrl>#timing</styleUrl><Point><coordinates>-74.019757,40.63947,0</coordinates></Point></Placemark>
+    <Placemark><name>5 Mile</name><description>8K/5mi</description><ExtendedData><Data name="distanceM"><value>8046.720</value></Data></ExtendedData><styleUrl>#timing</styleUrl><Point><coordinates>-74.007918,40.650868,0</coordinates></Point></Placemark>
+    <Placemark><name>6 Mile</name><description>9.7K/6mi (RTRT pin shifted -0.01 mi; placed on the mat)</description><ExtendedData><Data name="distanceM"><value>9656.064</value></Data></ExtendedData><styleUrl>#timing</styleUrl><Point><coordinates>-73.99608009902964,40.66226577014342,0</coordinates></Point></Placemark>
+    <Placemark><name>10K</name><description>10K/6.2mi (RTRT pin shifted -0.01 mi; placed on the mat)</description><ExtendedData><Data name="distanceM"><value>10000.000</value></Data></ExtendedData><styleUrl>#timing</styleUrl><Point><coordinates>-73.99355069269521,40.66470112478812,0</coordinates></Point></Placemark>
+    <Placemark><name>7 Mile</name><description>11.3K/7mi (RTRT pin shifted -0.01 mi; placed on the mat)</description><ExtendedData><Data name="distanceM"><value>11265.408</value></Data></ExtendedData><styleUrl>#timing</styleUrl><Point><coordinates>-73.98540416526208,40.674291923846695,0</coordinates></Point></Placemark>
+    <Placemark><name>8 Mile</name><description>12.9K/8mi (RTRT pin shifted -0.01 mi; placed on the mat)</description><ExtendedData><Data name="distanceM"><value>12874.752</value></Data></ExtendedData><styleUrl>#timing</styleUrl><Point><coordinates>-73.97845171563084,40.68678369898963,0</coordinates></Point></Placemark>
+    <Placemark><name>9 Mile</name><description>14.5/9mi</description><ExtendedData><Data name="distanceM"><value>14484.096</value></Data></ExtendedData><styleUrl>#timing</styleUrl><Point><coordinates>-73.959576,40.688957,0</coordinates></Point></Placemark>
+    <Placemark><name>15K</name><description>15K/9.3mi</description><ExtendedData><Data name="distanceM"><value>15000.000</value></Data></ExtendedData><styleUrl>#timing</styleUrl><Point><coordinates>-73.955446,40.690792,0</coordinates></Point></Placemark>
+    <Placemark><name>10 Mile</name><description>16K/10mi</description><ExtendedData><Data name="distanceM"><value>16093.440</value></Data></ExtendedData><styleUrl>#timing</styleUrl><Point><coordinates>-73.957389,40.700555,0</coordinates></Point></Placemark>
+    <Placemark><name>11 Mile</name><description>17.7K/11mi</description><ExtendedData><Data name="distanceM"><value>17702.784</value></Data></ExtendedData><styleUrl>#timing</styleUrl><Point><coordinates>-73.962331,40.71284,0</coordinates></Point></Placemark>
+    <Placemark><name>12 Mile</name><description>19.3K/12mi</description><ExtendedData><Data name="distanceM"><value>19312.128</value></Data></ExtendedData><styleUrl>#timing</styleUrl><Point><coordinates>-73.951105,40.724214,0</coordinates></Point></Placemark>
+    <Placemark><name>20K</name><description>20K/12.4mi</description><ExtendedData><Data name="distanceM"><value>20000.000</value></Data></ExtendedData><styleUrl>#timing</styleUrl><Point><coordinates>-73.954127,40.729973,0</coordinates></Point></Placemark>
+    <Placemark><name>13 Mile</name><description>20.9K/13mi</description><ExtendedData><Data name="distanceM"><value>20921.472</value></Data></ExtendedData><styleUrl>#timing</styleUrl><Point><coordinates>-73.952872,40.736634,0</coordinates></Point></Placemark>
+    <Placemark><name>Half</name><description>Half/13.1mi</description><ExtendedData><Data name="distanceM"><value>21097.500</value></Data></ExtendedData><styleUrl>#timing</styleUrl><Point><coordinates>-73.95298,40.738218,0</coordinates></Point></Placemark>
+    <Placemark><name>14 Mile</name><description>22.5K/14mi (RTRT pin shifted -0.01 mi; placed on the mat)</description><ExtendedData><Data name="distanceM"><value>22530.816</value></Data></ExtendedData><styleUrl>#timing</styleUrl><Point><coordinates>-73.95080705173125,40.7487254132168,0</coordinates></Point></Placemark>
+    <Placemark><name>15 Mile</name><description>24.1K/15mi</description><ExtendedData><Data name="distanceM"><value>24140.160</value></Data></ExtendedData><styleUrl>#timing</styleUrl><Point><coordinates>-73.946299,40.753286,0</coordinates></Point></Placemark>
+    <Placemark><name>25K</name><description>25K/15.5mi (RTRT pin shifted 0.005 mi; placed on the mat)</description><ExtendedData><Data name="distanceM"><value>25000.000</value></Data></ExtendedData><styleUrl>#timing</styleUrl><Point><coordinates>-73.95519841940974,40.757123247899735,0</coordinates></Point></Placemark>
+    <Placemark><name>16 Mile</name><description>25.7K/16mi</description><ExtendedData><Data name="distanceM"><value>25749.504</value></Data></ExtendedData><styleUrl>#timing</styleUrl><Point><coordinates>-73.963025,40.760318,0</coordinates></Point></Placemark>
+    <Placemark><name>17 Mile</name><description>27.4K/17mi</description><ExtendedData><Data name="distanceM"><value>27358.848</value></Data></ExtendedData><styleUrl>#timing</styleUrl><Point><coordinates>-73.953412,40.77145,0</coordinates></Point></Placemark>
+    <Placemark><name>18 Mile</name><description>29K/18mi</description><ExtendedData><Data name="distanceM"><value>28968.192</value></Data></ExtendedData><styleUrl>#timing</styleUrl><Point><coordinates>-73.944108,40.784146,0</coordinates></Point></Placemark>
+    <Placemark><name>30K</name><description>30K/18.6mi (RTRT pin shifted -0.01 mi; placed on the mat)</description><ExtendedData><Data name="distanceM"><value>30000.000</value></Data></ExtendedData><styleUrl>#timing</styleUrl><Point><coordinates>-73.9381428215217,40.79228476239179,0</coordinates></Point></Placemark>
+    <Placemark><name>19 Mile</name><description>30.6K/19mi</description><ExtendedData><Data name="distanceM"><value>30577.536</value></Data></ExtendedData><styleUrl>#timing</styleUrl><Point><coordinates>-73.93482,40.796813,0</coordinates></Point></Placemark>
+    <Placemark><name>20 Mile</name><description>32.2K/20mi (RTRT pin shifted -0.01 mi; placed on the mat)</description><ExtendedData><Data name="distanceM"><value>32186.880</value></Data></ExtendedData><styleUrl>#timing</styleUrl><Point><coordinates>-73.92567598781801,40.80782851156735,0</coordinates></Point></Placemark>
+    <Placemark><name>21 Mile</name><description>33.8K/21mi</description><ExtendedData><Data name="distanceM"><value>33796.224</value></Data></ExtendedData><styleUrl>#timing</styleUrl><Point><coordinates>-73.934555,40.814271,0</coordinates></Point></Placemark>
+    <Placemark><name>35K</name><description>35K/21.7mi</description><ExtendedData><Data name="distanceM"><value>35000.000</value></Data></ExtendedData><styleUrl>#timing</styleUrl><Point><coordinates>-73.94237,40.806379,0</coordinates></Point></Placemark>
+    <Placemark><name>22 Mile</name><description>35.4K/22mi (RTRT pin shifted -0.01 mi; placed on the mat)</description><ExtendedData><Data name="distanceM"><value>35405.568</value></Data></ExtendedData><styleUrl>#timing</styleUrl><Point><coordinates>-73.94546370705125,40.80484262974139,0</coordinates></Point></Placemark>
+    <Placemark><name>23 Mile</name><description>37K/23mi</description><ExtendedData><Data name="distanceM"><value>37014.912</value></Data></ExtendedData><styleUrl>#timing</styleUrl><Point><coordinates>-73.952537,40.792488,0</coordinates></Point></Placemark>
+    <Placemark><name>24 Mile</name><description>38.6K/24mi</description><ExtendedData><Data name="distanceM"><value>38624.256</value></Data></ExtendedData><styleUrl>#timing</styleUrl><Point><coordinates>-73.963332,40.781436,0</coordinates></Point></Placemark>
+    <Placemark><name>40K</name><description>40K/24.9mi (RTRT pin shifted 0.01 mi; placed on the mat)</description><ExtendedData><Data name="distanceM"><value>40000.000</value></Data></ExtendedData><styleUrl>#timing</styleUrl><Point><coordinates>-73.97062242948401,40.771007047010656,0</coordinates></Point></Placemark>
+    <Placemark><name>25 Mile</name><description>40.2K/25mi</description><ExtendedData><Data name="distanceM"><value>40233.600</value></Data></ExtendedData><styleUrl>#timing</styleUrl><Point><coordinates>-73.972434,40.769445,0</coordinates></Point></Placemark>
+    <Placemark><name>26 Mile</name><description>41.8K/26mi</description><ExtendedData><Data name="distanceM"><value>41842.944</value></Data></ExtendedData><styleUrl>#timing</styleUrl><Point><coordinates>-73.97925,40.770069,0</coordinates></Point></Placemark>
+    <Placemark><name>Finish</name><ExtendedData><Data name="distanceM"><value>42195.000</value></Data></ExtendedData><styleUrl>#timing</styleUrl><Point><coordinates>-73.976768,40.772576,0</coordinates></Point></Placemark>
+  </Folder>
+  <Folder><name>Gatorade® Endurance Formula</name>
+    <Placemark><name>Gatorade Endurance Formula 1</name><styleUrl>#marker</styleUrl><Point><coordinates>-74.027069807053,40.625870702846,0</coordinates></Point></Placemark>
+    <Placemark><name>Gatorade Endurance Formula 2</name><styleUrl>#marker</styleUrl><Point><coordinates>-74.019827842712,40.63943954027,0</coordinates></Point></Placemark>
+    <Placemark><name>Gatorade Endurance Formula 3</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.997350931168,40.661108134469,0</coordinates></Point></Placemark>
+    <Placemark><name>Gatorade Endurance Formula 4</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.97985434765268,40.682108507996645,0</coordinates></Point></Placemark>
+    <Placemark><name>Gatorade Endurance Formula 5</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.957037329674,40.698966504673,0</coordinates></Point></Placemark>
+    <Placemark><name>Gatorade Endurance Formula 6</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.962450027466,40.712695324184,0</coordinates></Point></Placemark>
+    <Placemark><name>Gatorade Endurance Formula 7</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.95230158197266,40.7227790466024,0</coordinates></Point></Placemark>
+    <Placemark><name>Gatorade Endurance Formula 8</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.95230575645242,40.73391182930524,0</coordinates></Point></Placemark>
+    <Placemark><name>Gatorade Endurance Formula 9</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.9528483292832,40.74630181072871,0</coordinates></Point></Placemark>
+    <Placemark><name>Gatorade Endurance Formula 10</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.94206846895666,40.748923594705985,0</coordinates></Point></Placemark>
+    <Placemark><name>Gatorade Endurance Formula 11</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.96004369231247,40.7622247793405,0</coordinates></Point></Placemark>
+    <Placemark><name>Gatorade Endurance Formula 12</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.925821781158,40.810268822223,0</coordinates></Point></Placemark>
+    <Placemark><name>Gatorade Endurance Formula 13</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.93768787384,40.812692723103,0</coordinates></Point></Placemark>
+    <Placemark><name>Gatorade Endurance Formula 14</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.946871757507,40.800109400089,0</coordinates></Point></Placemark>
+    <Placemark><name>Gatorade Endurance Formula 15</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.953174948692,40.79152424775,0</coordinates></Point></Placemark>
+    <Placemark><name>Gatorade Endurance Formula 16</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.96249294281,40.781589426848,0</coordinates></Point></Placemark>
+    <Placemark><name>Gatorade Endurance Formula 17</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.973189592361,40.768094211688,0</coordinates></Point></Placemark>
+    <Placemark><name>Gatorade® Endurance Formula 18</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.952649235725,40.77253469193,0</coordinates></Point></Placemark>
+    <Placemark><name>Gatorade® Endurance Formula 19</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.93461966565404,40.797125463729515,0</coordinates></Point></Placemark>
+    <Placemark><name>Gatorade® Endurance Formula 20</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.94448833285233,40.78355746741556,0</coordinates></Point></Placemark>
+  </Folder>
+  <Folder><name>Fluids</name>
+    <Placemark><name>Fluids 1</name><styleUrl>#marker</styleUrl><Point><coordinates>-74.026989340782,40.626053918834,0</coordinates></Point></Placemark>
+    <Placemark><name>Fluids 2</name><styleUrl>#marker</styleUrl><Point><coordinates>-74.019715189934,40.639582012682,0</coordinates></Point></Placemark>
+    <Placemark><name>Fluids 3</name><styleUrl>#marker</styleUrl><Point><coordinates>-74.00864303112,40.650246227012,0</coordinates></Point></Placemark>
+    <Placemark><name>Fluids 4</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.99699151516,40.66143367952,0</coordinates></Point></Placemark>
+    <Placemark><name>Fluids 5</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.985071778297,40.674714562743,0</coordinates></Point></Placemark>
+    <Placemark><name>Fluids 6</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.97980398800391,40.68219021528705,0</coordinates></Point></Placemark>
+    <Placemark><name>Fluids 7</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.962042331696,40.688627356424,0</coordinates></Point></Placemark>
+    <Placemark><name>Fluids 8</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.957085609436,40.69919018999,0</coordinates></Point></Placemark>
+    <Placemark><name>Fluids 9</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.962246179581,40.71298808809,0</coordinates></Point></Placemark>
+    <Placemark><name>Fluids 10</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.95211085881382,40.72298653677987,0</coordinates></Point></Placemark>
+    <Placemark><name>Fluids 11</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.95232020436659,40.733988855070464,0</coordinates></Point></Placemark>
+    <Placemark><name>Fluids 12</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.952863812447,40.746387247657,0</coordinates></Point></Placemark>
+    <Placemark><name>Fluids 13</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.94212709420925,40.748923132363586,0</coordinates></Point></Placemark>
+    <Placemark><name>Fluids 14</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.96000967262076,40.762263286966146,0</coordinates></Point></Placemark>
+    <Placemark><name>Fluids 15</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.94441877974299,40.783660710614555,0</coordinates></Point></Placemark>
+    <Placemark><name>Fluids 16</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.934624791145,40.797169293166,0</coordinates></Point></Placemark>
+    <Placemark><name>Fluids 17</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.926433324814,40.810597698389,0</coordinates></Point></Placemark>
+    <Placemark><name>Fluids 18</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.937891721725,40.812400398044,0</coordinates></Point></Placemark>
+    <Placemark><name>Fluids 19</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.946968317032,40.79998757504,0</coordinates></Point></Placemark>
+    <Placemark><name>Fluids 20</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.953287601471,40.791333363725,0</coordinates></Point></Placemark>
+    <Placemark><name>Fluids 21</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.963061571121,40.781500063579,0</coordinates></Point></Placemark>
+    <Placemark><name>Fluids 22</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.973125219345,40.767582298275,0</coordinates></Point></Placemark>
+    <Placemark><name>Fluids 23</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.952509760857,40.772717504976,0</coordinates></Point></Placemark>
+    <Placemark><name>Fluids 24</name><styleUrl>#marker</styleUrl><Point><coordinates>-74.01784959542238,40.6266220927364,0</coordinates></Point></Placemark>
+    <Placemark><name>Fluids (Elite Athletes Only) 25</name><styleUrl>#marker</styleUrl><Point><coordinates>-74.026194,40.627647,0</coordinates></Point></Placemark>
+    <Placemark><name>Fluids (Elite Athletes Only) 26</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.99354,40.664636,0</coordinates></Point></Placemark>
+    <Placemark><name>Fluids (Elite Athletes Only) 27</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.955258,40.690793,0</coordinates></Point></Placemark>
+    <Placemark><name>Fluids (Elite Athletes Only) 28</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.954157,40.729937,0</coordinates></Point></Placemark>
+    <Placemark><name>Fluids (Elite Athletes Only) 29</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.957549,40.758316,0</coordinates></Point></Placemark>
+    <Placemark><name>Water 30</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.95192249855594,40.773360618162,0</coordinates></Point></Placemark>
+    <Placemark><name>Fluids (Elite Athletes Only) 31</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.937935,40.792326,0</coordinates></Point></Placemark>
+    <Placemark><name>Fluids (Elite Athletes Only) 32</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.94233803992672,40.806284998763914,0</coordinates></Point></Placemark>
+  </Folder>
+  <Folder><name>Toilets</name>
+    <Placemark><name>Toilets 1</name><styleUrl>#marker</styleUrl><Point><coordinates>-74.026924967766,40.626233062869,0</coordinates></Point></Placemark>
+    <Placemark><name>Toilets 2</name><styleUrl>#marker</styleUrl><Point><coordinates>-74.019446969032,40.639830321015,0</coordinates></Point></Placemark>
+    <Placemark><name>Toilets 3</name><styleUrl>#marker</styleUrl><Point><coordinates>-74.008331894875,40.650535195366,0</coordinates></Point></Placemark>
+    <Placemark><name>Toilets 4</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.996723294258,40.661706322277,0</coordinates></Point></Placemark>
+    <Placemark><name>Toilets 5</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.98441088601568,40.675473415754425,0</coordinates></Point></Placemark>
+    <Placemark><name>Toilets 6</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.97974661701731,40.6822758690343,0</coordinates></Point></Placemark>
+    <Placemark><name>Toilets 7</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.95738445639867,40.689195436537034,0</coordinates></Point></Placemark>
+    <Placemark><name>Toilets 8</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.95745992256347,40.69970849567272,0</coordinates></Point></Placemark>
+    <Placemark><name>Toilets 9</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.962053060532,40.713305247536,0</coordinates></Point></Placemark>
+    <Placemark><name>Toilets 10</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.9518918305727,40.72318456353338,0</coordinates></Point></Placemark>
+    <Placemark><name>Toilets 11</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.95230534009802,40.73401637403006,0</coordinates></Point></Placemark>
+    <Placemark><name>Toilets 12</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.95261047495623,40.74703549612542,0</coordinates></Point></Placemark>
+    <Placemark><name>Toilets 13</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.941324949265,40.749837592672,0</coordinates></Point></Placemark>
+    <Placemark><name>Toilets 14</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.961682915688,40.760020959176,0</coordinates></Point></Placemark>
+    <Placemark><name>Toilets 15</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.943599462509,40.78479017738,0</coordinates></Point></Placemark>
+    <Placemark><name>Toilets 16</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.934528231621,40.79732767241,0</coordinates></Point></Placemark>
+    <Placemark><name>Toilets 17</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.926932215691,40.810812888084,0</coordinates></Point></Placemark>
+    <Placemark><name>Toilets 18</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.938084840775,40.81215273275,0</coordinates></Point></Placemark>
+    <Placemark><name>Toilets 19</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.947059512138,40.799869810614,0</coordinates></Point></Placemark>
+    <Placemark><name>Toilets 20</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.953410983086,40.791162786046,0</coordinates></Point></Placemark>
+    <Placemark><name>Toilets 21</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.963662385941,40.781280716864,0</coordinates></Point></Placemark>
+    <Placemark><name>Toilets 22</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.973071575165,40.767070380918,0</coordinates></Point></Placemark>
+    <Placemark><name>Toilets 23</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.952386379242,40.772884067535,0</coordinates></Point></Placemark>
+    <Placemark><name>Toilets 24</name><styleUrl>#marker</styleUrl><Point><coordinates>-74.0178543454998,40.62639724330995,0</coordinates></Point></Placemark>
+    <Placemark><name>Toilets 25</name><styleUrl>#marker</styleUrl><Point><coordinates>-74.02027213790183,40.62810647023895,0</coordinates></Point></Placemark>
+    <Placemark><name>Toilets 26</name><styleUrl>#marker</styleUrl><Point><coordinates>-74.02594702706118,40.62779385733651,0</coordinates></Point></Placemark>
+    <Placemark><name>Toilets 27</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.99382799909488,40.66428355282952,0</coordinates></Point></Placemark>
+    <Placemark><name>Toilets 28</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.96979135832892,40.687812641747854,0</coordinates></Point></Placemark>
+    <Placemark><name>Toilets 29</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.95517988875143,40.690050941232556,0</coordinates></Point></Placemark>
+    <Placemark><name>Toilets 30</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.95408070865601,40.72950495969698,0</coordinates></Point></Placemark>
+    <Placemark><name>Toilets 31</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.95173553142617,40.743085034875094,0</coordinates></Point></Placemark>
+    <Placemark><name>Toilets 32</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.9610585632864,40.76085104695679,0</coordinates></Point></Placemark>
+    <Placemark><name>Toilets 33</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.93824435041493,40.79201187665234,0</coordinates></Point></Placemark>
+    <Placemark><name>Toilets 34</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.9422792489197,40.80633946168112,0</coordinates></Point></Placemark>
+    <Placemark><name>Toilets 35</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.95887928150746,40.78421526628992,0</coordinates></Point></Placemark>
+    <Placemark><name>Toilets 36</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.97095,40.770571,0</coordinates></Point></Placemark>
+    <Placemark><name>Toilets 37</name><styleUrl>#marker</styleUrl><Point><coordinates>-73.97620597949089,40.76563059446579,0</coordinates></Point></Placemark>
+  </Folder>
+  <GroundOverlay>
+    <name>TCSNYCM26 App - Start Map</name>
+    <Icon><href>/_imgss/mapping/overlay/tcsnycm26-app-start-map-8488.png</href></Icon>
+    <LatLonBox><north>40.60418566095041</north><south>40.601592239423354</south><east>-74.05381391869378</east><west>-74.0696624475635</west></LatLonBox>
+  </GroundOverlay>
+  <GroundOverlay>
+    <name>TCSNYCM26 App - Finish Map</name>
+    <Icon><href>/_imgss/mapping/overlay/tcsnycm26-app-finish-map-5133.png</href></Icon>
+    <LatLonBox><north>40.78928173312954</north><south>40.76337865010484</south><east>-73.97467352827306</east><west>-73.97805782810214</west></LatLonBox>
+  </GroundOverlay>
+</Document>
+</kml>

@@ -1,0 +1,750 @@
+{
+  "auto": false,
+  "units": "miles",
+  "markers": [
+    {
+      "at": 1.0028,
+      "label": "1 Mile",
+      "kind": "post",
+      "units": "miles"
+    },
+    {
+      "at": 2.0056,
+      "label": "2 Mile",
+      "kind": "post",
+      "units": "miles"
+    },
+    {
+      "at": 2.9847,
+      "label": "Gatorade Endurance Formula 1",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 2.998,
+      "label": "Fluids 1",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 3.0093,
+      "label": "3 Mile",
+      "kind": "timing",
+      "units": "miles"
+    },
+    {
+      "at": 3.0109,
+      "label": "Toilets 1",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 3.1155,
+      "label": "Fluids (Elite Athletes Only) 25",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 3.1165,
+      "label": "5K",
+      "kind": "timing",
+      "units": "miles"
+    },
+    {
+      "at": 3.129,
+      "label": "Toilets 26",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 3.1623,
+      "label": "Toilets 24",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 3.1772,
+      "label": "Fluids 24",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 3.2376,
+      "label": "Toilets 25",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 4.0076,
+      "label": "Gatorade Endurance Formula 2",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 4.0116,
+      "label": "4 Mile",
+      "kind": "timing",
+      "units": "miles"
+    },
+    {
+      "at": 4.019,
+      "label": "Fluids 2",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 4.0412,
+      "label": "Toilets 2",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 4.957,
+      "label": "Fluids 3",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 4.9828,
+      "label": "Toilets 3",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 5.0143,
+      "label": "5 Mile",
+      "kind": "timing",
+      "units": "miles"
+    },
+    {
+      "at": 5.9128,
+      "label": "Gatorade Endurance Formula 3",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 5.9422,
+      "label": "Fluids 4",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 5.9657,
+      "label": "Toilets 4",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 6.0169,
+      "label": "6 Mile",
+      "kind": "timing",
+      "units": "miles"
+    },
+    {
+      "at": 6.1995,
+      "label": "Toilets 27",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 6.2279,
+      "label": "Fluids (Elite Athletes Only) 26",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 6.2311,
+      "label": "10K",
+      "kind": "timing",
+      "units": "miles"
+    },
+    {
+      "at": 7.0197,
+      "label": "7 Mile",
+      "kind": "timing",
+      "units": "miles"
+    },
+    {
+      "at": 7.0537,
+      "label": "Fluids 5",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 7.1166,
+      "label": "Toilets 5",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 7.6336,
+      "label": "Gatorade Endurance Formula 4",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 7.6398,
+      "label": "Fluids 6",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 7.6465,
+      "label": "Toilets 6",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 8.0222,
+      "label": "8 Mile",
+      "kind": "timing",
+      "units": "miles"
+    },
+    {
+      "at": 8.4815,
+      "label": "Toilets 28",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 8.8913,
+      "label": "Fluids 7",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 9.0225,
+      "label": "9 Mile",
+      "kind": "timing",
+      "units": "miles"
+    },
+    {
+      "at": 9.1385,
+      "label": "Toilets 7",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 9.2943,
+      "label": "Toilets 29",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 9.3456,
+      "label": "Fluids (Elite Athletes Only) 27",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 9.347,
+      "label": "15K",
+      "kind": "timing",
+      "units": "miles"
+    },
+    {
+      "at": 9.9179,
+      "label": "Gatorade Endurance Formula 5",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 9.9336,
+      "label": "Fluids 8",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 9.9719,
+      "label": "Toilets 8",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 10.0292,
+      "label": "10 Mile",
+      "kind": "timing",
+      "units": "miles"
+    },
+    {
+      "at": 11.0185,
+      "label": "Gatorade Endurance Formula 6",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 11.0302,
+      "label": "11 Mile",
+      "kind": "timing",
+      "units": "miles"
+    },
+    {
+      "at": 11.0413,
+      "label": "Fluids 9",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 11.0654,
+      "label": "Toilets 9",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 11.8978,
+      "label": "Gatorade Endurance Formula 7",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 11.9153,
+      "label": "Fluids 10",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 11.9331,
+      "label": "Toilets 10",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 12.0331,
+      "label": "12 Mile",
+      "kind": "timing",
+      "units": "miles"
+    },
+    {
+      "at": 12.43,
+      "label": "Toilets 30",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 12.4597,
+      "label": "Fluids (Elite Athletes Only) 28",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 12.4616,
+      "label": "20K",
+      "kind": "timing",
+      "units": "miles"
+    },
+    {
+      "at": 12.8455,
+      "label": "Gatorade Endurance Formula 8",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 12.8508,
+      "label": "Fluids 11",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 12.8526,
+      "label": "Toilets 11",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 13.0359,
+      "label": "13 Mile",
+      "kind": "timing",
+      "units": "miles"
+    },
+    {
+      "at": 13.1461,
+      "label": "Half",
+      "kind": "timing",
+      "units": "miles"
+    },
+    {
+      "at": 13.4902,
+      "label": "Toilets 31",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 13.8034,
+      "label": "Gatorade Endurance Formula 9",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 13.8089,
+      "label": "Fluids 12",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 13.8555,
+      "label": "Toilets 12",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 14.0389,
+      "label": "14 Mile",
+      "kind": "timing",
+      "units": "miles"
+    },
+    {
+      "at": 14.549,
+      "label": "Fluids 13",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 14.5508,
+      "label": "Gatorade Endurance Formula 10",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 14.6248,
+      "label": "Toilets 13",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 15.0415,
+      "label": "15 Mile",
+      "kind": "timing",
+      "units": "miles"
+    },
+    {
+      "at": 15.5775,
+      "label": "25K",
+      "kind": "timing",
+      "units": "miles"
+    },
+    {
+      "at": 15.7253,
+      "label": "Fluids (Elite Athletes Only) 29",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 16.0452,
+      "label": "16 Mile",
+      "kind": "timing",
+      "units": "miles"
+    },
+    {
+      "at": 16.1479,
+      "label": "Toilets 14",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 16.2139,
+      "label": "Toilets 32",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 16.3226,
+      "label": "Gatorade Endurance Formula 11",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 16.3258,
+      "label": "Fluids 14",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 17.0484,
+      "label": "17 Mile",
+      "kind": "timing",
+      "units": "miles"
+    },
+    {
+      "at": 17.1333,
+      "label": "Gatorade® Endurance Formula 18",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 17.1478,
+      "label": "Fluids 23",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 17.161,
+      "label": "Toilets 23",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 17.2016,
+      "label": "Water 30",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 18.0064,
+      "label": "Gatorade® Endurance Formula 20",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 18.0144,
+      "label": "Fluids 15",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 18.0516,
+      "label": "18 Mile",
+      "kind": "timing",
+      "units": "miles"
+    },
+    {
+      "at": 18.1034,
+      "label": "Toilets 15",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 18.6756,
+      "label": "Toilets 33",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 18.6947,
+      "label": "30K",
+      "kind": "timing",
+      "units": "miles"
+    },
+    {
+      "at": 18.7025,
+      "label": "Fluids (Elite Athletes Only) 31",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 19.0526,
+      "label": "19 Mile",
+      "kind": "timing",
+      "units": "miles"
+    },
+    {
+      "at": 19.0766,
+      "label": "Gatorade® Endurance Formula 19",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 19.0791,
+      "label": "Fluids 16",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 19.0911,
+      "label": "Toilets 16",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 20.0561,
+      "label": "20 Mile",
+      "kind": "timing",
+      "units": "miles"
+    },
+    {
+      "at": 20.243,
+      "label": "Gatorade Endurance Formula 12",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 20.5846,
+      "label": "Fluids 17",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 20.5963,
+      "label": "Toilets 17",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 21.0583,
+      "label": "21 Mile",
+      "kind": "timing",
+      "units": "miles"
+    },
+    {
+      "at": 21.3088,
+      "label": "Gatorade Endurance Formula 13",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 21.3316,
+      "label": "Fluids 18",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 21.3514,
+      "label": "Toilets 18",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 21.809,
+      "label": "35K",
+      "kind": "timing",
+      "units": "miles"
+    },
+    {
+      "at": 21.809,
+      "label": "Toilets 34",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 21.8138,
+      "label": "Fluids (Elite Athletes Only) 32",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 22.061,
+      "label": "22 Mile",
+      "kind": "timing",
+      "units": "miles"
+    },
+    {
+      "at": 22.461,
+      "label": "Gatorade Endurance Formula 14",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 22.4708,
+      "label": "Fluids 19",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 22.4802,
+      "label": "Toilets 19",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 23.0652,
+      "label": "23 Mile",
+      "kind": "timing",
+      "units": "miles"
+    },
+    {
+      "at": 23.1396,
+      "label": "Gatorade Endurance Formula 15",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 23.154,
+      "label": "Fluids 20",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 23.1675,
+      "label": "Toilets 20",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 23.7337,
+      "label": "Toilets 35",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 24.0215,
+      "label": "Gatorade Endurance Formula 16",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 24.0527,
+      "label": "Fluids 21",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 24.0675,
+      "label": "24 Mile",
+      "kind": "timing",
+      "units": "miles"
+    },
+    {
+      "at": 24.0879,
+      "label": "Toilets 21",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 24.9236,
+      "label": "40K",
+      "kind": "timing",
+      "units": "miles"
+    },
+    {
+      "at": 24.9586,
+      "label": "Toilets 36",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 25.0702,
+      "label": "25 Mile",
+      "kind": "timing",
+      "units": "miles"
+    },
+    {
+      "at": 25.1739,
+      "label": "Gatorade Endurance Formula 17",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 25.209,
+      "label": "Fluids 22",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 25.2438,
+      "label": "Toilets 22",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 25.5731,
+      "label": "Toilets 37",
+      "kind": "point",
+      "units": "miles"
+    },
+    {
+      "at": 26.0734,
+      "label": "26 Mile",
+      "kind": "timing",
+      "units": "miles"
+    }
+  ]
+}

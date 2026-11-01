@@ -44,6 +44,28 @@ export function trackable(race: { course?: string }): boolean {
   return typeof race.course === 'string' && race.course.trim() !== '';
 }
 
+/**
+ * Where an event's publishing switch starts when it loads.
+ *
+ * Three things can have an opinion and they are not equal. An operator who
+ * has flipped the switch for this event outranks everything — that decision
+ * is the one that has to survive a reload, a restart, or a deploy in the
+ * middle of a meet. Failing that the event itself says where it wants to
+ * start, which is the only way a meet can come up quiet without somebody
+ * remembering to silence it before the first race is armed. The old global
+ * setting stays underneath as the first-time migration it always was, so an
+ * event that says nothing behaves exactly as it did.
+ */
+export function initialPublishing(
+  cfg: { publishOnLoad?: boolean },
+  perEvent: string | undefined,
+  legacyGlobal: string | undefined,
+): boolean {
+  if (perEvent !== undefined) return perEvent !== '0';
+  if (cfg.publishOnLoad !== undefined) return cfg.publishOnLoad;
+  return legacyGlobal !== '0';
+}
+
 export interface AppEvents {
   emit: (event: string, payload: unknown) => void;
 }

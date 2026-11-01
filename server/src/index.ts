@@ -2,7 +2,8 @@ import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 import { ConfigManager, listEvents, migrateRaceMarkersToCourses, migrateRolesToVehicles } from './config/manager.js';
-import { App } from './app.js';
+import type { EventConfig } from './config/schema.js';
+import { App, initialPublishing } from './app.js';
 import { Forwarder } from './ingest/forwarder.js';
 import { FixGate } from './ingest/hygiene.js';
 import { DecoderPoller } from './decoders/poller.js';
@@ -89,12 +90,13 @@ for (const d of store.devices() as Array<{ imei: string; last_received_ms: numbe
 const apps = new Map<string, App>();
 const managers = new Map<string, ConfigManager>();
 
-/** Per-event publishing switch, persisted per event (falls back to the old
- *  global setting for first-time migration). */
-function publishSetting(eventId: string): boolean {
-  const perEvent = store.getSetting(`publish-enabled:${eventId}`);
-  if (perEvent !== undefined) return perEvent !== '0';
-  return store.getSetting('publish-enabled') !== '0';
+/** Where this event's publishing switch starts — see initialPublishing. */
+function publishSetting(cfg: EventConfig): boolean {
+  return initialPublishing(
+    cfg,
+    store.getSetting(`publish-enabled:${cfg.id}`),
+    store.getSetting('publish-enabled'),
+  );
 }
 
 function setPublishing(eventId: string, enabled: boolean, by?: string): void {
@@ -116,7 +118,7 @@ function loadEvent(file: string): App {
   const resolved = manager.resolved();
   if (apps.has(resolved.id)) throw new Error(`Event "${resolved.id}" is already active`);
   const app = new App(resolved, store, out, hub, (imei) => gate.health(imei));
-  app.publishEnabled = publishSetting(resolved.id);
+  app.publishEnabled = publishSetting(resolved);
   apps.set(resolved.id, app);
   managers.set(resolved.id, manager);
   loadedFiles.set(resolved.id, file);
@@ -203,7 +205,7 @@ function rebuildEvent(eventId: string, json: unknown): void {
     persistLoaded();
   }
   const app = new App(resolved, store, out, hub, (imei) => gate.health(imei));
-  app.publishEnabled = publishSetting(resolved.id);
+  app.publishEnabled = publishSetting(resolved);
   apps.set(resolved.id, app);
   syncListeners();
   console.log(`[events] "${resolved.id}" config updated — engines rebuilt`);

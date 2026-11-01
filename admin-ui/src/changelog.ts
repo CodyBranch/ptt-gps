@@ -22,6 +22,17 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '0.27.0',
+    date: '2026-11-01',
+    summary: 'A meet can come up with its outputs off, and three sheets-worth of setup stop being a form you fill in by hand.',
+    added: [
+      '**An event can start with publishing off.** Outputs default to on, which is right for a meet with a scoreboard of its own and wrong for the ones where it matters most: an event being built on the morning of a race shares a Firebase meet with whatever is already on air, and the cost of coming up live is a number appearing on a screen in front of a crowd. Setting `publishOnLoad: false` on the event makes it come up quiet, to be switched on deliberately from **OUTPUTS OFF** in the console. An operator who has flipped that switch outranks the file from then on, so a restart — or a deploy in the middle of a meet — gives them back what they chose, not what the file says.',
+      'A fleet sheet loads in one go: `node tools/load-fleet.mjs <fleet.csv>`. It brings the registry in line with the sheet — label, model, and whether the unit reports a battery, which a GV500 wired into a vehicle does not. Sixty-odd devices was never a form anybody should fill in twice. It never retires anything: hardware going out of service is a decision somebody makes, not a blank cell in a spreadsheet.',
+      "A course's markers load in one go: `node tools/load-course-markers.mjs <markers.json> --course courses/<file>`. Markers belong to the course rather than to a race, so they live in the library and not in the event file — which left a course traced from a KML full of timing mats and aid stations with no way in except the editor, one row at a time. The payload is the same shape the markers endpoint returns, so an existing course can be pulled out, edited and pushed back.",
+      'The publish log can be read back: `node tools/publish-history.mjs --key distance`. Every write the server makes to Firebase is recorded as it is made, alongside what the crew did, and when a scoreboard misbehaves during a race those two together say what was written, when, and what happened just before it. It collapses runs to transitions and marks a `null` as a removal, because a null in an RTDB update deletes the key rather than storing it. Read-only, and safe to run on a live box.',
+    ],
+  },
+  {
     version: '0.26.0',
     date: '2026-10-27',
     summary: 'A race with no course no longer takes the server down with it.',

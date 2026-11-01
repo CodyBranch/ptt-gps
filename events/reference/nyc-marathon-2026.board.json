@@ -1,0 +1,190 @@
+{
+  "raceId": "mens",
+  "title": "",
+  "units": "miles",
+  "decimals": 1,
+  "value": "covered",
+  "posts": "miles",
+  "markers": {
+    "start": true,
+    "finish": true,
+    "timing": true,
+    "custom": false
+  },
+  "groups": {
+    "w1": {
+      "shown": true,
+      "distance": true,
+      "marker": true,
+      "color": "#e11d48"
+    },
+    "w2": {
+      "shown": true,
+      "distance": true,
+      "marker": true,
+      "color": "#38bdf8"
+    },
+    "wus": {
+      "shown": true,
+      "distance": true,
+      "marker": true,
+      "color": "#f59e0b"
+    },
+    "wr": {
+      "shown": true,
+      "distance": true,
+      "marker": true,
+      "color": "#22c55e"
+    },
+    "m1": {
+      "shown": true,
+      "distance": true,
+      "marker": true,
+      "color": "#e11d48"
+    },
+    "m2": {
+      "shown": true,
+      "distance": true,
+      "marker": true,
+      "color": "#38bdf8"
+    },
+    "mus": {
+      "shown": true,
+      "distance": true,
+      "marker": true,
+      "color": "#f59e0b"
+    },
+    "mr": {
+      "shown": true,
+      "distance": true,
+      "marker": true,
+      "color": "#22c55e"
+    },
+    "ev": {
+      "shown": true,
+      "distance": true,
+      "marker": true,
+      "color": "#a78bfa"
+    },
+    "wcw": {
+      "shown": true,
+      "distance": true,
+      "marker": true,
+      "color": "#e11d48"
+    },
+    "wcwr": {
+      "shown": true,
+      "distance": true,
+      "marker": true,
+      "color": "#22c55e"
+    },
+    "wcm": {
+      "shown": true,
+      "distance": true,
+      "marker": true,
+      "color": "#e11d48"
+    },
+    "wcmr": {
+      "shown": true,
+      "distance": true,
+      "marker": true,
+      "color": "#22c55e"
+    },
+    "b1": {
+      "shown": false,
+      "distance": false,
+      "marker": false,
+      "color": "#64748b"
+    },
+    "b2": {
+      "shown": false,
+      "distance": false,
+      "marker": false,
+      "color": "#64748b"
+    },
+    "b3": {
+      "shown": false,
+      "distance": false,
+      "marker": false,
+      "color": "#64748b"
+    },
+    "b4": {
+      "shown": false,
+      "distance": false,
+      "marker": false,
+      "color": "#64748b"
+    },
+    "b5": {
+      "shown": false,
+      "distance": false,
+      "marker": false,
+      "color": "#64748b"
+    },
+    "b6": {
+      "shown": false,
+      "distance": false,
+      "marker": false,
+      "color": "#64748b"
+    },
+    "b7": {
+      "shown": false,
+      "distance": false,
+      "marker": false,
+      "color": "#64748b"
+    },
+    "b8": {
+      "shown": false,
+      "distance": false,
+      "marker": false,
+      "color": "#64748b"
+    },
+    "b9": {
+      "shown": false,
+      "distance": false,
+      "marker": false,
+      "color": "#64748b"
+    },
+    "b10": {
+      "shown": false,
+      "distance": false,
+      "marker": false,
+      "color": "#64748b"
+    },
+    "b11": {
+      "shown": false,
+      "distance": false,
+      "marker": false,
+      "color": "#64748b"
+    },
+    "b12": {
+      "shown": false,
+      "distance": false,
+      "marker": false,
+      "color": "#64748b"
+    }
+  },
+  "order": [
+    "m1",
+    "m2",
+    "mus",
+    "mr",
+    "ev",
+    "w1",
+    "w2",
+    "wus",
+    "wr",
+    "wcw",
+    "wcwr",
+    "wcm",
+    "wcmr"
+  ],
+  "lead": "m1",
+  "follow": false,
+  "zoom": 1,
+  "rotate": "auto",
+  "center": null,
+  "imagery": "dark",
+  "imageryDim": 0.5,
+  "showDone": true,
+  "showClock": true
+}
