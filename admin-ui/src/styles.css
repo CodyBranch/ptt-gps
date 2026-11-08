@@ -1038,6 +1038,17 @@ button.linklike {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .course-use:hover { border-color: var(--accent); }
+/* The chip that opens the rest reads as an action, not as another event. */
+.course-use.more { background: transparent; border-style: dashed; color: var(--dim); }
+.course-use.more:hover { color: var(--text); }
+
+.course-search {
+  background: var(--panel2); border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text); font: inherit; font-size: 13px; padding: 5px 10px;
+  width: 280px; max-width: 40vw; margin-left: 14px;
+}
+.course-search:focus { outline: none; border-color: var(--accent); }
+.course-search-count { font-size: 12px; margin-left: 10px; white-space: nowrap; }
 a.mini.linkbtn { text-decoration: none; display: inline-flex; align-items: center; }
 
 .dialog-course { width: 560px; max-width: calc(100vw - 32px); }

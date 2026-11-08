@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import type { ConfirmRequest } from './Confirm';
-import type { CourseInfo, Units } from '../types';
+import type { CourseInfo, CourseUse, Units } from '../types';
+import { courseName, useLabel, usesByEvent, visibleCourses } from '../courses';
 import { CoursePreview, type CourseMarker } from './MapView';
 import { Toast } from './Toast';
 
@@ -32,6 +33,7 @@ export function CoursesView({
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string }>();
   const [openFile, setOpenFile] = useState<string>();
   const [showArchived, setShowArchived] = useState(false);
+  const [query, setQuery] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
   const replaceRef = useRef<HTMLInputElement>(null);
   const replaceTarget = useRef<string>('');
@@ -59,14 +61,28 @@ export function CoursesView({
   const len = (c: CourseInfo) =>
     displayUnits === 'miles' ? `${c.lengthMi.toFixed(2)} mi` : `${c.lengthKm.toFixed(2)} km`;
 
-  const visible = courses.filter((c) => showArchived || !c.archived);
+  const visible = visibleCourses(courses, { query, showArchived });
   const archivedCount = courses.filter((c) => c.archived).length;
+  const searching = query.trim() !== '';
   const open = courses.find((c) => c.file === openFile);
 
   return (
     <div className="setup">
       <div className="setup-bar">
         <span className="setup-title">Courses</span>
+        <input
+          className="course-search"
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search name, file, notes or meet"
+          aria-label="Search courses"
+        />
+        {searching && (
+          <span className="dim course-search-count">
+            {visible.length} of {courses.length}
+          </span>
+        )}
         <span className="spacer" />
         <button className="mini primary" onClick={() => fileRef.current?.click()}>
           ⬆ Upload course
@@ -106,11 +122,23 @@ export function CoursesView({
           </div>
         )}
 
+        {courses.length > 0 && visible.length === 0 && (
+          <div className="home-empty">
+            <p>
+              Nothing matches “{query.trim()}”.
+              {archivedCount > 0 && !showArchived && ' Archived courses are not being searched.'}
+            </p>
+            <button className="mini" onClick={() => setQuery('')}>
+              Clear search
+            </button>
+          </div>
+        )}
+
         {visible.map((c) => (
           <div key={c.file} className={`course-card ${c.archived ? 'archived' : ''}`}>
             <div className="course-card-head">
               <button className="course-name" onClick={() => setOpenFile(c.file)}>
-                {c.label || c.file.replace('courses/', '')}
+                {courseName(c)}
               </button>
               {c.archived && <span className="course-tag">ARCHIVED</span>}
               {c.inActiveEvent && <span className="course-tag live">IN ACTIVE EVENT</span>}
@@ -121,25 +149,7 @@ export function CoursesView({
             </div>
             {c.notes && <div className="course-notes">{c.notes}</div>}
             <div className="course-uses">
-              {(c.uses?.length ?? 0) === 0 ? (
-                <span className="dim">Not used by any event</span>
-              ) : (
-                <>
-                  <span className="course-uses-label">
-                    Used by {c.eventCount} event{c.eventCount === 1 ? '' : 's'}:
-                  </span>
-                  {c.uses!.map((u) => (
-                    <button
-                      key={`${u.eventId}/${u.raceId}`}
-                      className="course-use"
-                      title={`${u.eventName} — ${u.raceName}`}
-                      onClick={() => onOpenEvent(u.eventId)}
-                    >
-                      {u.eventName} <span className="dim">· {u.raceName}</span>
-                    </button>
-                  ))}
-                </>
-              )}
+              <CourseUses uses={c.uses} onOpenEvent={onOpenEvent} />
             </div>
             <div className="home-actions">
               <button className="mini" onClick={() => setOpenFile(c.file)}>
@@ -186,6 +196,60 @@ export function CoursesView({
 
       <Toast msg={msg} onDone={() => setMsg(undefined)} />
     </div>
+  );
+}
+
+/** How many events a card names before it stops and offers the rest. */
+const USE_CHIPS = 4;
+
+/**
+ * Who uses a course — one chip per event, not one per race.
+ *
+ * A course we run often collects races far faster than it collects events: a
+ * single high-school meet puts a dozen races on one 5k, and listing them each
+ * made the card taller than the screen while saying nothing the count does
+ * not. The races are still there on hover, and in full under Details → Event
+ * history, which is where you go when you want to know which ones.
+ */
+function CourseUses({
+  uses,
+  onOpenEvent,
+}: {
+  uses?: CourseUse[];
+  onOpenEvent: (eventId: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const grouped = usesByEvent(uses);
+  if (grouped.length === 0) return <span className="dim">Not used by any event</span>;
+
+  const shown = expanded ? grouped : grouped.slice(0, USE_CHIPS);
+  const hidden = grouped.length - shown.length;
+  return (
+    <>
+      <span className="course-uses-label">
+        Used by {grouped.length} event{grouped.length === 1 ? '' : 's'}:
+      </span>
+      {shown.map((u) => (
+        <button
+          key={u.eventId}
+          className="course-use"
+          title={`${u.eventName} — ${u.races.join(', ')}`}
+          onClick={() => onOpenEvent(u.eventId)}
+        >
+          {u.eventName} <span className="dim">· {useLabel(u)}</span>
+        </button>
+      ))}
+      {hidden > 0 && (
+        <button className="course-use more" onClick={() => setExpanded(true)}>
+          +{hidden} more
+        </button>
+      )}
+      {expanded && grouped.length > USE_CHIPS && (
+        <button className="course-use more" onClick={() => setExpanded(false)}>
+          show fewer
+        </button>
+      )}
+    </>
   );
 }
 

@@ -22,6 +22,18 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '0.28.0',
+    date: '2026-11-08',
+    summary: 'The course library stops drowning in the courses we run most.',
+    changed: [
+      '**A course says which meets use it, not which races.** A course we run often collects races far faster than it collects events — one high-school meet puts fourteen races on a single 5k — and the card listed every one of them, so the courses we use most were the hardest to read and pushed everything below them off the screen. Each meet is now one entry saying how many races it ran there; hovering gives their names, and **Details → Event history** still lists every one with its date.',
+      'The library is sorted by the name you gave the course, and counts numbers as numbers. It was coming out in the order the files happen to sit on disk, so renaming a course to something clearer filed it under its old filename — and 10k sorted before 5k, which is nobody\'s idea of an order.',
+    ],
+    added: [
+      'A search box on the courses page. It matches the display name, the filename an event config points at, the notes, and the meets and races using it — so "the one we run at State" finds the course even when that is not what it is called.',
+    ],
+  },
+  {
     version: '0.27.0',
     date: '2026-11-01',
     summary: 'A meet can come up with its outputs off, and three sheets-worth of setup stop being a form you fill in by hand.',
