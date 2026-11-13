@@ -10,7 +10,7 @@ that never worked.
 
 ---
 
-## Unreleased — where the timing boxes are
+## v0.29.0 — where the timing boxes are
 
 **A new `decoders` message: the RaceResult timing boxes and their positions.**
 Emit `decoders` with an ack for the list, or listen for it: it is pushed after

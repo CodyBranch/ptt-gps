@@ -22,6 +22,14 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '0.29.0',
+    date: '2026-11-12',
+    summary: 'The live feed says where the timing boxes are.',
+    added: [
+      '**A `decoders` message on the live feed.** The RaceResult boxes this server polls, each with its device id, name, type, whether it is connected, and where RaceResult last placed it (or `null` without a position). A feed client can ask for it with an ack, and it is pushed after every poll. The Nexus desk uses it to check each box against the course map: a box that is not at its mat, a box out on the course where no mat is, and which boxes are at a mat before anyone has connected to them. A box hidden here is left out, and the battery, reader health and raw RaceResult record stay on the console. Additive: the feed protocol stays 1. See docs/live-feed.md.',
+    ],
+  },
+  {
     version: '0.28.0',
     date: '2026-11-08',
     summary: 'The course library stops drowning in the courses we run most.',
