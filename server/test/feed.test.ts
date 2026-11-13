@@ -343,3 +343,28 @@ describe('being off the course line', () => {
     expect(pos.offCourseMeters).toBeNull();
   });
 });
+
+describe('timing boxes on the feed', () => {
+  const box = (over: Record<string, unknown> = {}) => ({
+    deviceId: 'D-12345', name: 'Near Split', type: 'Decoder', connected: true,
+    lat: 38.9, lon: -92.3, battery: 80, seenMs: NOW - 30_000, raw: '{"secret":"stays home"}', ...over,
+  });
+
+  it('says which box, whether it is up and where it is, and nothing the console keeps', async () => {
+    const { feedDecoders } = await import('../src/api/feed.js');
+    const [d] = feedDecoders([box() as never], NOW);
+    expect(d).toEqual({ deviceId: 'D-12345', name: 'Near Split', type: 'Decoder', connected: true, lat: 38.9, lon: -92.3, seenMs: NOW - 30_000, ageS: 30 });
+  });
+
+  it('a box with no position says null, not 0,0', async () => {
+    const { feedDecoders } = await import('../src/api/feed.js');
+    const [d] = feedDecoders([box({ lat: undefined, lon: undefined }) as never], NOW);
+    expect(d.lat).toBeNull();
+    expect(d.lon).toBeNull();
+  });
+
+  it('a box hidden on the console stays hidden', async () => {
+    const { feedDecoders } = await import('../src/api/feed.js');
+    expect(feedDecoders([box({ hidden: true }) as never, box({ deviceId: 'D-2' }) as never], NOW).map((d) => d.deviceId)).toEqual(['D-2']);
+  });
+});

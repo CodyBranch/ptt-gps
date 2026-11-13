@@ -1,5 +1,6 @@
 import type { Server as SocketIOServer } from 'socket.io';
 import type { AuthService } from './auth.js';
+import type { DecoderRecord } from '../decoders/raceresult.js';
 
 /**
  * The live feed: a machine-facing socket.io namespace for other software to
@@ -379,6 +380,44 @@ export function eventSummary(id: string, snap: InternalSnapshot['events'][number
 export interface FeedContext {
   apps: Map<string, { snapshot: () => unknown }>;
   snapshotFor: (eventId: string) => unknown;
+  /** The timing boxes, as last polled from RaceResult. */
+  store?: { listDecoders: () => DecoderRecord[] };
+}
+
+/**
+ * A timing box, as the feed tells it: which box, whether it is up, and where
+ * it is. Enough for a meet's timing desk to find its own boxes on the course;
+ * not the battery, the reader health or the raw RaceResult record, which are
+ * the console's business. A box hidden on the console stays hidden here.
+ */
+export interface FeedDecoder {
+  /** RaceResult's device id, e.g. "D-12345" or an Ubidium's system id. */
+  deviceId: string;
+  name: string;
+  /** Decoder, TrackBox or Ubidium. */
+  type: string;
+  connected: boolean;
+  /** Where RaceResult last said the box is; null when it has no position. */
+  lat: number | null;
+  lon: number | null;
+  /** When this server last polled RaceResult for it, and how long ago that was. */
+  seenMs: number;
+  ageS: number;
+}
+
+export function feedDecoders(list: DecoderRecord[], nowMs: number): FeedDecoder[] {
+  return list
+    .filter((d) => !d.hidden)
+    .map((d) => ({
+      deviceId: d.deviceId,
+      name: d.name,
+      type: d.type,
+      connected: d.connected,
+      lat: typeof d.lat === 'number' && Number.isFinite(d.lat) ? d.lat : null,
+      lon: typeof d.lon === 'number' && Number.isFinite(d.lon) ? d.lon : null,
+      seenMs: d.seenMs,
+      ageS: Math.max(0, Math.round((nowMs - d.seenMs) / 1000)),
+    }));
 }
 
 export interface FeedConnection {
@@ -400,6 +439,8 @@ export interface Feed {
   connections: () => FeedConnection[];
   /** Drop everyone using a token, for when it is revoked or disabled. */
   disconnectToken: (tokenId: number) => void;
+  /** The boxes were polled: tell everyone connected. */
+  publishDecoders: (list: DecoderRecord[]) => void;
 }
 
 export function attachFeed(io: SocketIOServer, ctx: FeedContext, auth: AuthService): Feed {
@@ -476,6 +517,15 @@ export function attachFeed(io: SocketIOServer, ctx: FeedContext, auth: AuthServi
       else socket.emit('hello', { protocol: PROTOCOL, serverTimeMs: Date.now(), events: summaries() });
     });
 
+    // The timing boxes are not per meet: RaceResult lists every box on the
+    // account, wherever it is. Asked for, and pushed after every poll.
+    socket.on('decoders', (_payload: unknown, ack?: (res: unknown) => void) => {
+      const decoders = feedDecoders(ctx.store?.listDecoders() ?? [], Date.now());
+      const res = { ok: true, protocol: PROTOCOL, serverTimeMs: Date.now(), decoders };
+      if (ack) ack(res);
+      else socket.emit('decoders', res);
+    });
+
     socket.on('disconnect', () => console.log(`[feed] "${socket.data.tokenLabel}" from ${ip} disconnected`));
   });
 
@@ -517,6 +567,10 @@ export function attachFeed(io: SocketIOServer, ctx: FeedContext, auth: AuthServi
       for (const socket of ns.sockets.values()) {
         if (socket.data.tokenId === tokenId) socket.disconnect(true);
       }
+    },
+    publishDecoders: (list: DecoderRecord[]) => {
+      if (!ns.sockets.size) return;
+      ns.emit('decoders', { ok: true, protocol: PROTOCOL, serverTimeMs: Date.now(), decoders: feedDecoders(list, Date.now()) });
     },
     publishAll: () => {
       for (const id of ctx.apps.keys()) publish(id);

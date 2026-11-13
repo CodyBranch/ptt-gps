@@ -10,6 +10,21 @@ that never worked.
 
 ---
 
+## Unreleased — where the timing boxes are
+
+**A new `decoders` message: the RaceResult timing boxes and their positions.**
+Emit `decoders` with an ack for the list, or listen for it: it is pushed after
+every RaceResult poll. Each box has `deviceId`, `name`, `type`, `connected`,
+`lat`, `lon` (or `null`), `seenMs` and `ageS`. See
+[live-feed.md](live-feed.md#other-messages).
+
+It is for a timing desk to check its boxes against the course: the Nexus
+desk matches `deviceId` to its timing sources and puts each box on the course
+map. Additive; `protocol` stays **1**, and a consumer that ignores it sees no
+change.
+
+---
+
 ## v0.17.0 — the hide-distance switch reaches the feed
 
 **`event.showDistance`, a boolean, is now on every `race` message and every

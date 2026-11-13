@@ -26,6 +26,7 @@ import { DEVICE_ID, resolveRace } from '../config/schema.js';
 import * as turf from '@turf/turf';
 import { SimEngine, type SimTrackerCfg } from '../sim/engine.js';
 import type { DecoderPoller } from '../decoders/poller.js';
+import type { DecoderRecord } from '../decoders/raceresult.js';
 import { AuthService, hashPassword, type Role } from './auth.js';
 import { TunnelManager } from './tunnel.js';
 import { DeployManager } from '../deploy/manager.js';
@@ -131,6 +132,8 @@ export function startApi(
     // Every engine update in the system passes through here, so this is the
     // one place the feed has to hook to stay in step with the console.
     if (typeof eid === 'string') feed.publish(eid);
+    // So do the timing boxes, after each RaceResult poll.
+    if (event === 'decoders' && Array.isArray(payload)) feed.publishDecoders(payload as DecoderRecord[]);
   };
   /**
    * Raw wire traffic, sent only to consoles that asked for it.

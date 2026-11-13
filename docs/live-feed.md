@@ -259,6 +259,24 @@ race every few seconds.
   `hello`. Refresh your menu; your subscription is unaffected unless the meet
   itself went away.
 - **`unsubscribe`** — emit with no payload to stop receiving `race` messages.
+- **`decoders`** — the RaceResult timing boxes on this server's account, and
+  where each one is. Emit it with an ack for the current list; it is also
+  pushed to every connection after each poll of RaceResult (about once a
+  minute). Not per meet, and no `subscribe` needed:
+
+  ```json
+  { "ok": true, "protocol": 1, "serverTimeMs": 1800000000000,
+    "decoders": [
+      { "deviceId": "D-12345", "name": "Near Split", "type": "Decoder",
+        "connected": true, "lat": 38.9, "lon": -92.3,
+        "seenMs": 1799999970000, "ageS": 30 } ] }
+  ```
+
+  `deviceId` is RaceResult's (an Ubidium's system id for an Ubidium); match it
+  to your own record of the box. `lat`/`lon` are what RaceResult reports for
+  the box, or `null` when it has no position. There is no fix quality: a box
+  indoors or just switched on can be well off. A box hidden on the console is
+  left out.
 
 ---
 
